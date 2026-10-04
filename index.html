@@ -51,6 +51,7 @@ a{color:var(--muted)}
 .top{max-width:1200px;margin:0 auto;padding:22px 24px 10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
 .brand{display:flex;align-items:baseline;gap:8px;margin-right:auto}
 .brand h1{font-size:18px;font-weight:500;margin:0}
+.skip{position:absolute;left:-9999px}.skip:focus{position:static;display:inline-block;margin:0 0 8px;font-size:12.5px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .brand span{font-size:12px;color:var(--faint)}
 .actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -65,6 +66,7 @@ main{max-width:1200px;margin:0 auto;padding:0 24px 40px}
 .about input#title{font-size:20px;font-weight:500}
 .about input:hover,.about textarea:hover{border-bottom-color:var(--line)}
 .about input:focus,.about textarea:focus{outline:none;border-bottom-color:var(--accent)}
+input:focus-visible,textarea:focus-visible,select:focus-visible,.blabel:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* chart */
 #chart svg{display:block;width:100%;height:auto;font-family:var(--sans);touch-action:none}
@@ -74,6 +76,8 @@ main{max-width:1200px;margin:0 auto;padding:0 24px 40px}
 #chart .fline{fill:none;stroke:var(--accent);stroke-width:2.2;stroke-linejoin:round}
 #chart .dot{fill:var(--accent);stroke:var(--card);stroke-width:1.5;cursor:ns-resize}
 #chart .dot.off{fill:var(--dot-off)}
+#chart .hit{fill:transparent;cursor:ns-resize}
+.mark,.chip,details.menu>summary{min-height:24px}
 #chart .dot:focus{outline:none;stroke:var(--ink)}
 #chart .markt{font-size:11px;font-style:italic;fill:var(--muted)}
 #chart .seg-a{fill:var(--seg-a)}#chart .seg-b{fill:var(--seg-b)}
@@ -225,10 +229,12 @@ table.matrix{border-collapse:collapse}
 #wiz-text{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);padding:8px 10px;font:16px/1.6 var(--serif);resize:vertical;margin-bottom:10px}
 #wiz-more{margin:0 0 14px}
 .wiz-alt{font-size:12px;color:var(--faint);margin:14px 0 0}
+.wiz-keys{font-size:11.5px;color:var(--faint);margin:-4px 0 12px}
 .link{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;font-size:12px;cursor:pointer}
 #reader{border:1px solid var(--line-strong);border-radius:14px;background:var(--card);color:var(--ink);padding:22px 24px 18px;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 32px)}
 #reader::backdrop{background:rgba(28,26,22,.42)}
 #reader h2{font-size:18px;font-weight:500;margin:0 0 4px}
+#read-actions{position:sticky;bottom:-18px;background:var(--card);padding:10px 0 4px}
 #reader .rstep{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
 #reader .rstep h3{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;margin:0 0 8px}
 #reader .rnum{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:11.5px}
@@ -285,6 +291,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 </header>
 
 <main>
+  <a class="skip" href="#checks">Skip to the checks</a>
   <div class="about">
     <label>Title<input id="title" data-sfield="title" placeholder="Untitled" autocomplete="off"></label>
     <label>Logline<textarea id="logline" data-sfield="logline" rows="1" placeholder="The story in one sentence"></textarea></label>
@@ -306,7 +313,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     <aside>
       <section class="card" id="checks" aria-labelledby="checks-h"><h2 class="lab" id="checks-h">Checks</h2><div></div></section>
       <section class="card" id="threads" aria-labelledby="threads-h"><h2 class="lab" id="threads-h">Plants and payoffs</h2><ul></ul>
-        <form id="thread-add"><input placeholder="Something planted: an object, a line, a habit" aria-label="New thread" maxlength="200"><button class="ghost" type="submit">Add</button></form>
+        <form id="thread-add"><input placeholder="Something planted: an object, a line, a habit" aria-label="New thread" maxlength="200"><button class="ghost" type="submit" disabled>Add</button></form>
       </section>
     </aside>
   </div>
@@ -335,7 +342,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   <p class="sp-priv">Your story stays in this browser and in the files you save. No account. Nothing leaves the page unless you ask your own provider, with your own key, to read a story.</p>
   <div class="sp-actions">
     <button class="btn primary" data-ui="tour" autofocus>Take the tour</button>
-    <button class="btn" data-ui="splash-close" id="splash-close">Explore The whistle</button>
+    <button class="btn" data-ui="splash-close" id="splash-close">See a finished example</button>
     <button class="btn" data-ui="wizard">Start a new story</button>
   </div>
 </dialog>
@@ -343,14 +350,16 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   <div class="wiz-progress" id="wiz-progress"></div>
   <h2 id="wiz-h"></h2>
   <p id="wiz-hint"></p>
-  <textarea id="wiz-text" aria-labelledby="wiz-h" aria-describedby="wiz-hint" rows="4"></textarea>
+  <textarea id="wiz-text" aria-labelledby="wiz-h" aria-describedby="wiz-hint wiz-keys" rows="4"></textarea>
+  <p id="wiz-keys" class="wiz-keys">Enter for the next question · Shift+Enter for a new line</p>
   <button class="ghost" type="button" data-ui="wiz-more" id="wiz-more" hidden>Add another “Because of that”</button>
   <div class="sp-actions">
     <button class="btn" type="button" data-ui="wiz-back">Back</button>
-    <button class="btn" type="button" data-ui="wiz-skip">Skip</button>
+    <button class="btn" type="button" data-ui="wiz-skip" id="wiz-skip">Leave blank</button>
     <button class="btn primary" type="button" data-ui="wiz-next" id="wiz-next">Next</button>
+    <button class="btn" type="button" data-ui="wiz-finish" id="wiz-finish">Finish now</button>
   </div>
-  <p class="wiz-alt"><button class="link" type="button" data-ui="wiz-blank">Start with an empty spine instead</button> · Esc keeps the story you have.</p>
+  <p class="wiz-alt"><button class="link" type="button" data-ui="wiz-blank">Start with an empty spine instead</button> · <button class="link" type="button" data-ui="wiz-restart">Start over</button> · Esc closes without changes; your answers wait here.</p>
 </dialog>
 
 <dialog id="reader" aria-labelledby="reader-h">
@@ -370,7 +379,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
           <button class="x" data-ui="read-forget-key" id="key-forget" type="button" hidden>forget key</button>
           <label>model <input type="text" id="provider-model" list="provider-models" spellcheck="false" aria-label="Model id"></label><datalist id="provider-models"></datalist>
           <button class="btn" data-ui="read-models" type="button">Load models</button>
-          <p id="key-prompt" class="faint">Choose your provider and paste its API key. The key stays in this browser and shows only as a fingerprint; each read is billed to your account.</p>
+          <p id="key-prompt" class="faint">Choose your provider and paste its API key (<a id="key-link" href="#" target="_blank" rel="noopener">get a key</a>). The key stays in this browser and shows only as a fingerprint; each read is billed to your account.</p>
         </div></div>
       <details class="others" id="other-readers"><summary>Other readers: a model server on this machine, or Gemini Nano in Chrome. In our tests they missed the story's turn.</summary>
         <div class="rung"><label><input type="radio" name="rung" value="machine"> A model server on this machine</label><span id="machine-state" class="faint"></span>
@@ -853,16 +862,17 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     lmstudio: { label: 'LM Studio', base: 'http://127.0.0.1:1234/v1', native: 'http://127.0.0.1:1234/api/v0', cors: 'turn on CORS in LM Studio’s server settings' }
   };
   // The writer's provider: any OpenAI-compatible API, or Anthropic's own. Browser CORS checked 2026-10-04 for every
-  // listed host. No model is preset except Anthropic's: the writer picks one, or loads the provider's own list.
+  // listed host. Two models are preset, the two measured with the page's prompt (SPEC §5): Anthropic's and DeepSeek's; for the rest the
+  // writer picks one, or loads the provider's own list. `keys` is where the writer gets a key.
   const PROVIDERS = {
-    openrouter: { label: 'OpenRouter', kind: 'openai', base: 'https://openrouter.ai/api/v1' },
-    openai: { label: 'OpenAI', kind: 'openai', base: 'https://api.openai.com/v1' },
-    anthropic: { label: 'Anthropic', kind: 'anthropic', base: 'https://api.anthropic.com/v1', model: 'claude-opus-5-5' },
-    gemini: { label: 'Google Gemini', kind: 'openai', base: 'https://generativelanguage.googleapis.com/v1beta/openai' },
-    groq: { label: 'Groq', kind: 'openai', base: 'https://api.groq.com/openai/v1' },
-    mistral: { label: 'Mistral', kind: 'openai', base: 'https://api.mistral.ai/v1' },
-    deepseek: { label: 'DeepSeek', kind: 'openai', base: 'https://api.deepseek.com/v1' },
-    together: { label: 'Together', kind: 'openai', base: 'https://api.together.xyz/v1' },
+    openrouter: { label: 'OpenRouter', kind: 'openai', base: 'https://openrouter.ai/api/v1', keys: 'https://openrouter.ai/keys' },
+    openai: { label: 'OpenAI', kind: 'openai', base: 'https://api.openai.com/v1', keys: 'https://platform.openai.com/api-keys' },
+    anthropic: { label: 'Anthropic', kind: 'anthropic', base: 'https://api.anthropic.com/v1', model: 'claude-opus-5-5', keys: 'https://console.anthropic.com/settings/keys' },
+    gemini: { label: 'Google Gemini', kind: 'openai', base: 'https://generativelanguage.googleapis.com/v1beta/openai', keys: 'https://aistudio.google.com/apikey' },
+    groq: { label: 'Groq', kind: 'openai', base: 'https://api.groq.com/openai/v1', keys: 'https://console.groq.com/keys' },
+    mistral: { label: 'Mistral', kind: 'openai', base: 'https://api.mistral.ai/v1', keys: 'https://console.mistral.ai/api-keys' },
+    deepseek: { label: 'DeepSeek', kind: 'openai', base: 'https://api.deepseek.com/v1', model: 'deepseek-flash', keys: 'https://platform.deepseek.com/api_keys' },
+    together: { label: 'Together', kind: 'openai', base: 'https://api.together.xyz/v1', keys: 'https://api.together.ai/settings/api-keys' },
     custom: { label: 'Another OpenAI-compatible API', kind: 'openai', base: '' }
   };
 
@@ -1177,11 +1187,16 @@ const providerReader = {
       run: (pr, schema) => (anth ? anthropicCall(key, model, pr, schema) : openaiCall(base, key, model, pr, schema)) };
   }
 };
+// what to do when an address does not answer: a local server must run and allow this site; a provider needs the connection
+function reachNext(url) {
+  if (/^http:\/\/(127\.0\.0\.1|localhost)/.test(url)) return 'Start the model server and let it allow this site, then try again.';
+  return rcfg.provider === 'custom' && !/^https:\/\/(api\.|openrouter|generativelanguage)/.test(url) ? 'Check the address you entered with the key, and your connection.' : 'Check your connection, then try again.';
+}
 async function post(url, headers, body) {
   let res;
   stopped();
   try { res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: readSignal() }); }
-  catch (e) { stopped(); throw readerFail('reader_error', `Could not reach ${hostOf(url)} (${e.message}).`, 'Check the connection and the address. A local server must allow this site.'); }
+  catch (e) { stopped(); throw readerFail('reader_error', `Could not reach ${hostOf(url)} (${e.message}).`, reachNext(url)); }
   return { status: res.status, out: await res.json().catch(() => ({})) };
 }
 // providers word their errors differently: { error: { message } }, { error: "..." }, { message }, { detail }; some echo the key
@@ -1242,7 +1257,7 @@ async function listModels() {
   if (!key) throw readerFail('no_reader', `No key is set for ${p.label}.`, 'Paste your key first.');
   const headers = p.kind === 'anthropic' ? { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } : { authorization: `Bearer ${key}` };
   let res;
-  try { res = await fetch(`${base}/models${p.kind === 'anthropic' ? '?limit=1000' : ''}`, { headers, signal: AbortSignal.timeout(20000) }); } catch (e) { throw readerFail('reader_error', `Could not reach ${hostOf(base)} (${e.message}).`, 'Check the address, then try again.'); }
+  try { res = await fetch(`${base}/models${p.kind === 'anthropic' ? '?limit=1000' : ''}`, { headers, signal: AbortSignal.timeout(20000) }); } catch (e) { throw readerFail('reader_error', `Could not reach ${hostOf(base)} (${e.message}).`, reachNext(base)); }
   const out = await res.json().catch(() => ({}));
   apiStatus(res.status, out, p.label, key);
   return { source: p.label, models: LD.modelIds(out) };
@@ -1347,9 +1362,9 @@ const strategyFor = (a) => a.strategy || 'whole';
 let readProgress = () => { /* the dialog replaces this while it is open */ };
 function readError(words, id, strategy, door) {
   if (door !== 'ui' && id === 'provider' && rcfg.rung !== 'provider') return fail('person_only', 'Sending the story to a provider is the writer\'s choice; the writer has not chosen it.', 'Read with an on-device rung (machine or device), or ask the writer to choose the provider in Read a story.');
-  if (!id) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Read a story (reader.select with a rung), or pass rung.');
+  if (!id) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it: your provider with your key, or another reader (reader.select).');
   if (strategy !== undefined && !['whole', 'split'].includes(strategy)) return fail('invalid', `no strategy ${strategy}`, 'Use "whole" or "split".');
-  if (words < 50) return fail('invalid', `${words} words is too short to have a structure.`, 'Pass the story itself, at least 50 words.');
+  if (words < 50) return fail('invalid', `${words} words is too short to have a structure.`, 'Paste the whole story: at least 50 words.');
   if (!own(READERS, id)) return fail('invalid', `no rung ${id}`, `Use one of: ${LD.ORDER.join(', ')}.`);
   if (app.reading) return fail('busy', 'A read is already running.', 'Wait for it to finish, then call read.get.');
   return null;
@@ -1413,7 +1428,7 @@ const TOOLS = [
         const el = document.createElement('a'); el.href = url; el.download = filename; document.body.appendChild(el); el.click(); el.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
       } catch (e) { return fail('io_error', String(e && e.message || e), 'Call story.get and write the JSON yourself.'); }
-      app.dirty = false; app.savedNote = 'Download started'; persist();
+      app.dirty = false; app.savedNote = `Downloaded ${filename}`; persist();
       return ok({ filename, bytes: new TextEncoder().encode(text).length });
     } },
   { name: 'story.paste', description: 'Replace the story with pasted prose, one beat per paragraph, every label left to the writer. No model, nothing guessed. Undo brings the old story back.', mutating: true,
@@ -1599,11 +1614,18 @@ const opts = (list, cur, none) => (none !== undefined ? `<option value=""${cur ?
 let toastTimer = null;
 function toast(msg, next) {
   const el = $('#toast'); el.innerHTML = esc(msg) + (next ? ` <span>${esc(next)}</span>` : '');
+  el.classList.remove('show'); void el.offsetWidth;   // the same message again still shows as new
   el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 5000);
 }
 
 // what to redraw after a command: header and plant-label edits leave the beat cards alone, so a click into a beat keeps its cursor
-const NOTICES = { 'story.new': 'New story.', 'story.demo': 'Demo story loaded.', 'story.start': 'Your story is on the spine. Label each beat when you are ready.' };
+const NOTICES = { 'story.new': 'New story.', 'story.demo': 'Demo story loaded.', 'story.start': 'Your story is on the spine. Label each beat when you are ready.', 'beat.remove': 'Beat removed.' };
+// what the writer is told after a change made in the page; Undo and Redo clear a notice that no longer holds
+function notice(name, door) {
+  if (door !== 'ui') return;
+  if (name === 'undo' || name === 'redo') $('#toast').classList.remove('show');
+  else if (NOTICES[name]) toast(NOTICES[name], name === 'beat.remove' ? 'Undo brings it back.' : 'Undo brings your previous story back.');
+}
 const patchKeys = (args) => (args.patch ? Object.keys(args.patch) : []);
 const AFTER = {
   'view.focus': (args, door) => { renderAll(); if (door === 'ui' && args.principle !== 'all') $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
@@ -1613,24 +1635,32 @@ const AFTER = {
   'thread.update': (args) => (patchKeys(args).every(k => k === 'label') ? (renderViews(), patchCards()) : renderAll()),
   'beat.update': (args, door) => (door === 'ui' && patchKeys(args).length && patchKeys(args).every(k => k === 'text' || k === 'label') ? (renderViews(), patchCards()) : renderAll())
 };
+const readTool = (name) => /^read(er)?\./.test(name);
+// a failed call from the page says so in a toast, except in the open read dialog, whose own status line says it (one announcement)
+function failNotice(name, door, env) { if (door === 'ui' && !(reader.open && readTool(name))) toast(env.message, env.next); }
 function afterDispatch(name, args, door, env, t) {
-  if (door !== 'ui' && /^read(er)?\./.test(name)) { renderProposal(); if (reader.open) renderReader(false); }   // the dialog shows what an agent changed
-  if (!env.ok) { if (door === 'ui') toast(env.message, env.next); return; }
+  if (door !== 'ui' && readTool(name)) { renderProposal(); if (reader.open) renderReader(false); }   // the dialog shows what an agent changed
+  if (!env.ok) { failNotice(name, door, env); return; }
   if (AFTER[name]) { AFTER[name](args, door); return; }
   if (!t.mutating && name !== 'story.save') return;
-  if (door === 'ui' && NOTICES[name]) toast(NOTICES[name], 'Undo brings your previous story back.');
+  notice(name, door);
   renderAll();
 }
 
 function renderAll() {
   if (pending.size) flushPending();   // the writer's typing lands before anything is redrawn from the story
-  const a = document.activeElement, key = a && a.dataset ? focusKey(a) : null;
+  const a = document.activeElement, key = a && a.dataset ? focusKey(a) : null, fkey = a && a.dataset && a.dataset.focus;
   const sel = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
   renderHeader(); renderBeats(); renderViews();
+  restoreFocus(key, sel, fkey);
+}
+// after a redraw, focus returns to the same field (with its caret) or the same toggle, so keyboard writers keep their place
+function restoreFocus(key, sel, fkey) {
   if (key) {
     const el = [...document.querySelectorAll('[data-beat],[data-thread],[data-note],[data-sfield]')].find(x => focusKey(x) === key);
     if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel && typeof el.setSelectionRange === 'function') try { el.setSelectionRange(sel[0], sel[1]); } catch { /* selects and ranges have no caret */ } }
   }
+  if (fkey) { const b = document.querySelector(`[data-focus="${fkey}"]`); if (b) b.focus({ preventScroll: true }); }
 }
 const focusKey = (x) => [x.dataset.beat, x.dataset.thread, x.dataset.note, x.dataset.sfield, x.dataset.field, x.dataset.tfield, x.dataset.k].join('|');
 function renderViews() { renderChart(); renderArc(); renderChecks(); renderThreads(); renderCoverage(); renderSaveState(); }
@@ -1640,7 +1670,7 @@ function renderHeader() {
   document.title = (S().title || 'Untitled') + ' · sandhi';
 }
 function renderSaveState() {
-  $('#savestate').textContent = !app.kept ? 'Not kept in this browser: its storage is full · save to a file' : app.dirty ? 'Kept in this browser · not saved to a file' : app.savedNote || 'Saved';
+  $('#savestate').textContent = !app.kept ? 'Not kept in this browser: its storage is full · save to a file' : app.dirty ? 'In this browser · not saved to a file' : app.savedNote || 'In this browser';
   if (app.dirty) app.savedNote = null;
   $('#undo').disabled = !app.undo.length; $('#redo').disabled = !app.redo.length;
 }
@@ -1662,6 +1692,7 @@ function renderChart() {
     const on = app.focus === 'all' || b.tags.includes(app.focus), hit = app.focus !== 'all' && on;
     g += `<text class="num" x="${x(i)}" y="${NUM}" text-anchor="middle">${i + 1}</text>`;
     for (const m of b.marks) g += `<text class="markt" x="${x(i)}" y="${y(b.fortune) + (m === 'low' ? 22 : -12)}" text-anchor="middle">${m === 'turn' ? 'turn' : 'low point'}</text>`;
+    g += `<circle class="hit" data-i="${i}" cx="${x(i)}" cy="${y(b.fortune)}" r="12" aria-hidden="true"/>`;   // a 24 px target around an 11 px dot
     g += `<circle class="dot${on ? '' : ' off'}" data-i="${i}" cx="${x(i)}" cy="${y(b.fortune)}" r="${hit ? 7 : 5.5}" tabindex="0" role="slider" aria-label="Beat ${i + 1} fortune" aria-valuemin="-5" aria-valuemax="5" aria-valuenow="${b.fortune}"><title>Beat ${i + 1} · ${esc(b.label || C.spineName(b.spine))} · fortune ${fmtF(b.fortune)}${b.text ? ' — ' + esc(snip(b.text, 90)) : ''}</title></circle>`;
   });
   rows.forEach((row, ri) => { g += phaseRow(s, row, P0 + ri * (RH + 4), { n, L, w, RH }); });
@@ -1693,7 +1724,7 @@ function renderArc() {
     const best = a.best === arc.id;
     return `<figure class="mini${best ? ' best' : ''}" title="${esc(arc.d)}"><svg viewBox="0 0 60 24" aria-hidden="true"><path d="${d}"/></svg><figcaption>${esc(arc.name)}${best ? ` · r ${a.r.toFixed(2)}` : ''}</figcaption></figure>`;
   }).join('');
-  const lead = a.best ? `Closest of the six shapes: <b>${esc(a.name)}</b>` : a.reason === 'flat' ? 'The fortune line is flat, so no shape fits yet.' : 'Three beats or more give the line a shape.';
+  const lead = a.best ? `Closest of the six shapes: <b>${esc(a.name)}</b>` : a.reason === 'flat' ? 'The fortune line is flat, so no shape fits yet.' : 'Write three beats to see a shape.';
   // the three phase rows in a line each, so a phone reader sees what the words mean without a tooltip
   const used = (k) => S().beats.some(b => b[k]);
   const legend = `<p class="legend"><b>Story Spine</b>: Kenn Adams’s frame, once upon a time … until finally.${used('avastha') ? ' <b>Nāṭyaśāstra</b>: the five stages of the hero’s effort, from beginning to the fruit reached.' : ''}${used('kis') ? ' <b>Kishōtenketsu</b>: introduction, development, twist, conclusion.' : ''}</p>`;
@@ -1708,7 +1739,7 @@ function jointHtml(b, i) {
 }
 function markBtn(b, m, l) {
   const has = b.marks.includes(m), next = has ? b.marks.filter(x => x !== m) : [...b.marks, m];
-  return `<button class="mark" aria-pressed="${has}" data-cmd="beat.update" data-args="${attr({ id: b.id, patch: { marks: next } })}">${l}</button>`;
+  return `<button class="mark" aria-pressed="${has}" data-focus="mark:${b.id}:${m}" data-cmd="beat.update" data-args="${attr({ id: b.id, patch: { marks: next } })}">${l}</button>`;
 }
 function tagsHtml(b, P) {
   const chips = b.tags.map(t => `<button class="chip on" data-cmd="beat.update" data-args="${attr({ id: b.id, patch: { tags: b.tags.filter(x => x !== t) } })}" title="${esc(PLINE[t])} (click to remove)">${esc(PNAME[t])} <span aria-hidden="true">×</span></button>`).join('');
@@ -1798,7 +1829,7 @@ function renderCoverage() {
     h += `<tr class="${app.focus === c.id ? 'focus' : ''}"><th scope="row"><button data-cmd="view.focus" data-args="${attr({ principle: app.focus === c.id ? 'all' : c.id })}" title="${esc(PLINE[c.id])}"><span class="pn">${c.n}</span>${esc(c.name)}</button></th>`;
     s.beats.forEach((b, i) => {
       const on = b.tags.includes(c.id), next = on ? b.tags.filter(x => x !== c.id) : [...b.tags, c.id];
-      h += `<td class="c"><button data-cmd="beat.update" data-args="${attr({ id: b.id, patch: { tags: next } })}" aria-label="${on ? 'Untag' : 'Tag'} beat ${i + 1} with ${esc(c.name)}" aria-pressed="${on}"><i class="${on ? 'on' : 'no'}"></i></button></td>`;
+      h += `<td class="c"><button data-focus="cell:${b.id}:${c.id}" data-cmd="beat.update" data-args="${attr({ id: b.id, patch: { tags: next } })}" aria-label="${on ? 'Untag' : 'Tag'} beat ${i + 1} with ${esc(c.name)}" aria-pressed="${on}"><i class="${on ? 'on' : 'no'}"></i></button></td>`;
     });
     h += `<td class="n">${c.beats.length}/${n}</td></tr>`;
   }
@@ -1809,7 +1840,7 @@ function renderCoverage() {
   const dis = p.dissent || [], src = C.SOURCES.filter(x => p.src[x.id]);
   panel.innerHTML = `<div><h3>${PN[p.id]}. ${esc(p.name)}</h3><p>${esc(p.line)}</p><ul class="who">${src.map(x => `<li class="${dis.includes(x.id) ? 'dis' : ''}"><b>${esc(x.name)}</b><span>${dis.includes(x.id) ? 'Pushes back: ' : ''}${esc(p.src[x.id])}</span></li>`).join('')}</ul></div>
     <div><h2 class="lab">In this story</h2><textarea data-note="${p.id}" aria-label="How ${esc(p.name)} works in this story" placeholder="Where does this principle work in your story?">${esc(s.notes[p.id] || '')}</textarea>
-    <p class="faint" style="margin-top:6px">Beats: ${cov.find(c => c.id === p.id).beats.join(', ') || 'none tagged'} · <button class="ghost" data-cmd="view.focus" data-args="${attr({ principle: 'all' })}">Clear focus</button></p></div>`;
+    <p class="faint" style="margin-top:6px">Beats: ${cov.find(c => c.id === p.id).beats.join(', ') || 'none tagged'} · <button class="ghost" data-cmd="view.focus" data-args="${attr({ principle: 'all' })}">Show all principles</button></p></div>`;
 }
 
 // ---- UI events: every edit becomes a bus.dispatch
@@ -1855,8 +1886,9 @@ document.addEventListener('change', (e) => {
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
 const UI_ACTIONS = { help: () => openSplash(false), tour: () => startTour(), 'splash-close': () => splash.close(), open: () => $('#file').click(), wizard: () => openWizard(),
-  'wiz-next': () => wizardMove(1), 'wiz-back': () => wizardMove(-1), 'wiz-skip': () => { $('#wiz-text').value = ''; wizardMove(1); }, 'wiz-more': () => wizardMore(),
-  'wiz-blank': () => { wizard.close(); ui('story.new', {}); } };
+  'wiz-next': () => wizardMove(1), 'wiz-back': () => wizardMove(-1), 'wiz-skip': () => wizardMove(1), 'wiz-more': () => wizardMore(),
+  'wiz-finish': () => { wiz.values[wiz.i] = $('#wiz-text').value; wizardFinish(); }, 'wiz-restart': () => { wizardReset(); wizardStep(); },
+  'wiz-blank': () => wizardBlank() };
 function onUiControl(u, e) {
   const kind = u.dataset.ui;
   if (kind.startsWith('read-')) { onReadControl(kind, e); return; }
@@ -1877,26 +1909,33 @@ document.addEventListener('click', (e) => {
   if (g && g.dataset.goto) goBeat(g.dataset.goto);
 });
 document.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.more) { if (d.open) app.open.add(d.dataset.more); else app.open.delete(d.dataset.more); } }, true);
-$('#thread-add').addEventListener('submit', (e) => { e.preventDefault(); const i = e.target.querySelector('input'), v = i.value.trim(); if (!v) return; ui('thread.add', { label: v }).then(r => { if (r.ok) i.value = ''; }); });
+$('#thread-add input').addEventListener('input', (e) => { $('#thread-add button').disabled = !e.target.value.trim(); });
+$('#thread-add').addEventListener('submit', (e) => { e.preventDefault(); const i = e.target.querySelector('input'), v = i.value.trim(); if (!v) return; ui('thread.add', { label: v }).then(r => { if (r.ok) { i.value = ''; $('#thread-add button').disabled = true; } }); });
 function goBeat(id) { const el = document.getElementById('beat-' + id); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); }
 
+// a file that is not text (a picture, a binary) is refused: its bytes would become beats of noise
+async function textOf(f) {
+  const t = await f.text(), bad = (t.match(/\uFFFD/g) || []).length;
+  if (t.includes('\u0000') || bad > t.length / 100) { toast(`"${f.name}" is not a text file.`, 'Open a .txt or .md file, or paste the story.'); return null; }
+  return t;
+}
 // a file larger than any story the page can hold is refused before it is read (LIMITS: 3,000,000 characters of text)
 const MAX_FILE = 12e6;
 const tooBig = (f) => { if (f.size <= MAX_FILE) return false; toast(`That file is ${Math.round(f.size / 1e6)} MB, more than a story this page can hold.`, 'Open a .sandhi.json file saved from sandhi, or one part of a long story.'); return true; };
-async function openText(text) {
+async function openText(text, name) {
   let story;
-  try { story = JSON.parse(text); } catch { toast('That file is not JSON.', 'Open a .sandhi.json file saved from sandhi.'); return; }
+  try { story = JSON.parse(text); } catch { toast(`"${name || 'That file'}" is not a sandhi story.`, 'Open a .sandhi.json file saved from sandhi; to bring in prose, use Read a story.'); return; }
   const r = await ui('story.load', { story });
   if (r.ok) { app.dirty = false; persist(); renderSaveState(); toast(`Opened "${S().title || 'Untitled'}".`, 'Undo brings the previous story back.'); }
-  else if (r.class === 'invalid') toast('This file is not a sandhi story. Nothing changed.', 'Open a .sandhi.json file saved from sandhi.');
+  else if (r.class === 'invalid') toast(`"${name || 'This file'}" is not a sandhi story. Nothing changed.`, 'Open a .sandhi.json file saved from sandhi.');
 }
-$('#file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f && !tooBig(f)) openText(await f.text()); });
+$('#file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f && !tooBig(f)) openText(await f.text(), f.name); });
 document.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
 document.addEventListener('drop', async (e) => {
   const f = e.dataTransfer && e.dataTransfer.files[0]; if (!f) return; e.preventDefault();
   if (tooBig(f)) return;
-  if ($('#reader').open) { $('#read-text').value = await f.text(); $('#read-text').dispatchEvent(new Event('input')); return; }
-  openText(await f.text());
+  if ($('#reader').open) { const t = await textOf(f); if (t !== null) { $('#read-text').value = t; $('#read-text').dispatchEvent(new Event('input')); } return; }
+  openText(await f.text(), f.name);
 });
 // the call that commits the field the writer was typing in, or null when it holds what the story holds
 function activeFieldCall(el, d) {
@@ -1922,6 +1961,12 @@ addEventListener('storage', (e) => {
   renderAll(); toast('Updated from another tab.', "Undo brings this tab's version back.");
 });
 // keyboard: Enter commits a one-line field; Cmd/Ctrl+S saves; Cmd/Ctrl+Z undoes outside text; ? opens the splash
+// Esc closes an open beat menu first, and puts focus back on its button
+function closeMenu(e) {
+  const m = e.key === 'Escape' && document.querySelector('details.menu[open]');
+  if (!m) return false;
+  m.open = false; m.querySelector('summary').focus(); return true;
+}
 const escClearsFocus = (e) => e.key === 'Escape' && app.focus !== 'all' && !tour.layer && !document.querySelector('dialog[open]');
 function shortcut(e, typing) {
   const mod = e.metaKey || e.ctrlKey, key = e.key.toLowerCase();
@@ -1932,6 +1977,7 @@ function shortcut(e, typing) {
   return null;
 }
 document.addEventListener('keydown', (e) => {
+  if (closeMenu(e)) { e.preventDefault(); return; }
   if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea[rows="1"]')) { e.preventDefault(); e.target.blur(); return; }
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'range';
   const run = shortcut(e, typing);
@@ -1947,7 +1993,8 @@ document.addEventListener('keydown', (e) => {
     return Math.max(-5, Math.min(5, Math.round(5 - (p.y - T) / (B - T) * 10)));
   };
   box.addEventListener('pointerdown', (e) => {
-    const d = e.target.closest('.dot'); if (!d) return;
+    const h = e.target.closest('.dot, .hit'); if (!h) return;
+    const d = box.querySelector(`.dot[data-i="${h.dataset.i}"]`);
     e.preventDefault(); d.setPointerCapture(e.pointerId);
     drag = { el: d, i: +d.dataset.i, start: S().beats[+d.dataset.i].fortune, v: null };
   });
@@ -1984,7 +2031,7 @@ const MEASURED = {
   "deepseek-flash": "Measured: DeepSeek's deepseek-flash, reading in this page with the writer's key, found the turn in 5 of 5 stories and linked 8 of 9 labelled threads, with no quote dropped.",
   "claude-opus-5-5": "Measured: Claude Opus 5.5, reading with this page's prompt, marked the turn in 4 of 4 stories, every quote matching the text."
 };
-const MEASURED_NONE = 'This model is not measured yet. In our tests small local models often missed the turn; large provider models found it (SPEC §5).';
+const MEASURED_NONE = 'This model is not measured yet. In our tests small local models often missed the story’s turn, and large provider models found it.';
 function measuredLine(st) {
   const id = st.rung === 'device' ? 'gemini-nano' : st.rung === 'machine' ? st.machine.model : st.rung === 'provider' ? st.provider.model : null;
   if (!st.rung) return '';
@@ -1994,7 +2041,7 @@ function measuredLine(st) {
 function machineText(m) {
   if (!m.checked) return 'not looked for yet';
   if (m.access === 'denied') return 'Chrome blocks local network access for this site (Site settings → Local network access)';
-  return m.server ? `${LD.SERVERS[m.server].label} found, ${m.models} model${m.models === 1 ? '' : 's'}` : 'none answered on 127.0.0.1';
+  return m.server ? `${LD.SERVERS[m.server].label} found, ${m.models} model${m.models === 1 ? '' : 's'}` : `none answered on 127.0.0.1. Start Ollama (${LD.SERVERS.ollama.cors}) or LM Studio (${LD.SERVERS.lmstudio.cors}), then look again`;
 }
 let readerDraws = 0;   // draws overlap (the writer's change and an agent's call); only the newest one writes the dialog
 // the fields under each reader: shown for the chosen one; a chosen reader under "Other readers" opens that section
@@ -2002,6 +2049,7 @@ function readerFields(st) {
   // before any reader is chosen, the provider's fields show: the dialog asks for a key (Chirag 2026-10-04); pasting one chooses it
   $('#machine-fields').hidden = st.rung !== 'machine'; $('#provider-fields').hidden = !!st.rung && st.rung !== 'provider';
   $('#key-prompt').hidden = !!st.provider.key;
+  const keys = (LD.PROVIDERS[st.provider.id] || {}).keys; $('#key-link').hidden = !keys; if (keys) $('#key-link').href = keys;
   if (st.rung === 'machine' || st.rung === 'device') $('#other-readers').open = true;
   $('#provider').value = st.provider.id; $('#provider-base').hidden = st.provider.id !== 'custom';
   $('#key-forget').hidden = !st.provider.key;
@@ -2015,9 +2063,8 @@ async function renderReader(probe) {
   $('#nano-state').textContent = '· ' + NANO_TEXT[st.device];
   $('#key-state').textContent = st.provider.key ? `· ${st.provider.label}, ${st.provider.key}` : '· no key yet';
   readerFields(st);
-  const hint = { machine: 'a model server on this machine', device: 'Gemini Nano', provider: 'your provider' }[st.suggested];
   $('#read-measured').textContent = measuredLine(st);
-  $('#read-privacy').textContent = !st.rung ? `Add your provider’s key to read with it, or choose another reader.${hint && st.suggested !== 'provider' ? ` Available here: ${hint}.` : ''}` : st.local ? `Read by ${st.where}.` : `Read by ${st.where}, billed to your account.`;
+  $('#read-privacy').textContent = !st.rung ? 'Add your provider’s key to read with it, or choose another reader.' : st.local ? `Read by ${st.where}.` : `Read by ${st.where}, billed to your account.`;
 }
 function fillModels(listId, models) { $(listId).innerHTML = models.map(m => `<option value="${esc(m)}">`).join(''); }
 function renderProposal() {
@@ -2033,9 +2080,9 @@ function renderProposal() {
 }
 async function openReader() { $('#read-progress').textContent = ''; await renderReader(false); renderProposal(); if (!reader.open) reader.showModal(); $('#read-text').focus(); }   // the proposal is drawn last, so a read that ended meanwhile shows
 readProgress = (m) => { $('#read-progress').textContent = m; };
-const countWords = () => { $('#read-count').textContent = `${C.wordCount($('#read-text').value)} words`; };
+const countWords = () => { const n = C.wordCount($('#read-text').value); $('#read-count').textContent = n < 50 ? `${n} words · 50 needed` : `${n} words`; if (n >= 50 && /too short/.test($('#read-progress').textContent)) readProgress(''); };
 $('#read-text').addEventListener('input', countWords);
-$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f && !tooBig(f)) { $('#read-text').value = await f.text(); countWords(); } });
+$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; const t = f && !tooBig(f) ? await textOf(f) : null; if (t !== null) { $('#read-text').value = t; countWords(); } });
 const READER_CHANGES = {
   rung: (el) => { readProgress(''); return ui('reader.select', { rung: el.value }); },
   provider: (el) => ui('reader.select', { provider: el.value }),
@@ -2046,7 +2093,10 @@ const READER_CHANGES = {
 reader.addEventListener('change', async (e) => {
   readerDraws++;   // the writer's change wins: a draw already under way read the settings before it, so it must not write
   const fn = READER_CHANGES[e.target.name === 'rung' ? 'rung' : e.target.id];
-  if (fn) { await fn(e.target); renderReader(false); }
+  if (!fn) return;
+  const r = await fn(e.target);
+  if (r && !r.ok) readProgress(`${r.message} ${r.next || ''}`);   // a refused key or choice says why, in the dialog
+  renderReader(false);
 });
 async function lookForServer() {
   readProgress('Looking for Ollama or LM Studio on 127.0.0.1… If Chrome asks to let this site reach your local network, choose Allow.');
@@ -2092,6 +2142,7 @@ async function onReadControl(kind, e) {
   if (kind === 'read-accept' && e.isTrusted) {   // person-only: a real click, never a scripted one, on the proposal shown
     const r = await ui('read.accept', { id: +$('#read-actions [data-ui="read-accept"]').dataset.proposal });
     if (r.ok) { reader.close(); toast(`Read by ${r.data.model}: ${r.data.beats} beats.`, 'Undo brings your previous story back.'); }
+    else readProgress(`${r.message} ${r.next || ''}`);   // the dialog's own status line says why (one announcement)
     return null;
   }
   return onReaderTool(kind);
@@ -2110,13 +2161,18 @@ const WIZ = [
   { key: 'belief', h: 'Why are you telling it?', hint: 'The belief under the plot. Skip it for now if you do not know yet.', rows: 2 }
 ];
 const wiz = { steps: [], values: [], i: 0 };
+const wizardReset = () => { wiz.steps = WIZ.map(x => ({ ...x })); wiz.values = WIZ.map(() => ''); wiz.i = 0; };
+// a wizard closed with Esc keeps its answers: the next New resumes where the writer left it ("Start over" clears it)
 function openWizard() {
   if (splash.open) splash.close();
   flushPending();
-  wiz.steps = WIZ.map(x => ({ ...x })); wiz.values = WIZ.map(() => ''); wiz.i = 0;
+  if (!wiz.steps.length) wizardReset();
   if (!wizard.open) wizard.showModal();
   wizardStep();
 }
+wizard.addEventListener('close', () => { if (wiz.steps.length) wiz.values[wiz.i] = $('#wiz-text').value; });
+// "Leave blank" is for an empty answer only, so it never erases what was typed
+const wizardSkipState = () => { $('#wiz-skip').disabled = !!$('#wiz-text').value.trim(); };
 function wizardStep() {
   const st = wiz.steps[wiz.i], t = $('#wiz-text');
   $('#wiz-progress').textContent = `New story · ${wiz.i + 1} of ${wiz.steps.length}`;
@@ -2126,7 +2182,8 @@ function wizardStep() {
   $('#wiz-more').hidden = !st.many;
   wizard.querySelector('[data-ui="wiz-back"]').disabled = wiz.i === 0;
   $('#wiz-next').textContent = wiz.i === wiz.steps.length - 1 ? 'Finish' : 'Next';
-  t.focus();
+  $('#wiz-finish').hidden = wiz.i === wiz.steps.length - 1;
+  wizardSkipState(); t.focus();
 }
 function wizardMove(d) {
   wiz.values[wiz.i] = $('#wiz-text').value;
@@ -2144,16 +2201,23 @@ function wizardMore() {
 function wizardLines() {
   return wiz.steps.map((st, k) => ({ st, text: wiz.values[k].trim() })).filter(({ st, text }) => C.SPINE.some(x => x.id === st.key) && (text || (st.key !== 'since' && !st.n))).map(({ st, text }) => ({ stage: st.key, text }));
 }
+const wizardAnswer = (key) => wiz.values[wiz.steps.findIndex(x => x.key === key)].trim();
 async function wizardFinish() {
-  const v = (key) => wiz.values[wiz.steps.findIndex(x => x.key === key)].trim();
-  const r = await ui('story.start', { title: v('title'), logline: v('logline'), belief: v('belief'), lines: wizardLines() });
-  if (r.ok) { wizard.close(); scrollTo({ top: 0, behavior: 'smooth' }); }
+  const r = await ui('story.start', { title: wizardAnswer('title'), logline: wizardAnswer('logline'), belief: wizardAnswer('belief'), lines: wizardLines() });
+  if (r.ok) { wizardReset(); wiz.steps = []; wizard.close(); scrollTo({ top: 0, behavior: 'smooth' }); }
 }
-// Enter moves on from a one-line answer; Cmd/Ctrl+Enter from any
+// the empty spine keeps what the writer already said about the story: title, who wants what, why
+async function wizardBlank() {
+  wiz.values[wiz.i] = $('#wiz-text').value;
+  const r = await ui('story.start', { title: wizardAnswer('title'), logline: wizardAnswer('logline'), belief: wizardAnswer('belief') });
+  if (r.ok) { wiz.steps = []; wizard.close(); }
+}
+// Enter moves on from every answer; Shift+Enter adds a line
 $('#wiz-text').addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter' || e.shiftKey || !(e.metaKey || e.ctrlKey || $('#wiz-text').rows === 1)) return;
+  if (e.key !== 'Enter' || e.shiftKey) return;
   e.preventDefault(); e.stopPropagation(); wizardMove(1);
 });
+$('#wiz-text').addEventListener('input', wizardSkipState);
 
 // ---- splash and tour: first visit only; `?` brings both back (Slate's first-run pattern)
 const SEEN = 'sandhi:intro-seen';
@@ -2169,7 +2233,7 @@ const TOUR = [
 ];
 const splash = $('#splash');
 function openSplash(first) {
-  $('#splash-close').textContent = first ? 'Explore The whistle' : 'Back to the story';
+  $('#splash-close').textContent = first ? 'See a finished example' : 'Back to the story';
   if (!splash.open) splash.showModal();
 }
 splash.addEventListener('close', () => store.set(SEEN, '1'));
@@ -2242,6 +2306,11 @@ function startTour() {
   addEventListener('resize', placeTour); addEventListener('scroll', placeTour, true);
   tourStep(0);
 }
+
+// ---- a failure nobody caught still reaches the writer, with a next step (silent-failures playbook)
+const SAFE = 'Your story is kept in this browser. Reload the page if anything looks wrong.';
+addEventListener('error', (e) => { if (e.message) toast(`Something went wrong: ${e.message}`, SAFE); });
+addEventListener('unhandledrejection', (e) => toast(`Something went wrong: ${(e.reason && e.reason.message) || e.reason}`, SAFE));
 
 // ---- boot: the story renders before anything else is touched (first value)
 // what this browser kept: the journal, the story, the undo history; anything corrupt starts fresh

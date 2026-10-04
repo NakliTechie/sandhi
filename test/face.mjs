@@ -86,7 +86,7 @@ const story = (await call('story.get', {})).data.story;
 check('face.undo_story_new', story.title === 'The whistle' && story.beats.length === 10, story.title);
 
 const [dl] = await Promise.all([page.waitForEvent('download'), call('story.save', {})]);
-check('face.save_says_download_started', (await page.textContent('#savestate')) === 'Download started', await page.textContent('#savestate'));
+check('face.save_says_downloaded', (await page.textContent('#savestate')) === 'Downloaded the-whistle.sandhi.json', await page.textContent('#savestate'));
 const saved = JSON.parse(readFileSync(await dl.path(), 'utf8'));
 check('face.save_file', dl.suggestedFilename() === 'the-whistle.sandhi.json' && JSON.stringify(saved) === JSON.stringify(story), dl.suggestedFilename());
 await call('story.new', {});
@@ -273,7 +273,7 @@ async function readPage(opts) {
   check('read.dialog_follows_agent', follows && radioFollows, { follows, radioFollows, id1, shownId, agentRead: agentRead.class, proposal: agentRead.data && agentRead.data.proposal });
   await p.evaluate((id) => { document.querySelector('[data-ui="read-accept"]').dataset.proposal = id; }, id1);   // the writer clicks a reading that was replaced
   await p.click('[data-ui="read-accept"]');
-  await p.waitForFunction(() => /changed after it was shown/.test(document.querySelector('#toast').textContent));
+  await p.waitForFunction(() => /changed after it was shown/.test(document.querySelector('#read-progress').textContent));
   check('read.accept_bound_to_shown_proposal', JSON.stringify((await call('story.get', {})).data.story) === unchanged, 'a replaced reading was accepted');
   await call('read.run', { text: prose });   // a whole-story reading, shown in the open dialog
   await p.waitForFunction(() => document.querySelectorAll('#read-result li').length === 10);
@@ -346,7 +346,7 @@ async function readPage(opts) {
   const p6 = await ctx6.newPage(); await p6.goto(new URL('../index.html', import.meta.url).href); await p6.evaluate(() => window.sandhi.ready);
   await p6.click('[data-ui="read-open"]'); await p6.check('#reader input[value="provider"]');
   await p6.fill('#provider-key', 'sk-test-0000-not-a-real-key'); await p6.locator('#provider-key').blur();
-  const told = await p6.waitForFunction(() => /opened as a file/.test(document.querySelector('#toast').textContent), null, { timeout: 2000 }).then(() => true, () => false);
+  const told = await p6.waitForFunction(() => /opened as a file/.test(document.querySelector('#read-progress').textContent), null, { timeout: 2000 }).then(() => true, () => false);
   const keys6 = (await p6.evaluate(() => window.sandhi.tools['reader.status']({}))).data.keys;
   check('ladder.no_key_on_file_pages', told && keys6.length === 0, { told, keys6 });
   await ctx6.close();
@@ -677,6 +677,52 @@ async function readPage(opts) {
   const toldAside = await p.waitForFunction(() => /did not pass the schema check/.test(document.querySelector('#toast').textContent), null, { timeout: 2000 }).then(() => true, () => false);
   check('import.bad_kept_story_set_aside', toldAside && aside && aside.includes('broken'), { toldAside, aside: aside && aside.slice(0, 60) });
   check('import.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+
+{ // the UX review's quick wins (plan/ux-review-2026-10-04.md): the wizard keeps answers; imports refuse non-text; notices; focus; Esc; errors surface
+  const { ctx2, p, call } = await readPage({});
+  await p.click('[data-ui="wizard"]'); await p.waitForFunction(() => document.querySelector('#wizard').open);
+  await p.keyboard.type('Kept title');
+  const blankOff = await p.evaluate(() => document.querySelector('#wiz-skip').disabled);
+  await p.keyboard.press('Enter'); await p.keyboard.type('Line one'); await p.keyboard.press('Shift+Enter'); await p.keyboard.type('line two');
+  const twoLines = (await p.inputValue('#wiz-text')) === 'Line one\nline two';
+  await p.keyboard.press('Enter');                                                  // Enter moves on from a multi-line step too
+  const step3 = await p.textContent('#wiz-h');
+  await p.keyboard.press('Escape'); await p.click('[data-ui="wizard"]'); await p.waitForFunction(() => document.querySelector('#wizard').open);
+  const resumed = await p.textContent('#wiz-h');
+  await p.click('[data-ui="wiz-back"]'); const kept = await p.inputValue('#wiz-text');
+  await p.click('[data-ui="wiz-blank"]'); await p.waitForFunction(() => !document.querySelector('#wizard').open);
+  const blank = (await call('story.get', {})).data.story;
+  check('ux.wizard_keeps_answers', blankOff && twoLines && step3 === 'Once upon a time…' && resumed === 'Once upon a time…' && kept === 'Line one\nline two'
+    && blank.title === 'Kept title' && blank.logline === 'Line one\nline two' && blank.beats.length === 5, { blankOff, twoLines, step3, resumed, kept, title: blank.title, beats: blank.beats.length });
+  await p.click('[data-ui="wizard"]'); await p.waitForFunction(() => document.querySelector('#wizard').open);
+  const fresh = await p.textContent('#wiz-h');                                      // a finished wizard starts fresh
+  await p.keyboard.type('Only a title'); await p.click('#wiz-finish'); await p.waitForFunction(() => !document.querySelector('#wizard').open);
+  check('ux.wizard_finish_now', fresh === 'What is the story called?' && (await call('story.get', {})).data.story.title === 'Only a title', fresh);
+  await call('story.demo', {});
+  // a file that is not text is refused, on the read dialog's drop
+  await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);
+  await p.evaluate(() => { const dt = new DataTransfer(); dt.items.add(new File([new Uint8Array([137, 80, 78, 71, 0, 0, 0, 13, 255, 254, 0, 1])], 'picture.png', { type: 'image/png' })); document.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })); });
+  const refused = await p.waitForFunction(() => /picture\.png" is not a text file/.test(document.querySelector('#toast').textContent), null, { timeout: 2000 }).then(() => true, () => false);
+  check('ux.non_text_file_refused', refused && (await p.inputValue('#read-text')) === '', refused);
+  await p.click('[data-ui="read-close"]');
+  // removing a beat says so; Undo clears the notice
+  await p.click('#beat-b3 details.menu summary'); await p.click('#beat-b3 [data-cmd="beat.remove"]');
+  const removed = await p.textContent('#toast'); await p.click('#undo');
+  const cleared = await p.evaluate(() => !document.querySelector('#toast').classList.contains('show'));
+  check('ux.remove_says_so_undo_clears', /Beat removed/.test(removed) && cleared, { removed, cleared });
+  // a toggle keeps keyboard focus; Esc closes the beat menu; an empty Add is disabled
+  await p.focus('#beat-b2 [data-focus="mark:b2:turn"]'); await p.keyboard.press('Space'); await p.waitForTimeout(100);
+  const focusKept = await p.evaluate(() => document.activeElement && document.activeElement.dataset.focus);
+  await p.click('#beat-b4 details.menu summary'); await p.keyboard.press('Escape');
+  const menuClosed = await p.evaluate(() => !document.querySelector('#beat-b4 details.menu').open);
+  const addOff = await p.evaluate(() => document.querySelector('#thread-add button').disabled);
+  check('ux.focus_esc_add', focusKept === 'mark:b2:turn' && menuClosed && addOff, { focusKept, menuClosed, addOff });
+  // a failure nobody caught still reaches the writer
+  await p.evaluate(() => { setTimeout(() => { throw new Error('a test failure'); }); });
+  const surfaced = await p.waitForFunction(() => /Something went wrong: .*a test failure/.test(document.querySelector('#toast').textContent), null, { timeout: 2000 }).then(() => true, () => false);
+  check('ux.errors_surface', surfaced, surfaced);
   await ctx2.close();
 }
 

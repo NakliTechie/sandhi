@@ -35,7 +35,8 @@ check('ladder.local', L.rungIsLocal('machine') && L.rungIsLocal('device') && !L.
 // 3. providers: every listed host is https; the only preset model is Anthropic's; local servers are loopback
 const provs = plain(L.PROVIDERS);
 check('ladder.providers_https', Object.entries(provs).every(([id, p]) => (id === 'custom' ? p.base === '' : p.base.startsWith('https://'))) && isDeepStrictEqual(Object.keys(provs).toSorted(), ['anthropic', 'custom', 'deepseek', 'gemini', 'groq', 'mistral', 'openai', 'openrouter', 'together']), Object.keys(provs));
-check('ladder.model_presets', Object.entries(provs).every(([id, p]) => (id === 'anthropic' ? p.model === 'claude-opus-5-5' : !p.model)), 'presets');
+const PRESET = { anthropic: 'claude-opus-5-5', deepseek: 'deepseek-flash' };   // the two models measured with the page's prompt (SPEC §5)
+check('ladder.model_presets', Object.entries(provs).every(([id, p]) => p.model === PRESET[id]) && Object.entries(provs).every(([id, p]) => id === 'custom' ? !p.keys : String(p.keys).startsWith('https://')), 'presets and key links');
 check('ladder.servers_loopback', Object.values(plain(L.SERVERS)).every(x => /^http:\/\/127\.0\.0\.1:\d+\/v1$/.test(x.base) && /^http:\/\/127\.0\.0\.1:\d+\/api/.test(x.native)) && L.SERVERS.ollama.window === 16384, 'servers');
 
 // 4. the OpenAI-compatible body in three JSON modes, strictest first
