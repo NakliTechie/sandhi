@@ -62,7 +62,7 @@ Agents: `window.sandhi` exposes 32 tools over one command bus, and `navigator.mo
 cd test && npm install && npm test
 ```
 
-The gates refuse a demo story that does not match the explainer's data, a check with no test that fires it, a control with no tool behind it, a cold load over five seconds, an agent door that offers the accept or key tools or sends the story off the device on its own, and any serious accessibility violation. Reading quality is measured, not gated: on *The whistle* and three public-domain stories, codex `gpt-6-astra` and a Claude subagent marked the turn in all four with every quote matching the text, and DeepSeek in the page with a real key found it in 4 of 4, while a 4B local model found it in 5 of 12 reads, and Gemini Nano missed it in 8 of 8 and could not finish a 7,082-word story (table in [SPEC.md §5](SPEC.md)). The read dialog shows each reader's measured result.
+The gates refuse a demo story that does not match the explainer's data, a check with no test that fires it, a control with no tool behind it, a cold load over five seconds, an agent door that offers the accept or key tools or sends the story off the device on its own, and any serious accessibility violation. Reading quality is measured, not gated: on *The whistle* and three public-domain stories, codex `gpt-6-astra` and a Claude subagent marked the turn in all four with every quote matching the text, and DeepSeek in the page with a real key found it in 5 of 5, while a 4B local model found it in 5 of 12 reads, and Gemini Nano missed it in 8 of 8 and could not finish a 7,082-word story (table in [SPEC.md §5](SPEC.md)). The read dialog shows each reader's measured result.
 
 ## License
 
