@@ -886,7 +886,7 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } }
 };
-const app = { story: null, undo: [], redo: [], dirty: false, focus: 'all', last: null, coalesce: null, coalesceAt: 0, coalesceStart: 0, journal: [], open: new Set(), proposal: null, reading: false };
+const app = { story: null, undo: [], redo: [], dirty: false, kept: true, focus: 'all', last: null, coalesce: null, coalesceAt: 0, coalesceStart: 0, journal: [], open: new Set(), proposal: null, reading: false };
 const ok = (data) => ({ ok: true, class: 'ok', data: data || {} });
 const fail = (cls, message, next, data) => ({ ok: false, class: cls, message, next, ...(data ? { data } : {}) });
 const S = () => app.story;
@@ -895,19 +895,31 @@ const PN = Object.fromEntries(C.PRINCIPLES.map((p, i) => [p.id, i + 1]));
 const PNAME = Object.fromEntries(C.PRINCIPLES.map(p => [p.id, p.name]));
 const PLINE = Object.fromEntries(C.PRINCIPLES.map(p => [p.id, p.line]));
 
-function persist() { store.set(KEY, JSON.stringify({ story: app.story, dirty: app.dirty })); }
 const UKEY = 'sandhi:undo';
-function persistUndo() { if (!store.set(UKEY, JSON.stringify(app.undo.slice(-30)))) store.set(UKEY, '[]'); }
-function journalAppend(e) { app.journal.push(e); if (app.journal.length > 200) app.journal.splice(0, app.journal.length - 200); store.set(JKEY, JSON.stringify(app.journal)); }
+// the story first: when the browser's store is full, the saved undo gives way; when even that fails, app.kept says so
+function persist() {
+  const v = JSON.stringify({ story: app.story, dirty: app.dirty });
+  app.kept = store.set(KEY, v) || (store.set(UKEY, '[]') && store.set(KEY, v));
+  return app.kept;
+}
+function persistUndo() { for (const n of [30, 10, 3]) if (store.set(UKEY, JSON.stringify(app.undo.slice(-n)))) return; store.set(UKEY, '[]'); }
+// the journal is shared by every tab: read what is stored, append, write back
+function journalAppend(e) {
+  let list = null; try { list = JSON.parse(store.get(JKEY) || 'null'); } catch { /* corrupt: this tab's copy */ }
+  if (!Array.isArray(list)) list = app.journal;
+  list.push(e); if (list.length > 200) list.splice(0, list.length - 200);
+  app.journal = list; store.set(JKEY, JSON.stringify(list));
+}
 
 // Every mutation: build a new story, validate it, then swap and autosave in one write (SPEC §0, row 6).
 function commit(next, key) {
   const v = C.validate(next);
   if (!v.ok) return fail('invalid', `${v.errors.length} field(s) fail schema sandhi:1`, 'Fix the fields listed in data.errors and call again.', { errors: v.errors.slice(0, 20) });
   const now = Date.now(), same = key && key === app.coalesce && now - app.coalesceAt < 2000 && now - app.coalesceStart < 5000;
-  if (!same) { app.undo.push(C.clone(app.story)); if (app.undo.length > 100) app.undo.shift(); app.coalesceStart = now; persistUndo(); }
+  if (!same) { app.undo.push(C.clone(app.story)); if (app.undo.length > 100) app.undo.shift(); app.coalesceStart = now; }
   app.coalesce = key || null; app.coalesceAt = now;
   app.redo = []; app.story = next; app.dirty = true; persist();
+  if (!same) persistUndo();
   return null;
 }
 const noBeat = (id) => fail('not_found', `no beat with id ${id}`, 'Call status or story.get for the current beat ids.');
@@ -921,7 +933,8 @@ function statusData() {
   for (const x of list) classes[x.class] = (classes[x.class] || 0) + 1;
   return { version: VERSION, title: s.title, beats: s.beats.length, words: s.beats.reduce((n, b) => n + C.wordCount(b.text), 0), threads: s.threads.length,
     checks: { count: list.length, classes }, arc: a.best ? { best: a.best, name: a.name, r: a.r } : { best: null, reason: a.reason },
-    focus: app.focus, dirty: app.dirty, undo: app.undo.length, redo: app.redo.length, last: app.last,
+    focus: app.focus, dirty: app.dirty, kept: app.kept, undo: app.undo.length,
+    ui: { dialog: reader.open ? 'read' : splash.open ? 'splash' : null, tour: !!tour.layer, typing: pending.size > 0 }, redo: app.redo.length, last: app.last,
     read: { reading: app.reading, proposal: app.proposal ? { beats: app.proposal.report.beats, model: app.proposal.report.model } : null } };
 }
 const BEAT_PATCH_SCHEMA = { type: 'object', properties: {
@@ -1242,11 +1255,11 @@ const TOOLS = [
     handler: async () => ok({ story: C.clone(S()) }) },
   { name: 'story.update', description: 'Set the title, logline, belief, or per-principle notes ("In this story"). An empty note removes it. Undo reverses it.', mutating: true,
     inputSchema: { type: 'object', properties: { title: { type: 'string' }, logline: { type: 'string' }, belief: { type: 'string' }, notes: { type: 'object', additionalProperties: { type: 'string' } } } },
-    handler: async (a) => {
+    handler: async (a, door) => {
       const n = C.clone(S());
       for (const k of ['title', 'logline', 'belief']) if (a[k] !== undefined) n[k] = a[k];
       if (a.notes) for (const [k, v] of Object.entries(a.notes)) { if (v === '') delete n.notes[k]; else n.notes[k] = v; }
-      return commit(n, 'story.update:' + Object.keys(a).toSorted().join(',')) || ok({});
+      return commit(n, `story.update:${door}:${Object.keys(a).toSorted().join(',')}:${a.notes ? Object.keys(a.notes).toSorted().join(',') : ''}`) || ok({});
     } },
   { name: 'story.new', description: 'Replace the story with a blank Story Spine of five beats. Undo brings the old story back.', mutating: true, inputSchema: NONE,
     handler: async () => commit(C.blankStory(), null) || ok({ beats: 5 }) },
@@ -1325,13 +1338,13 @@ const TOOLS = [
     } },
   { name: 'thread.update', description: 'Change a thread\'s label, plant beat, or payoff beats (payoffs replace whole).', mutating: true,
     inputSchema: { type: 'object', properties: { id: { type: 'string' }, patch: { type: 'object', properties: { label: { type: 'string' }, plant: { type: ['string', 'null'] }, payoffs: { type: 'array', items: { type: 'string' } } } } }, required: ['id', 'patch'] },
-    handler: async (a) => {
+    handler: async (a, door) => {
       const bad = unknownKeys(a.patch, THREAD_PATCH);
       if (!a.patch || bad.length) return fail('invalid', bad.length ? `unknown thread field(s): ${bad.join(', ')}` : 'patch is required', 'Use only: label, plant, payoffs.');
       const n = C.clone(S()), t = n.threads.find(x => x.id === a.id);
       if (!t) return noThread(a.id);
       Object.assign(t, C.clone(a.patch));
-      return commit(n, `thread.update:${a.id}:${Object.keys(a.patch).toSorted().join(',')}`) || ok({ id: a.id });
+      return commit(n, `thread.update:${door}:${a.id}:${Object.keys(a.patch).toSorted().join(',')}`) || ok({ id: a.id });
     } },
   { name: 'thread.remove', description: 'Remove a thread. Undo restores it.', mutating: true,
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
@@ -1460,8 +1473,9 @@ const AFTER = {
   'view.focus': (args, door) => { renderAll(); if (door === 'ui' && args.principle !== 'all') $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
   'read.discard': () => renderProposal(),
   'story.update': () => { renderHeader(); renderViews(); },
-  'thread.update': (args) => (patchKeys(args).every(k => k === 'label') ? renderViews() : renderAll()),
-  'beat.update': (args, door) => (door === 'ui' && patchKeys(args).length && patchKeys(args).every(k => k === 'text' || k === 'label') ? renderViews() : renderAll())
+  'story.save': () => renderSaveState(),
+  'thread.update': (args) => (patchKeys(args).every(k => k === 'label') ? (renderViews(), patchCards()) : renderAll()),
+  'beat.update': (args, door) => (door === 'ui' && patchKeys(args).length && patchKeys(args).every(k => k === 'text' || k === 'label') ? (renderViews(), patchCards()) : renderAll())
 };
 function afterDispatch(name, args, door, env, t) {
   if (door !== 'ui' && /^read(er)?\./.test(name)) { renderProposal(); if (reader.open) renderReader(false); }   // the dialog shows what an agent changed
@@ -1473,6 +1487,7 @@ function afterDispatch(name, args, door, env, t) {
 }
 
 function renderAll() {
+  if (pending.size) flushPending();   // the writer's typing lands before anything is redrawn from the story
   const a = document.activeElement, key = a && a.dataset ? focusKey(a) : null;
   const sel = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
   renderHeader(); renderBeats(); renderViews();
@@ -1485,11 +1500,11 @@ const focusKey = (x) => [x.dataset.beat, x.dataset.thread, x.dataset.note, x.dat
 function renderViews() { renderChart(); renderArc(); renderChecks(); renderThreads(); renderCoverage(); renderSaveState(); }
 
 function renderHeader() {
-  for (const k of ['title', 'logline', 'belief']) { const el = $('#' + k); if (el !== document.activeElement) el.value = S()[k]; }
+  for (const k of ['title', 'logline', 'belief']) { const el = $('#' + k); if (el !== document.activeElement || !el.dataset.dirty) el.value = S()[k]; }
   document.title = (S().title || 'Untitled') + ' · sandhi';
 }
 function renderSaveState() {
-  $('#savestate').textContent = app.dirty ? 'Kept in this browser · not saved to a file' : app.savedNote || 'Saved';
+  $('#savestate').textContent = !app.kept ? 'Not kept in this browser: its storage is full · save to a file' : app.dirty ? 'Kept in this browser · not saved to a file' : app.savedNote || 'Saved';
   if (app.dirty) app.savedNote = null;
   $('#undo').disabled = !app.undo.length; $('#redo').disabled = !app.redo.length;
 }
@@ -1565,16 +1580,16 @@ function tagsHtml(b, P) {
   const add = addable.length ? `<select class="addtag" data-beat="${b.id}" data-field="tag-add" aria-label="Add a principle to beat ${P}"><option value="">+ principle</option>${addable.map(p => `<option value="${p.id}">${PN[p.id]}. ${esc(p.name)}</option>`).join('')}</select>` : '';
   return chips + add;
 }
+const threadNames = (s, f) => s.threads.filter(f).map(t => esc(t.label)).join(' · ') || '<span class="faint">none</span>';
 function moreHtml(b, s) {
-  const id = b.id, none = '<span class="faint">none</span>';
-  const planted = s.threads.filter(t => t.plant === id).map(t => esc(t.label)), paid = s.threads.filter(t => t.payoffs.includes(id)).map(t => esc(t.label));
+  const id = b.id;
   const nextN = b.drafts.reduce((m, d) => Math.max(m, d.n), 0) + 1;
   const drafts = b.drafts.map((d, k) => `<li><s>${esc(d.text)}</s><input class="dnote" data-beat="${id}" data-field="draft-note" data-k="${k}" value="${esc(d.note)}" placeholder="Why it changed" aria-label="Note on draft ${d.n}"></li>`).join('');
   return `<details class="more" data-more="${id}"${app.open.has(id) ? ' open' : ''}><summary>Phases, threads, drafts</summary><div class="inner">
       <label>Nāṭyaśāstra stage <select class="sel" data-beat="${id}" data-field="avastha">${opts(C.AVASTHA, b.avastha, '—')}</select></label>
       <label>Kishōtenketsu part <select class="sel" data-beat="${id}" data-field="kis">${opts(C.KIS, b.kis, '—')}</select></label>
-      <div>Plants here: ${planted.join(' · ') || none}</div>
-      <div>Pays off here: ${paid.join(' · ') || none}</div>
+      <div>Plants here: <span data-plants>${threadNames(s, t => t.plant === id)}</span></div>
+      <div>Pays off here: <span data-pays>${threadNames(s, t => t.payoffs.includes(id))}</span></div>
       ${drafts && `<ul class="drafts">${drafts}</ul>`}
       <button class="ghost" data-ui="keep-draft" data-id="${id}"${b.text.trim() ? '' : ' disabled'}>Keep this text as draft ${nextN}</button>
     </div></details>`;
@@ -1605,6 +1620,18 @@ function beatCard(b, i, s) {
     <div class="tags">${tagsHtml(b, P)}</div>
     ${moreHtml(b, s)}
   </article>`;
+}
+// after a selective render: the parts of each card that follow a label, the text or a thread name, patched in place (the fields keep their cursor)
+function patchCards() {
+  const s = S();
+  for (const b of s.beats) {
+    const card = document.getElementById('beat-' + b.id); if (!card) continue;
+    const by = card.querySelector('.byline'); if (by && b.by !== 'model') by.remove();
+    const keep = card.querySelector('[data-ui="keep-draft"]'); if (keep) keep.disabled = !b.text.trim();
+    const pl = card.querySelector('[data-plants]'), pa = card.querySelector('[data-pays]');
+    if (pl) pl.innerHTML = threadNames(s, t => t.plant === b.id);
+    if (pa) pa.innerHTML = threadNames(s, t => t.payoffs.includes(b.id));
+  }
 }
 function renderBeats() {
   const s = S();
@@ -1664,8 +1691,10 @@ function beatField(el) {
   if (['joint', 'driver', 'avastha', 'kis'].includes(f)) return { id, patch: { [f]: el.value || null } };
   return { id, patch: { [f]: el.value } };
 }
+const typedIn = (el) => el.dataset.sfield || el.dataset.note || el.dataset.tfield === 'label' || el.dataset.field === 'draft-note';
 document.addEventListener('input', (e) => {
   const el = e.target;
+  if (typedIn(el)) el.dataset.dirty = '1';   // committed on change, or on leaving the page
   if (el.dataset.beat && (el.dataset.field === 'text' || el.dataset.field === 'label')) {
     if (el.dataset.field === 'text') { const w = el.closest('.beat').querySelector('.words'); if (w) w.textContent = C.wordCount(el.value) + ' words'; }
     later(el.dataset.beat + el.dataset.field, () => ui('beat.update', beatField(el)), 350);
@@ -1686,6 +1715,7 @@ document.addEventListener('change', (e) => {
   else if (d.thread) onThreadChange(el);
   else if (d.note) ui('story.update', { notes: { [d.note]: el.value } });
   else if (d.sfield) ui('story.update', { [d.sfield]: el.value });
+  delete d.dirty;
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
 function onUiControl(u, e) {
@@ -1728,12 +1758,19 @@ document.addEventListener('drop', async (e) => {
   if ($('#reader').open) { $('#read-text').value = await f.text(); $('#read-text').dispatchEvent(new Event('input')); return; }
   openText(await f.text());
 });
+// the call that commits the field the writer was typing in, or null when it holds what the story holds
+function activeFieldCall(el, d) {
+  if (d.beat && d.field === 'draft-note') { const a = beatField(el); return a && ['beat.update', a]; }
+  if (d.sfield) return el.value !== S()[d.sfield] && ['story.update', { [d.sfield]: el.value }];
+  if (d.note) return el.value !== (S().notes[d.note] || '') && ['story.update', { notes: { [d.note]: el.value } }];
+  return d.thread && d.tfield === 'label' ? threadLabelCall(el, d) : null;
+}
+function threadLabelCall(el, d) { const t = S().threads.find(x => x.id === d.thread); return t && t.label !== el.value && ['thread.update', { id: t.id, patch: { label: el.value } }]; }
 function saveActiveField() {
   const el = document.activeElement, d = el && el.dataset;
-  if (!d) return;
-  if (d.sfield && el.value !== S()[d.sfield]) ui('story.update', { [d.sfield]: el.value });
-  else if (d.note && el.value !== (S().notes[d.note] || '')) ui('story.update', { notes: { [d.note]: el.value } });
-  else if (d.thread && d.tfield === 'label') { const t = S().threads.find(x => x.id === d.thread); if (t && t.label !== el.value) ui('thread.update', { id: t.id, patch: { label: el.value } }); }
+  if (!d || !d.dirty) return;   // only a field the writer typed in: an untouched one never writes back over a newer story
+  delete d.dirty;
+  const c = activeFieldCall(el, d); if (c) ui(c[0], c[1]);
 }
 addEventListener('pagehide', () => { saveActiveField(); flushPending(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { saveActiveField(); flushPending(); } });

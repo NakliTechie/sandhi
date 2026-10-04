@@ -494,6 +494,92 @@ async function readPage(opts) {
   await ctx2.close();
 }
 
+{ // typing survives every redraw: Esc, an agent's view.focus and story.save, another tab's save (forward pass M1)
+  const { ctx2, p, errs, call } = await readPage({});
+  const b2 = '#beat-b2 textarea.btext', text2 = async () => (await call('story.get', {})).data.story.beats[1].text;
+  const typeIn = async (w) => { await p.click(b2); await p.keyboard.press('End'); await p.keyboard.type(' ' + w); };
+  await call('view.focus', { principle: 'care' });
+  await typeIn('ESCA'); await p.keyboard.press('Escape'); await p.keyboard.type(' ESCB'); await p.waitForTimeout(600);
+  await typeIn('VFA'); await call('view.focus', { principle: 'plant' }); await p.keyboard.type(' VFB'); await p.waitForTimeout(600);
+  await call('view.focus', { principle: 'all' });
+  await typeIn('SVA'); await call('story.save', {}); await p.keyboard.type(' SVB'); await p.waitForTimeout(600);
+  const other = await ctx2.newPage(); await other.goto(base); await other.evaluate(() => window.sandhi.ready);
+  await typeIn('TBA'); await other.evaluate(() => window.sandhi.tools['beat.update']({ id: 'b9', patch: { fortune: 1 } }));
+  await p.waitForFunction(() => document.querySelector('#toast').textContent.includes('another tab'), null, { timeout: 3000 }).catch(() => {});
+  await p.keyboard.type(' TBB'); await p.waitForTimeout(600);
+  const t = await text2(), b9 = (await call('story.get', {})).data.story.beats[8].fortune;
+  check('persist.typing_survives_every_redraw', ['ESCA ESCB', 'VFA VFB', 'SVA SVB', 'TBA TBB'].every(w => t.includes(' ' + w)) && b9 === 1, { tail: t.slice(-60), b9 });
+  await other.close();
+  // an untouched, focused title follows an agent's edit, and hiding the tab does not write the old title back (L13)
+  await p.click('#title'); await call('story.update', { title: 'Agent title' });
+  await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await p.waitForTimeout(100);
+  check('persist.untouched_field_never_writes_back', (await call('story.get', {})).data.story.title === 'Agent title' && (await p.inputValue('#title')) === 'Agent title', await p.inputValue('#title'));
+  await p.evaluate(() => { delete document.visibilityState; });
+  // the writer's and an agent's title edits are two undo steps, not one (L14, T10)
+  await p.fill('#title', 'Writer title'); await p.locator('#title').blur();
+  await call('story.update', { title: 'Agent again' });
+  await call('undo', {});
+  check('persist.undo_steps_per_door', (await call('story.get', {})).data.story.title === 'Writer title', (await call('story.get', {})).data.story.title);
+  // a draft note being typed survives a reload (L16)
+  await call('beat.update', { id: 'b4', patch: { drafts: [{ n: 1, text: 'an older draft', note: '' }] } });
+  await p.evaluate(() => { document.querySelector('[data-more="b4"]').open = true; });
+  await p.click('#beat-b4 .dnote'); await p.keyboard.type('Why it changed');
+  await p.reload(); await p.evaluate(() => window.sandhi.ready);
+  check('persist.draft_note_at_reload', (await call('story.get', {})).data.story.beats[3].drafts[0].note === 'Why it changed', (await call('story.get', {})).data.story.beats[3].drafts);
+  // two tabs share one journal (L17)
+  const tab2 = await ctx2.newPage(); await tab2.goto(base); await tab2.evaluate(() => window.sandhi.ready);
+  await tab2.evaluate(() => window.sandhi.tools.arc({})); await call('coverage', {});
+  const jn = (await call('journal', { n: 5 })).data.entries.map(e => e.tool);
+  check('persist.journal_shared_by_tabs', jn.includes('arc') && jn.includes('coverage'), jn);
+  await tab2.close();
+  check('persist.redraw_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // after a selective render, a card's byline, Keep-draft button and thread names follow (forward pass L15)
+  const { ctx2, p, errs, call } = await readPage({});
+  const read = JSON.parse(JSON.stringify(SEED)); for (const b of read.beats) { b.by = 'model'; b.model = 'fixture'; }
+  await call('story.load', { story: read });
+  const bylines = () => p.evaluate(() => document.querySelectorAll('#beats .byline').length);
+  const before = await bylines();
+  await p.click('#beat-b1 .blabel'); await p.keyboard.type('!'); await p.waitForTimeout(600);
+  const after = await bylines();
+  await call('beat.update', { id: 'b3', patch: { text: '' } });
+  await p.click('#beat-b3 textarea.btext'); await p.keyboard.type('Now it has text'); await p.waitForTimeout(600);
+  const keep = await p.evaluate(() => document.querySelector('#beat-b3 [data-ui="keep-draft"]').disabled);
+  await p.fill('#threads textarea[data-thread="water"]', 'renamed thread'); await p.locator('#threads textarea[data-thread="water"]').blur();
+  const plant = (await call('story.get', {})).data.story.threads[0].plant;
+  const names = await p.evaluate((id) => document.querySelector(`#beat-${id} [data-plants]`).textContent, plant);
+  check('render.card_parts_follow', before === 10 && after === 9 && keep === false && names.includes('renamed thread'), { before, after, keep, names });
+  check('render.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // a full browser store: the page says the story is not kept, and keeps it again once there is room (forward pass M3)
+  const { ctx2, p, errs, call } = await readPage({});
+  await p.evaluate(() => { let n = 0; for (const size of [1e6, 1e5, 1e4, 1e3, 100]) { const x = 'x'.repeat(size); try { for (;;) localStorage.setItem('junk' + n++, x); } catch { /* full at this size */ } } });
+  const big = JSON.parse(JSON.stringify(SEED)); big.beats[0].text = 'y'.repeat(150000);
+  const r = await call('story.load', { story: big });
+  const st = (await call('status', {})).data, note = await p.textContent('#savestate');
+  await p.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('junk')) localStorage.removeItem(k); });
+  await call('beat.update', { id: 'b2', patch: { fortune: 1 } });
+  const again = (await call('status', {})).data.kept;
+  check('persist.full_store_says_so', r.ok && st.kept === false && /storage is full/.test(note) && again === true, { kept: st.kept, note, again });
+  check('persist.full_store_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // the agent's one perception act says what the writer has open; a .txt dropped on the read dialog fills it (AR6, T10)
+  const { ctx2, p, errs, call } = await readPage({});
+  const closed = (await call('status', {})).data.ui;
+  await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);
+  const open = (await call('status', {})).data.ui;
+  await p.evaluate(() => { const dt = new DataTransfer(); dt.items.add(new File(['Once upon a time there was a dropped story.'], 'story.txt', { type: 'text/plain' })); document.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })); });
+  const filled = await p.waitForFunction(() => document.querySelector('#read-text').value.startsWith('Once upon a time there was a dropped'), null, { timeout: 2000 }).then(() => true, () => false);
+  check('status.ui_state', closed.dialog === null && closed.tour === false && closed.typing === false && open.dialog === 'read', { closed, open });
+  check('read.txt_drop_fills_dialog', filled, 'not filled');
+  check('ui_state.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+
 // ---- 4. layout: phone width, dark scheme
 const phone = await browser.newContext({ viewport: { width: 375, height: 812 } });
 const pp = await phone.newPage(); await pp.goto(base); await pp.evaluate(() => window.sandhi.ready);
