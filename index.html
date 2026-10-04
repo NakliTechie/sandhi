@@ -9,7 +9,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 25 L16 12 L28 25' fill='none' stroke='%23BA7517' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='12' r='4.5' fill='%232C2A24'/%3E%3C/svg%3E">
 <style>
 :root{
-  --bg:#F7F2E7;--card:#FFFDF7;--ink:#2C2A24;--muted:#6B665A;--faint:#938D7E;
+  --bg:#F7F2E7;--card:#FFFDF7;--ink:#2C2A24;--muted:#5A5549;--faint:#6B665A;
   --line:rgba(60,45,15,.14);--line-strong:rgba(60,45,15,.35);--hover:rgba(60,45,15,.06);
   --accent:#BA7517;--accent-bg:#F1E0C2;--accent-ink:#633806;--dot-off:#D9CBB0;
   --seg-a:#EFE6D2;--seg-b:#E5D8BC;
@@ -18,12 +18,12 @@
   --r:10px;color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#1C1A16;--card:#25221D;--ink:#ECE5D5;--muted:#B2AA97;--faint:#857E6E;
+  --bg:#1C1A16;--card:#25221D;--ink:#ECE5D5;--muted:#BFB7A4;--faint:#A39C8B;
   --line:rgba(236,229,213,.12);--line-strong:rgba(236,229,213,.3);--hover:rgba(236,229,213,.06);
   --accent:#D99A3B;--accent-bg:#4A3517;--accent-ink:#F3D9AE;--dot-off:#5A5040;
   --seg-a:#2E2A23;--seg-b:#38322A;color-scheme:dark;}}
 :root[data-theme="dark"]{
-  --bg:#1C1A16;--card:#25221D;--ink:#ECE5D5;--muted:#B2AA97;--faint:#857E6E;
+  --bg:#1C1A16;--card:#25221D;--ink:#ECE5D5;--muted:#BFB7A4;--faint:#A39C8B;
   --line:rgba(236,229,213,.12);--line-strong:rgba(236,229,213,.3);--hover:rgba(236,229,213,.06);
   --accent:#D99A3B;--accent-bg:#4A3517;--accent-ink:#F3D9AE;--dot-off:#5A5040;
   --seg-a:#2E2A23;--seg-b:#38322A;color-scheme:dark;}
@@ -40,7 +40,8 @@ a{color:var(--muted)}
 /* header */
 .top{max-width:1200px;margin:0 auto;padding:22px 24px 10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
 .brand{display:flex;align-items:baseline;gap:8px;margin-right:auto}
-.brand b{font-size:18px;font-weight:500}
+.brand h1{font-size:18px;font-weight:500;margin:0}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .brand span{font-size:12px;color:var(--faint)}
 .actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .btn{font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;color:var(--muted)}
@@ -87,7 +88,8 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 .joint.opt select{border-style:dashed;color:var(--faint)}
 .joint.slack select,.joint.missing select{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-bg)}
 .beat{display:flex;flex-direction:column;gap:8px;transition:opacity .12s ease;scroll-margin-top:16px}
-.beat.dim{opacity:.35}
+.beat.dim{background:transparent;border-style:dashed}
+.beat.dim .btext{color:var(--muted)}
 .beat.flash{border-color:var(--accent)}
 .bhead{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
 .bnum{font-size:18px;font-weight:500;color:var(--faint);min-width:24px}
@@ -234,7 +236,7 @@ footer code{font-size:11.5px}
 </head>
 <body>
 <header class="top">
-  <div class="brand"><b>sandhi</b><span>the joints of a story</span></div>
+  <div class="brand"><h1>sandhi</h1><span>the joints of a story</span></div>
   <nav class="actions" aria-label="Story">
     <button class="btn" data-cmd="story.new" title="Start a blank Story Spine. Undo brings this story back.">New</button>
     <button class="btn" data-ui="open" title="Open a .sandhi.json file">Open</button>
@@ -1440,7 +1442,7 @@ function renderChart() {
     g += `<circle class="dot${on ? '' : ' off'}" data-i="${i}" cx="${x(i)}" cy="${y(b.fortune)}" r="${hit ? 7 : 5.5}" tabindex="0" role="slider" aria-label="Beat ${i + 1} fortune" aria-valuemin="-5" aria-valuemax="5" aria-valuenow="${b.fortune}"><title>Beat ${i + 1} · ${esc(b.label || C.spineName(b.spine))} · fortune ${fmtF(b.fortune)}${b.text ? ' — ' + esc(snip(b.text, 90)) : ''}</title></circle>`;
   });
   rows.forEach((row, ri) => { g += phaseRow(s, row, P0 + ri * (RH + 4), { n, L, w, RH }); });
-  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Fortune line and phases of ${esc(s.title)}">${g}</svg>`;
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="group" aria-label="Fortune line and phases of ${esc(s.title)}">${g}</svg>`;
   box.dataset.geom = JSON.stringify({ T, B });
 }
 // one row of the phase strip: consecutive beats with the same label merge into one segment
@@ -1553,7 +1555,7 @@ function renderThreads() {
 }
 function renderCoverage() {
   const s = S(), cov = C.coverage(s), n = s.beats.length;
-  let h = `<thead><tr><th></th>${s.beats.map((b, i) => `<th scope="col">${i + 1}</th>`).join('')}<th></th></tr></thead><tbody>`;
+  let h = `<thead><tr><th scope="col"><span class="sr-only">Principle</span></th>${s.beats.map((b, i) => `<th scope="col"><span class="sr-only">Beat </span>${i + 1}</th>`).join('')}<th scope="col"><span class="sr-only">Beats tagged</span></th></tr></thead><tbody>`;
   for (const c of cov) {
     h += `<tr class="${app.focus === c.id ? 'focus' : ''}"><th scope="row"><button data-cmd="view.focus" data-args="${attr({ principle: app.focus === c.id ? 'all' : c.id })}" title="${esc(PLINE[c.id])}"><span class="pn">${c.n}</span>${esc(c.name)}</button></th>`;
     s.beats.forEach((b, i) => {
