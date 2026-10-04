@@ -213,6 +213,10 @@ async function readPage(opts) {
   const before = (await call('story.get', {})).data.story;
   const refused = await call('read.accept', {});
   check('read.accept_person_only', refused.class === 'person_only' && JSON.stringify((await call('story.get', {})).data.story) === JSON.stringify(before), refused);
+  const nm = await call('reader.models', {});
+  check('read.nano_no_model_list', nm.class === 'no_reader' && /no list of models/.test(nm.message), nm);
+  const proto = [await call('reader.select', { provider: 'constructor' }), await call('reader.select', { server: 'toString' }), await call('read.run', { text: prose, rung: 'toString' })];
+  check('read.prototype_names_refused', proto.every(x => x.class === 'invalid') && (await call('reader.status', {})).data.provider.id === 'openrouter', proto.map(x => x.class));
   const keyRefused = await call('reader.key', { key: 'x' });
   check('read.key_person_only', keyRefused.class === 'person_only', keyRefused);
   // an agent reads on the device; sending the story to a provider, or choosing one, is the writer's
@@ -313,6 +317,12 @@ async function readPage(opts) {
   check('ladder.no_key_on_file_pages', told && keys6.length === 0, { told, keys6 });
   await ctx6.close();
 }
+{ // split on a story that only just fits whole: its labelling call would not fit, so it reads in parts (forward pass L10)
+  const { ctx2, call } = await readPage({ nano: tok(whole.system + '\n' + whole.user) + 1600 });
+  const r = await call('read.run', { text: prose, strategy: 'split' });
+  check('read.split_too_long_reads_in_parts', r.ok && r.data.mode === 'two-pass', r.data || r);
+  await ctx2.close();
+}
 { // a window too small for the whole story: parts, then the outline
   const { ctx2, p, errs, call } = await readPage({ nano: twoPassInput + 1600 });
   const r = await call('read.run', { text: prose });
@@ -394,9 +404,9 @@ async function readPage(opts) {
   await p.waitForFunction(() => /OpenRouter, key·/.test(document.querySelector('#key-state').textContent));
   // a provider that echoes part of the key in an error: the message the agent face returns has it scrubbed
   await p.unroute('https://openrouter.ai/api/v1/**');
-  await p.route('https://openrouter.ai/api/v1/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: { message: 'Incorrect API key provided: sk-test-0000-not-a-real-key' } }) }));
-  r = await call('read.run', { text: prose });
-  check('ladder.error_scrubs_key', r.class === 'key_rejected' && !r.message.includes(TEST_KEY) && r.message.includes('[key]'), r);
+  await p.route('https://openrouter.ai/api/v1/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: { message: 'Incorrect API key provided: test-0000-not-a-real-key' } }) }));
+  r = await call('read.run', { text: prose });   // the echo has no sk- prefix: only the request's own key can find it
+  check('ladder.error_scrubs_key', r.class === 'key_rejected' && !r.message.includes('0000-not-a-real-key') && r.message.includes('[key]'), r);
   // the keys: in IndexedDB, shown as fingerprints, never in localStorage, the journal or the agent face
   const st = (await call('reader.status', {})).data;
   const ls = await p.evaluate(() => JSON.stringify(localStorage));
@@ -448,6 +458,20 @@ async function readPage(opts) {
   const took = Date.now() - t4;
   check('ladder.probe_ends_on_time', st4.machine.checked && st4.machine.server === null && took < 4000, { took, machine: st4.machine });
   await ctx4.close();
+}
+{ // Stop while the probe waits on Chrome's local-network prompt: the read ends at once, not after 60 s (forward pass L7)
+  const ctx7 = await browser.newContext();
+  await ctx7.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } delete window.LanguageModel;
+    const f0 = window.fetch; window.fetch = (u, o) => (String(u).startsWith('http://127.0.0.1:') ? new Promise(() => {}) : f0(u, o));
+    const q = navigator.permissions.query.bind(navigator.permissions);
+    navigator.permissions.query = (d) => (d && /local-network|loopback/.test(d.name) ? Promise.resolve({ state: 'prompt' }) : q(d)); });
+  const p7 = await ctx7.newPage(); await p7.goto(base); await p7.evaluate(() => window.sandhi.ready);
+  await p7.evaluate((text) => { window.__r = window.sandhi.tools['read.run']({ text, rung: 'machine' }); }, prose);
+  await p7.waitForTimeout(300);
+  const t7 = Date.now(); await p7.evaluate(() => window.sandhi.tools['read.cancel']({}));
+  const r7 = await p7.evaluate(() => window.__r), ms7 = Date.now() - t7;
+  check('ladder.stop_ends_probe', r7.class === 'cancelled' && ms7 < 2000, { r7: r7.class, ms7 });
+  await ctx7.close();
 }
 { // Chrome has blocked this site from the local network: say so at once, and say how to allow it
   const ctx3 = await browser.newContext();

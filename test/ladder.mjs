@@ -34,7 +34,7 @@ check('ladder.local', L.rungIsLocal('machine') && L.rungIsLocal('device') && !L.
 
 // 3. providers: every listed host is https; the only preset model is Anthropic's; local servers are loopback
 const provs = plain(L.PROVIDERS);
-check('ladder.providers_https', Object.entries(provs).every(([id, p]) => (id === 'custom' ? p.base === '' : p.base.startsWith('https://'))) && Object.keys(provs).length >= 8, provs);
+check('ladder.providers_https', Object.entries(provs).every(([id, p]) => (id === 'custom' ? p.base === '' : p.base.startsWith('https://'))) && isDeepStrictEqual(Object.keys(provs).toSorted(), ['anthropic', 'custom', 'deepseek', 'gemini', 'groq', 'mistral', 'openai', 'openrouter', 'together']), Object.keys(provs));
 check('ladder.model_presets', Object.entries(provs).every(([id, p]) => (id === 'anthropic' ? p.model === 'claude-opus-5-5' : !p.model)), 'presets');
 check('ladder.servers_loopback', Object.values(plain(L.SERVERS)).every(x => /^http:\/\/127\.0\.0\.1:\d+\/v1$/.test(x.base)), 'servers');
 
@@ -56,12 +56,20 @@ check('ladder.parse_plain', isDeepStrictEqual(plain(L.parseOpenAI(oa('{"a":"1"}'
 check('ladder.parse_fenced', isDeepStrictEqual(plain(L.parseOpenAI(oa('Here:\n```json\n{"a":"1"}\n```'))).json, { a: '1' }), 'fenced');
 check('ladder.parse_refusal', L.parseOpenAI(oa(null, { refusal: 'no' })).error === 'refused', 'refusal');
 check('ladder.parse_length', L.parseOpenAI({ choices: [{ finish_reason: 'length', message: { content: '{"a":' } }] }).error === 'too_long', 'length');
+check('ladder.parse_prose_braces', isDeepStrictEqual(plain(L.extractJson('{"a":1}\nNote: I used {braces} here.')), { a: 1 }) && isDeepStrictEqual(plain(L.extractJson('{"a":1}\n{"b":2}')), { a: 1 })
+  && isDeepStrictEqual(plain(L.extractJson('Sure {not json} here: {"a":"x}y{"} and } more')), { a: 'x}y{' }) && L.extractJson('no object at all') === null, 'prose braces');
 check('ladder.parse_not_json', L.parseOpenAI(oa('I cannot help with that.')).error === 'not_json', 'not json');
 check('ladder.parse_anthropic', isDeepStrictEqual(plain(L.parseAnthropic({ model: 'claude-opus-5-5', stop_reason: 'end_turn', content: [{ type: 'text', text: '{"a":"1"}' }] })), { json: { a: '1' }, model: 'claude-opus-5-5' })
   && L.parseAnthropic({ stop_reason: 'refusal', content: [] }).error === 'refused' && L.parseAnthropic({ stop_reason: 'max_tokens', content: [] }).error === 'too_long', 'anthropic');
 check('ladder.model_ids', isDeepStrictEqual(plain(L.modelIds({ data: [{ id: 'b' }, { id: 'a' }, {}, null] })), ['a', 'b']) && L.modelIds({}).length === 0, 'model ids');
 
-// 6. fingerprints: stable, short, and not the key
+// 6. error text: the request's own key is taken out whatever its shape (Mistral's are 32 letters and digits, no prefix)
+const KEY32 = 'Q7xY9mN2pL4kR8sT1vW6zA3bC5dE0fG7';
+check('ladder.scrub_unprefixed_key', !L.scrub(`Invalid API key: ${KEY32}`, KEY32).includes(KEY32) && L.scrub(`Invalid API key: ${KEY32}`, KEY32).includes('[key]')
+  && !L.scrub(`key ...${KEY32.slice(-10)} rejected`, KEY32).includes(KEY32.slice(-10)) && L.scrub('Incorrect API key provided: sk-test-0000-not-a-real-key').includes('[key]')
+  && L.scrub('model not found', KEY32) === 'model not found', L.scrub(`Invalid API key: ${KEY32}`, KEY32));
+
+// 7. fingerprints: stable, short, and not the key
 const f1 = await L.fingerprint('sk-test-0000'), f2 = await L.fingerprint('sk-test-0000'), f3 = await L.fingerprint('sk-test-0001');
 check('ladder.fingerprint', /^key·[0-9a-f]{8}$/.test(f1) && f1 === f2 && f1 !== f3 && !f1.includes('sk-'), [f1, f3]);
 

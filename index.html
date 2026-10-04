@@ -844,13 +844,38 @@ footer code{font-size:11.5px}
     if (mode === 'object') body.response_format = { type: 'json_object' };
     return body;
   }
-  // The first JSON object in a reply, with or without code fences around it.
+  // Where the object that opens at t[a] closes: braces counted outside strings. -1 if it never closes.
+  function objectEnd(t, a) {
+    let depth = 0, str = false, esc = false;
+    for (let i = a; i < t.length; i++) {
+      const c = t[i];
+      if (esc) esc = false;
+      else if (str) { if (c === '\\') esc = true; else if (c === '"') str = false; }
+      else if (c === '"') str = true;
+      else if (c === '{') depth++;
+      else if (c === '}' && --depth === 0) return i;
+    }
+    return -1;
+  }
+  // The first JSON object in a reply: the whole reply, a fenced block, or the first balanced object in the prose around it.
   function extractJson(text) {
     const t = String(text || '').trim();
     try { return JSON.parse(t); } catch { /* look inside */ }
-    const a = t.indexOf('{'), b = t.lastIndexOf('}');
-    if (a < 0 || b <= a) return null;
-    try { return JSON.parse(t.slice(a, b + 1)); } catch { return null; }
+    const fence = /```(?:json)?\s*([\s\S]*?)```/.exec(t);
+    if (fence) try { return JSON.parse(fence[1]); } catch { /* scan for an object */ }
+    for (let a = t.indexOf('{'); a >= 0; a = t.indexOf('{', a + 1)) {
+      const b = objectEnd(t, a);
+      if (b < 0) return null;
+      try { return JSON.parse(t.slice(a, b + 1)); } catch { /* the next brace */ }
+    }
+    return null;
+  }
+  // Error text from a provider, with the request's own key taken out, whatever its shape, and anything key-shaped too.
+  function scrub(text, key) {
+    let t = String(text);
+    const k = String(key || '');
+    if (k.length >= 8) for (const tok of t.match(/[A-Za-z0-9_\-*.]{8,}/g) || []) if (k.includes(tok) || tok.includes(k.slice(-8)) || tok.includes(k.slice(0, 8))) t = t.split(tok).join('[key]');
+    return t.replace(/(sk-|sk_|gsk_|xai-|AIza)[A-Za-z0-9_\-*.]{4,}/g, '[key]');
   }
   // -> { json } or { error: refused | too_long | not_json }
   function parseOpenAI(out) {
@@ -875,7 +900,7 @@ footer code{font-size:11.5px}
   // A /models reply -> model ids (OpenAI-compatible and Anthropic both answer { data: [{ id }] }).
   const modelIds = (out) => ((out && out.data) || []).map(m => m && m.id).filter(Boolean).toSorted();
 
-  root.SandhiLadder = { RUNGS, ORDER, SERVERS, PROVIDERS, JSON_MODES, detectLadder, rungLabel, rungIsLocal, openaiBody, extractJson, parseOpenAI, parseAnthropic, fingerprint, modelIds };
+  root.SandhiLadder = { RUNGS, ORDER, SERVERS, PROVIDERS, JSON_MODES, detectLadder, rungLabel, rungIsLocal, openaiBody, extractJson, scrub, parseOpenAI, parseAnthropic, fingerprint, modelIds };
 })(globalThis);
 </script>
 
@@ -947,7 +972,13 @@ const NONE = { type: 'object', properties: {} };
 // ---- readers (L5) on the AI ladder (SandhiLadder): a model server on this machine, Gemini Nano in Chrome, or the
 // writer's own provider and key. Probes run only on an explicit action. A reader only proposes.
 const LD = globalThis.SandhiLadder, RKEY = 'sandhi:reader';
-const rcfg = (() => { const d = { rung: null, provider: 'openrouter', server: null, models: {}, base: '' }; try { return { ...d, ...JSON.parse(store.get(RKEY) || '{}') }; } catch { return d; } })();
+const own = (m, k) => typeof k === 'string' && Object.hasOwn(m, k);   // a lookup that never finds Object.prototype's names
+// the writer's reader settings: only rungs, providers, servers and model ids the ladder knows survive a reload
+const rcfg = (() => {
+  let o = {}; try { o = JSON.parse(store.get(RKEY) || '{}') || {}; } catch { /* the defaults */ }
+  const models = o.models && typeof o.models === 'object' ? Object.entries(o.models).filter(([k, v]) => typeof v === 'string' && (own(LD.PROVIDERS, k) || own(LD.SERVERS, k))) : [];
+  return { rung: LD.ORDER.includes(o.rung) ? o.rung : null, provider: own(LD.PROVIDERS, o.provider) ? o.provider : 'openrouter', server: own(LD.SERVERS, o.server) ? o.server : null, models: Object.fromEntries(models) };
+})();
 const saveCfg = () => store.set(RKEY, JSON.stringify(rcfg));
 const readerFail = (cls, message, next) => Object.assign(new Error(message), { cls, next });
 let readAbort = null;   // the running read's AbortController; read.cancel aborts it
@@ -1015,17 +1046,17 @@ async function lanAccess() {
 }
 // A hard deadline: in Chrome 153 an aborted fetch that is waiting on the local network prompt stays pending (seen live,
 // 158 s past a 60 s abort), so the timer, not the abort signal, decides when the probe gives up.
-async function probeServer(id, waitMs) {
+async function probeServer(id, waitMs, stop) {
   const ask = fetch(`${LD.SERVERS[id].base}/models`, { signal: AbortSignal.timeout(waitMs) })
     .then(async r => (r.ok ? LD.modelIds(await r.json()) : null)).catch(() => null);
-  return Promise.race([ask, new Promise(done => { setTimeout(() => done(null), waitMs + 250); })]);
+  return Promise.race([ask, new Promise(done => { setTimeout(() => done(null), waitMs + 250); if (stop) stop.addEventListener('abort', () => done(null), { once: true }); })]);
 }
-async function probeMachine() {
+async function probeMachine(stop) {
   const ids = Object.keys(LD.SERVERS).toSorted((a, b) => (b === rcfg.server) - (a === rcfg.server)), access = await lanAccess();
   machine = { checked: true, found: null, access };
   if (access === 'denied') return null;
   // every server at once, under one deadline: one prompt from Chrome covers them all
-  const waitMs = access === 'prompt' ? 60000 : 1500, lists = await Promise.all(ids.map(id => probeServer(id, waitMs)));
+  const waitMs = access === 'prompt' ? 60000 : 1500, lists = await Promise.all(ids.map(id => probeServer(id, waitMs, stop)));
   const k = lists.findIndex(Boolean);
   if (k >= 0) machine.found = { id: ids[k], models: lists[k] };
   machine.access = await lanAccess();
@@ -1033,7 +1064,7 @@ async function probeMachine() {
 }
 const machineReader = {
   async open() {
-    if (!machine.found) await probeMachine();
+    if (!machine.found) await probeMachine(readSignal());   // Stop ends the look, not 60 s on Chrome's local-network prompt
     const f = machine.found;
     if (!f && machine.access === 'denied') throw readerFail('no_reader', 'Chrome blocks this site from your local network.', 'Allow it: the site icon in the address bar, Site settings, Local network access, Allow. Then look again.');
     if (!f) throw readerFail('no_reader', 'No model server answered on this machine.', `Start Ollama (${LD.SERVERS.ollama.cors}) or LM Studio (${LD.SERVERS.lmstudio.cors}), allow local network access if Chrome asks, then look again.`);
@@ -1067,15 +1098,13 @@ async function post(url, headers, body) {
   catch (e) { stopped(); throw readerFail('reader_error', `Could not reach ${hostOf(url)} (${e.message}).`, 'Check the connection and the address. A local server must allow this site.'); }
   return { status: res.status, out: await res.json().catch(() => ({})) };
 }
-// providers word their errors differently: { error: { message } }, { error: "..." }, { message }, { detail }
-const scrub = (t) => String(t).replace(/(sk-|sk_|gsk_|xai-|AIza)[A-Za-z0-9_\-*.]{4,}/g, '[key]');   // providers sometimes echo part of a key
-function errorText(out, status) {
+// providers word their errors differently: { error: { message } }, { error: "..." }, { message }, { detail }; some echo the key
+function errorText(out, status, key) {
   const e = out && out.error;
-  if (e) return scrub(e.message || e);
-  return scrub((out && (out.message || out.detail)) || `HTTP ${status}`);
+  return LD.scrub(e ? e.message || e : (out && (out.message || out.detail)) || `HTTP ${status}`, key);
 }
-function apiStatus(status, out, who) {
-  const msg = errorText(out, status).slice(0, 300);
+function apiStatus(status, out, who, key) {
+  const msg = errorText(out, status, key).slice(0, 300);
   if (status === 401 || status === 403) throw readerFail('key_rejected', `${who} rejected the key: ${msg}`, 'Check the key in Read a story, then try again.');
   if (status === 429 || status === 529) throw readerFail('rate_limited', `${who} is busy or rate-limited: ${msg}`, 'Wait a minute, then try again.');
   if (status < 200 || status >= 300) throw readerFail('reader_error', `${who} returned ${status}: ${msg}`, 'Check the model id and the address in Read a story.');
@@ -1091,37 +1120,36 @@ const jsonMode = new Map();
 async function openaiCall(base, key, model, prompt, schema, extra) {
   const memo = `${base}|${model}`, modes = LD.JSON_MODES.slice(LD.JSON_MODES.indexOf(jsonMode.get(memo) || 'schema'));
   const headers = { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) };
-  let res;
+  let res;   // the last mode, 'prompt', always returns or throws
   for (const mode of modes) {
     res = await post(`${base}/chat/completions`, headers, LD.openaiBody(model, prompt, schema, mode, extra));
     if (res.status === 400 && mode !== 'prompt') continue;
-    apiStatus(res.status, res.out, hostOf(base));
+    apiStatus(res.status, res.out, hostOf(base), key);
     jsonMode.set(memo, mode);
     return parsed(LD.parseOpenAI(res.out), model);
   }
-  apiStatus(res.status, res.out, hostOf(base));
-  return parsed({ error: 'not_json' }, model);
 }
 // Anthropic's own Messages API, raw fetch (one static file, nothing loaded from third parties): JSON-schema output, effort medium, fallbacks "default".
 async function anthropicCall(key, model, { system, user }, schema) {
   const body = { model, max_tokens: 16000, system, messages: [{ role: 'user', content: user }], output_config: { format: { type: 'json_schema', schema } } };
   const headers = { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
-  if (/^claude-(opus|fable|sonnet-5)/.test(model)) body.output_config.effort = 'medium';
+  if (/^claude-(opus-(4-[5-9]|[5-9])|fable|sonnet-5)/.test(model)) body.output_config.effort = 'medium';   // effort: Opus 4.5 and later
   if (/^claude-(opus-5|fable-5|sonnet-5-5)/.test(model)) { body.fallbacks = 'default'; headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'; }
   const res = await post('https://api.anthropic.com/v1/messages', headers, body);
-  apiStatus(res.status, res.out, 'Anthropic');
+  apiStatus(res.status, res.out, 'Anthropic', key);
   return parsed(LD.parseAnthropic(res.out), model);
 }
 // the model ids the chosen rung offers: a local server's /models, or the provider's /models with the writer's key
 async function listModels() {
-  if ((rcfg.rung || 'device') === 'machine') { await probeMachine(); return machine.found ? { source: LD.SERVERS[machine.found.id].label, models: machine.found.models } : null; }
+  if (rcfg.rung === 'machine') { if (!machine.found) await probeMachine(); return machine.found ? { source: LD.SERVERS[machine.found.id].label, models: machine.found.models } : null; }
+  if (rcfg.rung !== 'provider') throw readerFail('no_reader', rcfg.rung ? 'Gemini Nano has no list of models.' : 'No reader is chosen yet.', 'Choose a model server on this machine or your provider, then load its models.');
   const { p, rec, base } = await providerTarget(), key = rec && rec.key;
   if (!key) throw readerFail('no_reader', `No key is set for ${p.label}.`, 'Paste your key first.');
   const headers = p.kind === 'anthropic' ? { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } : { authorization: `Bearer ${key}` };
   let res;
-  try { res = await fetch(`${base}/models`, { headers }); } catch (e) { throw readerFail('reader_error', `Could not reach ${hostOf(base)} (${e.message}).`, 'Check the address.'); }
+  try { res = await fetch(`${base}/models${p.kind === 'anthropic' ? '?limit=1000' : ''}`, { headers, signal: AbortSignal.timeout(20000) }); } catch (e) { throw readerFail('reader_error', `Could not reach ${hostOf(base)} (${e.message}).`, 'Check the address, then try again.'); }
   const out = await res.json().catch(() => ({}));
-  apiStatus(res.status, out, p.label);
+  apiStatus(res.status, out, p.label, key);
   return { source: p.label, models: LD.modelIds(out) };
 }
 const READERS = { machine: machineReader, device: nano, provider: providerReader };
@@ -1146,8 +1174,8 @@ async function readerStatus(probe) {
     keys: Object.entries(prints).map(([provider, fp]) => ({ provider, fingerprint: fp })) };
 }
 function keyError(id, key, base) {
-  if (!LD.PROVIDERS[id]) return fail('invalid', `no provider ${id}`, `Use one of: ${Object.keys(LD.PROVIDERS).join(', ')}.`);
-  const ok2 = /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/)/.test(base);
+  if (!own(LD.PROVIDERS, id)) return fail('invalid', `no provider ${id}`, `Use one of: ${Object.keys(LD.PROVIDERS).join(', ')}.`);
+  const ok2 = /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$))/.test(base);
   if (key && id === 'custom' && !ok2) return fail('invalid', 'A custom provider needs its address, starting with https:// (or http://127.0.0.1).', 'Enter the OpenAI-compatible base URL, such as https://host/v1, then the key.');
   return null;
 }
@@ -1160,8 +1188,8 @@ function agentSelectError(a, door) {
 }
 function selectError(a) {
   if (a.rung && !LD.ORDER.includes(a.rung)) return fail('invalid', `no rung ${a.rung}`, `Use one of: ${LD.ORDER.join(', ')}.`);
-  if (a.provider && !LD.PROVIDERS[a.provider]) return fail('invalid', `no provider ${a.provider}`, `Use one of: ${Object.keys(LD.PROVIDERS).join(', ')}.`);
-  if (a.server && !LD.SERVERS[a.server]) return fail('invalid', `no server ${a.server}`, `Use one of: ${Object.keys(LD.SERVERS).join(', ')}.`);
+  if (a.provider && !own(LD.PROVIDERS, a.provider)) return fail('invalid', `no provider ${a.provider}`, `Use one of: ${Object.keys(LD.PROVIDERS).join(', ')}.`);
+  if (a.server && !own(LD.SERVERS, a.server)) return fail('invalid', `no server ${a.server}`, `Use one of: ${Object.keys(LD.SERVERS).join(', ')}.`);
   if (a.base !== undefined) return fail('invalid', "The custom address is set with its key, in the page, so a key only ever goes where the writer sent it.", 'Ask the writer to enter the address and key together in Read a story.');
   return null;
 }
@@ -1180,7 +1208,10 @@ async function readText(text, reader, progress, strategy) {
   try {
     const whole = C.READ_PROMPTS.whole(text);
     if (await r.measure(whole.system + '\n' + whole.user) > r.maxInput) return await readInParts(text, r, progress);
-    if (strategy === 'split') return await readSplit(text, r, progress);
+    if (strategy === 'split') {   // the labelling call carries the whole text again, plus a header per beat
+      const lp = C.READ_PROMPTS.beatLabels([text]);
+      return await r.measure(lp.system + '\n' + lp.user) > r.maxInput * 0.95 ? await readInParts(text, r, progress) : await readSplit(text, r, progress);
+    }
     progress(`Reading the whole story with ${r.model}…`);
     const out = await r.run(whole, C.READ_SCHEMAS.whole);
     return { ...C.storyFromWhole(text, out.json, out.model), mode: 'whole', calls: 1, model: out.model };
@@ -1192,13 +1223,15 @@ async function readSplit(text, r, progress) {
   const b = await r.run(C.READ_PROMPTS.bounds(text), C.READ_SCHEMAS.bounds);
   const { scenes, dropped } = C.anchorScenes(text, (b.json && b.json.beats) || []);
   if (!scenes.length) return { story: null, dropped: { beats: dropped, quotes: 0 }, mode: 'split', calls: 1, model: b.model };
+  const lp = C.READ_PROMPTS.beatLabels(C.beatTexts(text, scenes));
+  if (await r.measure(lp.system + '\n' + lp.user) > r.maxInput) throw readerFail('too_long', `Labelling ${scenes.length} beats is too long for ${r.model} in one call.`, 'Read it whole (strategy "whole"), or with a reader that holds more.');
   progress(`Labelling ${scenes.length} beats with ${r.model}…`);
-  const out = await r.run(C.READ_PROMPTS.beatLabels(C.beatTexts(text, scenes)), C.READ_SCHEMAS.beatLabels), res = C.storyFromSplit(text, scenes, out.json, out.model);
+  const out = await r.run(lp, C.READ_SCHEMAS.beatLabels), res = C.storyFromSplit(text, scenes, out.json, out.model);
   return { ...res, dropped: { ...res.dropped, beats: res.dropped.beats + dropped }, mode: 'split', calls: 2, model: out.model };
 }
 async function readInParts(text, r, progress) {
   const empty = C.READ_PROMPTS.scenes('', 1, 1), room = r.maxInput - await r.measure(empty.system + '\n' + empty.user);
-  if (room < 300) throw readerFail('too_long', `${r.model} has no room left for the story after the instructions.`, 'Choose Claude with your key.');
+  if (room < 300) throw readerFail('too_long', `${r.model} has no room left for the story after the instructions.`, 'Choose your provider, or a model server with a longer window.');
   const chunks = C.chunkText(text, Math.floor(room * r.charsPerToken * 0.85)), all = [];
   for (let i = 0; i < chunks.length; i++) {
     stopped();
@@ -1209,21 +1242,20 @@ async function readInParts(text, r, progress) {
   const { scenes, dropped } = C.anchorScenes(text, all);
   if (!scenes.length) return { story: null, dropped: { beats: dropped, quotes: 0 }, mode: 'two-pass', calls: chunks.length, model: r.model };
   const lp = C.READ_PROMPTS.labels(scenes);
-  if (await r.measure(lp.system + '\n' + lp.user) > r.maxInput) throw readerFail('too_long', `An outline of ${scenes.length} scenes is too long for ${r.model} to read at once.`, 'Choose Claude with your key, or read the story a part at a time.');
+  if (await r.measure(lp.system + '\n' + lp.user) > r.maxInput) throw readerFail('too_long', `An outline of ${scenes.length} scenes is too long for ${r.model} to read at once.`, 'Choose your provider or a model server with a longer window, or read the story a part at a time.');
   progress(`Reading the whole story in outline: ${scenes.length} scenes…`);
   const out = await r.run(lp, C.READ_SCHEMAS.labels), res = C.storyFromLabels(text, scenes, out.json, out.model);
   return { ...res, dropped: { ...res.dropped, beats: res.dropped.beats + dropped }, mode: 'two-pass', calls: chunks.length + 1, model: out.model };
 }
-// how each rung reads a story that fits in one call: 'whole' (one call does everything) or 'split' (beats, then labels)
-const READ_DEFAULT = { machine: 'whole', device: 'whole', provider: 'whole' };
-const strategyFor = (a, id) => a.strategy || READ_DEFAULT[id] || 'whole';
+// a story that fits in one call is read 'whole' (one call does everything) unless 'split' (beats, then labels) is asked for
+const strategyFor = (a) => a.strategy || 'whole';
 let readProgress = () => { /* the dialog replaces this while it is open */ };
 function readError(words, id, strategy, door) {
   if (door !== 'ui' && id === 'provider' && rcfg.rung !== 'provider') return fail('person_only', 'Sending the story to a provider is the writer\'s choice; the writer has not chosen it.', 'Read with an on-device rung (machine or device), or ask the writer to choose the provider in Read a story.');
   if (!id) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Read a story (reader.select with a rung), or pass rung.');
   if (strategy !== undefined && !['whole', 'split'].includes(strategy)) return fail('invalid', `no strategy ${strategy}`, 'Use "whole" or "split".');
   if (words < 50) return fail('invalid', `${words} words is too short to have a structure.`, 'Pass the story itself, at least 50 words.');
-  if (!READERS[id]) return fail('invalid', `no rung ${id}`, `Use one of: ${LD.ORDER.join(', ')}.`);
+  if (!own(READERS, id)) return fail('invalid', `no rung ${id}`, `Use one of: ${LD.ORDER.join(', ')}.`);
   if (app.reading) return fail('busy', 'A read is already running.', 'Wait for it to finish, then call read.get.');
   return null;
 }
@@ -1233,7 +1265,7 @@ async function runRead(a, door) {
   const bad = readError(words, id, a.strategy, door); if (bad) return bad;
   app.reading = true; app.proposal = null; readAbort = new AbortController(); const t0 = performance.now();
   try {
-    const r = await readText(text, READERS[id], (m) => readProgress(m), strategyFor(a, id));
+    const r = await readText(text, READERS[id], (m) => readProgress(m), strategyFor(a));
     stopped();   // a reader that ignored the abort still stages nothing
     if (!r.story) return fail('nothing_found', 'None of the model\'s beat quotes matched the text.', 'Check the text is the story itself, then try again or try the other reader.', { dropped: r.dropped });
     const v = C.validate(r.story);
@@ -1899,7 +1931,7 @@ async function onReaderTool(kind) {
   readProgress('Loading models…');
   const r = await ui('reader.models', {});
   readProgress(r.ok ? `${r.data.count} models from ${r.data.source}. Pick one in the model field.` : `${r.message} ${r.next || ''}`);
-  if (r.ok) fillModels((rcfg.rung || 'device') === 'machine' ? '#machine-models' : '#provider-models', r.data.models);
+  if (r.ok) fillModels(rcfg.rung === 'machine' ? '#machine-models' : '#provider-models', r.data.models);
   return renderReader(false);
 }
 async function readRunClick() {
