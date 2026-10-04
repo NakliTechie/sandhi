@@ -333,6 +333,19 @@ async function readPage(opts) {
   check('ladder.machine_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // Chrome has blocked this site from the local network: say so at once, and say how to allow it
+  const ctx3 = await browser.newContext();
+  await ctx3.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } delete window.LanguageModel;
+    const q = navigator.permissions.query.bind(navigator.permissions);
+    navigator.permissions.query = (d) => (d && /local-network|loopback/.test(d.name) ? Promise.resolve({ state: 'denied' }) : q(d)); });
+  const p3 = await ctx3.newPage(); await p3.goto(base); await p3.evaluate(() => window.sandhi.ready);
+  let asked = 0; await p3.route('http://127.0.0.1:11434/**', (route) => { asked++; return route.abort(); });
+  const t0 = Date.now();
+  const st3 = (await p3.evaluate(() => window.sandhi.tools['reader.status']({ probe: true }))).data;
+  const r3 = await p3.evaluate((text) => window.sandhi.tools['read.run']({ text, rung: 'machine' }), prose);
+  check('ladder.machine_denied', st3.machine.access === 'denied' && asked === 0 && Date.now() - t0 < 3000 && r3.class === 'no_reader' && /Local network access/.test(r3.next), { access: st3.machine.access, asked, r3 });
+  await ctx3.close();
+}
 
 { // the writer's edits survive: an agent edit mid-typing, an unsaved field at reload, undo across a reload, two tabs
   const { ctx2, p, errs, call } = await readPage({});

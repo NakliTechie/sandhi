@@ -931,22 +931,36 @@ async function nanoRun({ system, user }, schema) {
 // Local models answer without thinking: Qwen 3.5 4B on Ollama thought ~6,000 tokens and ran out of context on The whistle (2026-10-04).
 const LOCAL_EXTRA = { reasoning_effort: 'none' };
 // machine rung: an OpenAI-compatible server on 127.0.0.1; found only by an explicit probe (Chrome may ask to allow local network access)
-let machine = { checked: false, found: null };
-async function probeServer(id) {
-  try { const r = await fetch(`${LD.SERVERS[id].base}/models`, { signal: AbortSignal.timeout(1500) }); return r.ok ? LD.modelIds(await r.json()) : null; }
+let machine = { checked: false, found: null, access: null };
+// Chrome asks the writer before a public page may reach 127.0.0.1 ("local network access"). Until the writer answers, a request
+// waits on the prompt, so the probe waits long enough for a person to answer it (found live, Chrome 153, 2026-10-04).
+async function lanAccess() {
+  for (const name of ['loopback-network', 'local-network-access']) {
+    try { return (await navigator.permissions.query({ name })).state; } catch { /* this Chrome names it differently, or has no such permission */ }
+  }
+  return 'granted';
+}
+async function probeServer(id, waitMs) {
+  try { const r = await fetch(`${LD.SERVERS[id].base}/models`, { signal: AbortSignal.timeout(waitMs) }); return r.ok ? LD.modelIds(await r.json()) : null; }
   catch { return null; }
 }
 async function probeMachine() {
-  const ids = Object.keys(LD.SERVERS).toSorted((a, b) => (b === rcfg.server) - (a === rcfg.server));
-  machine = { checked: true, found: null };
-  for (const id of ids) { const models = await probeServer(id); if (models) { machine.found = { id, models }; break; } }
+  const ids = Object.keys(LD.SERVERS).toSorted((a, b) => (b === rcfg.server) - (a === rcfg.server)), access = await lanAccess();
+  machine = { checked: true, found: null, access };
+  if (access === 'denied') return null;
+  for (const id of ids) {
+    const models = await probeServer(id, (await lanAccess()) === 'prompt' ? 60000 : 1500);
+    if (models) { machine.found = { id, models }; break; }
+  }
+  machine.access = await lanAccess();
   return machine.found ? machine.found.id : null;
 }
 const machineReader = {
   async open() {
     if (!machine.found) await probeMachine();
     const f = machine.found;
-    if (!f) throw readerFail('no_reader', 'No model server answered on this machine.', `Start Ollama (${LD.SERVERS.ollama.cors}) or LM Studio (${LD.SERVERS.lmstudio.cors}), then look again.`);
+    if (!f && machine.access === 'denied') throw readerFail('no_reader', 'Chrome blocks this site from your local network.', 'Allow it: the site icon in the address bar, Site settings, Local network access, Allow. Then look again.');
+    if (!f) throw readerFail('no_reader', 'No model server answered on this machine.', `Start Ollama (${LD.SERVERS.ollama.cors}) or LM Studio (${LD.SERVERS.lmstudio.cors}), allow local network access if Chrome asks, then look again.`);
     const model = rcfg.models[f.id] || f.models[0];
     if (!model) throw readerFail('no_reader', `${LD.SERVERS[f.id].label} has no model loaded.`, 'Pull or load a model, then try again.');
     return { model, maxInput: 3000, charsPerToken: 4, measure: async (t) => Math.ceil(t.length / 4), run: (p, schema) => openaiCall(LD.SERVERS[f.id].base, null, model, p, schema, LOCAL_EXTRA), close() { /* nothing held open */ } };
@@ -1040,8 +1054,8 @@ async function keyPrints() {
 }
 function machineInfo() {
   const f = machine.found;
-  if (!f) return { checked: machine.checked, server: null, models: 0, model: null };
-  return { checked: machine.checked, server: f.id, models: f.models.length, model: rcfg.models[f.id] || f.models[0] || null };
+  if (!f) return { checked: machine.checked, access: machine.access, server: null, models: 0, model: null };
+  return { checked: machine.checked, access: machine.access, server: f.id, models: f.models.length, model: rcfg.models[f.id] || f.models[0] || null };
 }
 async function readerStatus(probe) {
   const prints = await keyPrints(), t = await providerTarget();
@@ -1659,6 +1673,7 @@ $('#provider').innerHTML = Object.entries(LD.PROVIDERS).map(([id, x]) => `<optio
 const NANO_TEXT = { ready: 'ready · fast, but missed the turn in our test', download: 'downloads once, about 22 GB free disk', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
 function machineText(m) {
   if (!m.checked) return 'not looked for yet';
+  if (m.access === 'denied') return 'Chrome blocks local network access for this site (Site settings → Local network access)';
   return m.server ? `${LD.SERVERS[m.server].label} found, ${m.models} model${m.models === 1 ? '' : 's'}` : 'none answered on 127.0.0.1';
 }
 async function renderReader(probe) {
@@ -1701,7 +1716,7 @@ reader.addEventListener('change', async (e) => {
   if (fn) { await fn(e.target); renderReader(false); }
 });
 async function onReaderTool(kind) {
-  if (kind === 'read-probe') { readProgress('Looking for Ollama or LM Studio on 127.0.0.1…'); await ui('reader.status', { probe: true }); readProgress(''); return renderReader(false); }
+  if (kind === 'read-probe') { readProgress('Looking for Ollama or LM Studio on 127.0.0.1… If Chrome asks to let this site reach your local network, choose Allow.'); await ui('reader.status', { probe: true }); readProgress(''); return renderReader(false); }
   if (kind === 'read-forget-key') { await ui('reader.key', { provider: $('#provider').value, key: '' }); return renderReader(false); }
   if (kind !== 'read-models') return null;
   readProgress('Loading models…');
