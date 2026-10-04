@@ -248,6 +248,8 @@ footer code{font-size:11.5px}
 .empty{color:var(--faint);font-size:13px;margin:0}
 @media (max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}aside{position:static}.about{grid-template-columns:minmax(0,1fr)}#panel{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:600px){.top{padding:16px 16px 8px}main{padding:0 16px 32px}footer{padding:16px}}
+/* the page is drawn by its scripts: until the first render, nothing shows, so nothing visible moves (layout shift 0.63 on a slow phone) */
+body:not(.ready) > :not(dialog) { visibility: hidden; }
 </style>
 </head>
 <body>
@@ -2071,8 +2073,7 @@ function restore() {
   if (Array.isArray(u)) app.undo = u.filter(x => C.validate(x).ok);
 }
 (function boot() {
-  restore();
-  renderAll();
+  try { restore(); renderAll(); } finally { document.body.classList.add('ready'); }
   performance.mark('sandhi:first-value');
   bootResolve(statusData());
   if (!store.get(SEEN)) requestAnimationFrame(() => openSplash(true));

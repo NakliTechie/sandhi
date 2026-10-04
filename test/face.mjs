@@ -640,6 +640,16 @@ await pp.keyboard.press('Escape');
 const sw = await pp.evaluate(() => document.documentElement.scrollWidth);
 check('layout.no_hscroll_375', sw <= 375, sw);
 await phone.close();
+// a slow phone paints before the scripts finish: nothing visible may move when they do (Lighthouse CLS 0.63 before the fix)
+const slow = await browser.newContext({ viewport: { width: 412, height: 823 }, isMobile: true, hasTouch: true });
+await slow.addInitScript(() => { window.__cls = 0; new PerformanceObserver(l => { for (const e of l.getEntries()) if (!e.hadRecentInput) window.__cls += e.value; }).observe({ type: 'layout-shift', buffered: true }); });
+const sp = await slow.newPage(); const cdpSlow = await slow.newCDPSession(sp);
+await cdpSlow.send('Emulation.setCPUThrottlingRate', { rate: 6 });
+await cdpSlow.send('Network.emulateNetworkConditions', { offline: false, latency: 150, downloadThroughput: 200000, uploadThroughput: 100000 });
+await sp.goto(base); await sp.evaluate(() => window.sandhi.ready); await sp.waitForTimeout(800);
+const cls = await sp.evaluate(() => window.__cls);
+check('layout.no_shift_slow_phone', cls < 0.05, cls);
+await slow.close();
 const dark = await browser.newContext({ colorScheme: 'dark' });
 const dp = await dark.newPage(); await dp.goto(base); await dp.evaluate(() => window.sandhi.ready);
 const bg = await dp.evaluate(() => getComputedStyle(document.body).backgroundColor);
