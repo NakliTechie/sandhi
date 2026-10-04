@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 32 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
+check('face.manifest', man.length === 33 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -337,7 +337,7 @@ async function readPage(opts) {
   const names = await p5.evaluate(() => window.__mc.map(t => t.name));
   const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
   const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
-  check('door.model_context', names.length === 30 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  check('door.model_context', names.length === 31 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
   await ctx5.close();
 }
 { // a page opened as a file stores no key: every local file shares its storage
@@ -616,7 +616,7 @@ async function readPage(opts) {
   await call('story.load', { story: read });
   const bylines = () => p.evaluate(() => document.querySelectorAll('#beats .byline').length);
   const before = await bylines();
-  await p.click('#beat-b1 .blabel'); await p.keyboard.type('!'); await p.waitForTimeout(600);
+  await p.click('#beat-b1 [data-more="b1"] > summary'); await p.click('#beat-b1 .blabel'); await p.keyboard.type('!'); await p.waitForTimeout(600);   // the name sits in "Label this beat"
   const after = await bylines();
   await call('beat.update', { id: 'b3', patch: { text: '' } });
   await p.click('#beat-b3 textarea.btext'); await p.keyboard.type('Now it has text'); await p.waitForTimeout(600);
@@ -680,6 +680,46 @@ async function readPage(opts) {
   await ctx2.close();
 }
 
+{ // the UX review's structural changes: sticky header, recent stories, import with a preview, grouped checks, traditions switch
+  const { ctx2, p, call } = await readPage({});
+  await p.evaluate(() => scrollTo(0, 2500)); await p.waitForTimeout(150);
+  const header = await p.evaluate(() => { const r = document.querySelector('.topbar').getBoundingClientRect(); return { top: Math.round(r.top), undo: document.querySelector('#undo').checkVisibility() }; });
+  check('ux.header_sticks', header.top === 0 && header.undo, header);
+  await p.evaluate(() => scrollTo(0, 0));
+  await call('story.update', { title: 'Mine, not saved' }); await call('story.demo', {});   // a replace keeps the story it pushed aside
+  await p.click('.storymenu > summary');
+  const recentShown = await p.evaluate(() => document.querySelector('#recent button') && document.querySelector('#recent button').textContent);
+  await p.click('#recent button'); await p.waitForTimeout(150);
+  check('ux.recent_story_back', /Mine, not saved/.test(recentShown || '') && (await call('story.get', {})).data.story.title === 'Mine, not saved', { recentShown });
+  const before = JSON.stringify((await call('story.get', {})).data.story);
+  await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);
+  await p.fill('#read-text', 'First paragraph of an imported story.\n\nSecond paragraph.\n\nThird paragraph.');
+  await p.click('[data-ui="read-paste"]'); await p.waitForTimeout(150);
+  const staged = await p.evaluate(() => ({ sum: document.querySelector('#read-result .sum') && document.querySelector('#read-result .sum').textContent, accept: !document.querySelector('[data-ui="read-accept"]').hidden }));
+  const unchangedYet = JSON.stringify((await call('story.get', {})).data.story) === before;
+  await p.click('[data-ui="read-accept"]'); await p.waitForFunction(() => !document.querySelector('#reader').open);
+  const imported = (await call('story.get', {})).data.story;
+  check('ux.import_paragraphs_preview', /3 beats/.test(staged.sum || '') && /one beat per paragraph/.test(staged.sum) && staged.accept && unchangedYet && imported.beats.length === 3, { staged, unchangedYet, n: imported.beats.length });
+  await call('story.new', {});
+  const grouped = await p.evaluate(() => [...document.querySelectorAll('#checks li')].map(li => li.textContent));
+  check('ux.checks_grouped', grouped.length === 1 && /5 beats/.test(grouped[0]) && /Beats 1, 2, 3, 4, 5/.test(grouped[0]), grouped);
+  await call('story.demo', {});
+  const rowsBefore = await p.evaluate(() => document.querySelectorAll('#chart .rowl').length);
+  await call('story.start', { title: 'Plain', lines: [{ stage: 'once', text: 'a' }, { stage: 'oneday', text: 'b' }, { stage: 'until', text: 'c' }] });
+  const rowsPlain = await p.evaluate(() => document.querySelectorAll('#chart .rowl').length);
+  await p.check('#trad-all');
+  const rowsAll = await p.evaluate(() => document.querySelectorAll('#chart .rowl').length);
+  check('ux.traditions_switch', rowsBefore === 3 && rowsPlain === 1 && rowsAll === 3, { rowsBefore, rowsPlain, rowsAll });
+  await ctx2.close();
+}
+{ // write first, label later (UX review H6): a beat card shows number, stage, text; its labels wait behind one disclosure with a summary
+  const { ctx2, p } = await readPage({});
+  const card = await p.evaluate(() => { const c = document.querySelector('#beat-b8'), d = c.querySelector('[data-more="b8"]');
+    const shown = [...c.querySelectorAll('input,select,textarea,button,summary')].filter(x => x.checkVisibility()).length;
+    return { shown, open: d.open, summary: d.querySelector('.lsum').textContent, name: c.querySelector('.bname').textContent, text: c.querySelector('textarea.btext').checkVisibility() }; });
+  check('ux.write_first_card', card.shown <= 5 && !card.open && /the turn/.test(card.summary) && card.name === 'The turn' && card.text, card);
+  await ctx2.close();
+}
 { // the UX review's quick wins (plan/ux-review-2026-10-04.md): the wizard keeps answers; imports refuse non-text; notices; focus; Esc; errors surface
   const { ctx2, p, call } = await readPage({});
   await p.click('[data-ui="wizard"]'); await p.waitForFunction(() => document.querySelector('#wizard').open);
@@ -713,6 +753,7 @@ async function readPage(opts) {
   const cleared = await p.evaluate(() => !document.querySelector('#toast').classList.contains('show'));
   check('ux.remove_says_so_undo_clears', /Beat removed/.test(removed) && cleared, { removed, cleared });
   // a toggle keeps keyboard focus; Esc closes the beat menu; an empty Add is disabled
+  await p.click('#beat-b2 [data-more="b2"] > summary');
   await p.focus('#beat-b2 [data-focus="mark:b2:turn"]'); await p.keyboard.press('Space'); await p.waitForTimeout(100);
   const focusKept = await p.evaluate(() => document.activeElement && document.activeElement.dataset.focus);
   await p.click('#beat-b4 details.menu summary'); await p.keyboard.press('Escape');
