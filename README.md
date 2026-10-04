@@ -8,6 +8,7 @@
   <img alt="one file" src="https://img.shields.io/badge/one-file-BA7517?style=flat-square">
   <img alt="account: none" src="https://img.shields.io/badge/account-none-BA7517?style=flat-square">
   <img alt="writes prose: never" src="https://img.shields.io/badge/writes%20prose-never-BA7517?style=flat-square">
+  <a href="LICENSE"><img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-BA7517?style=flat-square"></a>
 </p>
 
 <p align="center"><img src="marketing/hero.png" width="880" alt="sandhi showing the demo story The whistle: a fortune line across ten beats, each beat's phase in three traditions, the closest of six story shapes, and the checks panel"></p>
@@ -65,4 +66,4 @@ The gates refuse a demo story that cannot round-trip the explainer's data, a che
 
 ## License
 
-Not chosen yet. · [SPEC.md](SPEC.md) · [llms.txt](llms.txt) · [How stories work](https://assets.chiragpatnaik.com/how-stories-work)
+[MIT](LICENSE). · [SPEC.md](SPEC.md) · [llms.txt](llms.txt) · [How stories work](https://assets.chiragpatnaik.com/how-stories-work)
