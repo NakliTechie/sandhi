@@ -3,9 +3,12 @@
 // explainer's own labels. Local servers need no key; for a provider, pass the NAME of an env var that holds the key.
 //   node test/live.mjs --base http://127.0.0.1:1234/v1 --model <id>
 //   node test/live.mjs --base https://openrouter.ai/api/v1 --model <id> --key-env OPENROUTER_API_KEY
+//   add --story <name> for a story in test/stories/ with hand labels; --json-mode object|prompt to start below json_schema
+//   (a server that ignores response_format, such as mlx_lm.server). For Ollama, prefer test/page-read.mjs: it sets num_ctx.
 // Writes test/receipts/live-<model>.json. The score measures agreement with one editorial reading, not truth.
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { loadPage, score as scoreAgainst, plain } from './score.mjs';
+import { readFileSync } from 'node:fs';
+import { loadPage, score as scoreAgainst, scoreStory, plain } from './score.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const base = arg('base', 'http://127.0.0.1:1234/v1').replace(/\/+$/, ''), model = arg('model'), keyEnv = arg('key-env');
@@ -15,11 +18,14 @@ const extra = reasoning === 'default' ? {} : { reasoning_effort: reasoning };
 if (!model) { console.error('pass --model <id> (GET ' + base + '/models lists them)'); process.exit(2); }
 const key = keyEnv ? process.env[keyEnv] : null;
 if (keyEnv && !key) { console.error(`env var ${keyEnv} is empty`); process.exit(2); }
-const { C, L, seed, prose } = loadPage();
+const { C, L, seed, prose: whistle } = loadPage();
+const storyName = arg('story'), startMode = arg('json-mode', 'schema');
+const prose = storyName ? readFileSync(new URL(`./stories/${storyName}.txt`, import.meta.url), 'utf8').trim() : whistle;
+const labels = storyName ? JSON.parse(readFileSync(new URL(`./stories/${storyName}.labels.json`, import.meta.url), 'utf8')) : null;
 
 // one call, stepping down the JSON mode on HTTP 400 exactly as the page does
 async function call(prompt, schema) {
-  for (const mode of L.JSON_MODES) {
+  for (const mode of L.JSON_MODES.slice(L.JSON_MODES.indexOf(startMode))) {
     const t0 = Date.now();
     const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) }, body: JSON.stringify(L.openaiBody(model, prompt, schema, mode, extra)) });
     const out = await res.json().catch(() => ({}));
@@ -30,7 +36,7 @@ async function call(prompt, schema) {
   throw new Error('every JSON mode was rejected');
 }
 
-const score = (story) => scoreAgainst(story, seed, prose, C);
+const score = (story) => (labels ? scoreStory(story, labels, C) : scoreAgainst(story, seed, prose, C));
 
 const strategy = arg('strategy', 'whole');
 // the page's split strategy: one call finds the beats, a second labels them
@@ -54,10 +60,10 @@ let receipt;
 try {
   const { r, built } = strategy === 'split' ? await readSplit() : await readWhole();
   if (!built.story) throw new Error('no beat quote matched the text');
-  receipt = { gate: 'live', base, model, reasoning, strategy, json_mode: r.mode, ms: Date.now() - t0, dropped: built.dropped, valid: C.validate(built.story).ok, score: score(built.story),
+  receipt = { gate: 'live', base, model, story: storyName || 'the-whistle', words: C.wordCount(prose), reasoning, strategy, json_mode: r.mode, ms: Date.now() - t0, dropped: built.dropped, valid: C.validate(built.story).ok, score: score(built.story),
     beats: built.story.beats.map((b, i) => `${i + 1} ${b.spine}/${b.joint || '-'} f${b.fortune}${b.marks.length ? ' ' + b.marks.join('+') : ''} | ${b.text.slice(0, 50)}`) };
 } catch (e) { receipt = { gate: 'live', base, model, ms: Date.now() - t0, error: String(e.message || e) }; }
 mkdirSync(new URL('./receipts/', import.meta.url), { recursive: true });
-writeFileSync(new URL(`./receipts/live-${model.replace(/[^a-z0-9._-]+/gi, '_')}.json`, import.meta.url), JSON.stringify(receipt, null, 1));
+writeFileSync(new URL(`./receipts/live-${`${model}-${storyName || 'the-whistle'}-${Date.now()}`.replace(/[^a-z0-9._-]+/gi, '_')}.json`, import.meta.url), JSON.stringify(receipt, null, 1));
 console.log(JSON.stringify(receipt, null, 1));
 process.exit(receipt.error ? 1 : 0);
