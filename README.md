@@ -4,11 +4,17 @@
 
 *Sandhi* is the Nāṭyaśāstra's word for the joints that join a play's action, like the joints of a limb. This tool checks the joints.
 
-Live (planned): https://sandhi.naklitechie.com
+Live: https://sandhi.naklitechie.com
 
 ## Install
 
-_TODO: one single-file `index.html`, opened from disk or served from sandhi.naklitechie.com. No build step, no account._
+Open https://sandhi.naklitechie.com. Or download [`index.html`](index.html) and open it from disk: one file, no build step, no account, nothing fetched.
+
+Your story autosaves in the browser. **Save** writes a `.sandhi.json` file; **Open** (or drag the file onto the page) reads it back.
+
+**Status (v0.1):** write mode without a model. You label beats, joints, fortune, phases and threads; sandhi draws the views and runs the checks on those labels. The model-assisted parts below (proposals, questions, read mode) are Batch B and C in `plan/`.
+
+Tests: `cd test && npm install && npm test` (core, parity, face + cold-load timing). Agent face: `window.sandhi` (21 tools, see [`SPEC.md`](SPEC.md) §0).
 
 ## What it does
 
