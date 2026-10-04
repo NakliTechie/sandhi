@@ -968,6 +968,12 @@ const BEAT_PATCH_SCHEMA = { type: 'object', properties: {
   marks: { type: 'array', items: { enum: C.MARKS } }, driver: { enum: [...C.DRIVERS, null] }, avastha: { enum: [...C.AVASTHA.map(x => x.id), null] },
   kis: { enum: [...C.KIS.map(x => x.id), null] }, drafts: { type: 'array', items: { type: 'object', properties: { n: { type: 'integer' }, text: { type: 'string' }, note: { type: 'string' } } } } } };
 const NONE = { type: 'object', properties: {} };
+// notes: principle ids to text, checked before anything is assigned (a key such as __proto__ would reach the object's prototype)
+function notesError(notes) {
+  if (notes === undefined) return null;
+  const bad = notes && typeof notes === 'object' && !Array.isArray(notes) ? Object.keys(notes).filter(k => !Object.hasOwn(PN, k) || typeof notes[k] !== 'string') : ['notes'];
+  return bad.length ? fail('invalid', `not a principle note: ${bad.join(', ')}`, `Use principle ids (${Object.keys(PN).join(', ')}) with text values.`) : null;
+}
 
 // ---- readers (L5) on the AI ladder (SandhiLadder): a model server on this machine, Gemini Nano in Chrome, or the
 // writer's own provider and key. Probes run only on an explicit action. A reader only proposes.
@@ -1289,6 +1295,7 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { title: { type: 'string' }, logline: { type: 'string' }, belief: { type: 'string' }, notes: { type: 'object', additionalProperties: { type: 'string' } } } },
     handler: async (a, door) => {
       const n = C.clone(S());
+      const bad = notesError(a.notes); if (bad) return bad;
       for (const k of ['title', 'logline', 'belief']) if (a[k] !== undefined) n[k] = a[k];
       if (a.notes) for (const [k, v] of Object.entries(a.notes)) { if (v === '') delete n.notes[k]; else n.notes[k] = v; }
       return commit(n, `story.update:${door}:${Object.keys(a).toSorted().join(',')}:${a.notes ? Object.keys(a.notes).toSorted().join(',') : ''}`) || ok({});
@@ -1776,6 +1783,9 @@ document.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset &
 $('#thread-add').addEventListener('submit', (e) => { e.preventDefault(); const i = e.target.querySelector('input'), v = i.value.trim(); if (!v) return; ui('thread.add', { label: v }).then(r => { if (r.ok) i.value = ''; }); });
 function goBeat(id) { const el = document.getElementById('beat-' + id); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); }
 
+// a file larger than any story the page can hold is refused before it is read (LIMITS: 3,000,000 characters of text)
+const MAX_FILE = 12e6;
+const tooBig = (f) => { if (f.size <= MAX_FILE) return false; toast(`That file is ${Math.round(f.size / 1e6)} MB, more than a story this page can hold.`, 'Open a .sandhi.json file saved from sandhi, or one part of a long story.'); return true; };
 async function openText(text) {
   let story;
   try { story = JSON.parse(text); } catch { toast('That file is not JSON.', 'Open a .sandhi.json file saved from sandhi.'); return; }
@@ -1783,10 +1793,11 @@ async function openText(text) {
   if (r.ok) { app.dirty = false; persist(); renderSaveState(); toast(`Opened "${S().title || 'Untitled'}".`, 'Undo brings the previous story back.'); }
   else if (r.class === 'invalid') toast('This file is not a sandhi story. Nothing changed.', 'Open a .sandhi.json file saved from sandhi.');
 }
-$('#file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) openText(await f.text()); });
+$('#file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f && !tooBig(f)) openText(await f.text()); });
 document.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
 document.addEventListener('drop', async (e) => {
   const f = e.dataTransfer && e.dataTransfer.files[0]; if (!f) return; e.preventDefault();
+  if (tooBig(f)) return;
   if ($('#reader').open) { $('#read-text').value = await f.text(); $('#read-text').dispatchEvent(new Event('input')); return; }
   openText(await f.text());
 });
@@ -1904,7 +1915,7 @@ async function openReader() { $('#read-progress').textContent = ''; await render
 readProgress = (m) => { $('#read-progress').textContent = m; };
 const countWords = () => { $('#read-count').textContent = `${C.wordCount($('#read-text').value)} words`; };
 $('#read-text').addEventListener('input', countWords);
-$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) { $('#read-text').value = await f.text(); countWords(); } });
+$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f && !tooBig(f)) { $('#read-text').value = await f.text(); countWords(); } });
 const READER_CHANGES = {
   rung: (el) => { readProgress(''); return ui('reader.select', { rung: el.value }); },
   provider: (el) => ui('reader.select', { provider: el.value }),
@@ -2055,7 +2066,8 @@ function restore() {
   const read = (k, d) => { try { return JSON.parse(store.get(k) || 'null') || d; } catch { return d; } };
   const j = read(JKEY, []), o = read(KEY, null), u = read(UKEY, []);
   if (Array.isArray(j)) app.journal = j.slice(-200);
-  if (o && C.validate(o.story).ok) { app.story = o.story; app.dirty = !!o.dirty; } else app.story = C.seed();
+  if (o && C.validate(o.story).ok) { app.story = o.story; app.dirty = !!o.dirty; }
+  else { app.story = C.seed(); if (o) app.setAside = store.set('sandhi:story:rejected', store.get(KEY)); }
   if (Array.isArray(u)) app.undo = u.filter(x => C.validate(x).ok);
 }
 (function boot() {
@@ -2064,6 +2076,7 @@ function restore() {
   performance.mark('sandhi:first-value');
   bootResolve(statusData());
   if (!store.get(SEEN)) requestAnimationFrame(() => openSplash(true));
+  if (app.setAside !== undefined) toast('The story kept in this browser did not pass the schema check, so the demo story is shown.', app.setAside ? 'It is set aside in this browser as sandhi:story:rejected; nothing was deleted.' : 'This browser could not set it aside: its storage is full.');
 })();
 </script>
 </body>

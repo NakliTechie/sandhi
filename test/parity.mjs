@@ -16,8 +16,11 @@ const cmds = new Set([...src.matchAll(/data-cmd="([a-z.]+)"/g)].map(m => m[1]));
 const calls = new Set([...src.matchAll(/(?:bus\.dispatch|\bui)\('([a-z.]+)'/g)].map(m => m[1]));
 const ternary = [...src.matchAll(/\bui\(e\.shiftKey \? '([a-z.]+)' : '([a-z.]+)'/g)].flatMap(m => [m[1], m[2]]);
 for (const t of ternary) calls.add(t);
-const CLASSES = new Set(['ok', 'invalid', 'not_found', 'stack_empty', 'io_error', 'unknown_tool', 'internal', 'person_only', 'busy',
-  'no_reader', 'reader_error', 'key_rejected', 'rate_limited', 'refused', 'too_long', 'nothing_found', 'no_proposal', 'cancelled']);
+// the closed set is SPEC §0's own list, read from SPEC.md, so the code and the contract cannot drift apart (forward pass T8)
+const spec = readFileSync(new URL('../SPEC.md', import.meta.url), 'utf8');
+const classLine = (spec.split('\n').find(l => l.startsWith('**Outcome classes (closed):**')) || '');
+const CLASSES = new Set([...classLine.matchAll(/`([a-z_]+)`/g)].map(m => m[1]));
+if (CLASSES.size < 10) findings.push('SPEC §0 has no outcome class list');
 const used = new Set([...src.matchAll(/(?:fail|readerFail)\('([a-z_]+)'/g)].map(m => m[1]));
 // person-only tools exist in the manifest and are refused on every door but the page (SPEC §0)
 for (const n of ['read.accept', 'reader.key']) if (!new RegExp(`name: '${n.replace('.', '\\.')}'[^\\n]*\\n?[^\\n]*personOnly: true`).test(app)) findings.push(`${n}: not marked personOnly`);

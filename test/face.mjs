@@ -604,6 +604,32 @@ async function readPage(opts) {
   await ctx2.close();
 }
 
+{ // imports and hardening (forward pass Batch E): note ids, file size, a kept story that fails the schema, the size limits
+  const { ctx2, p, errs, call } = await readPage({});
+  const polluted = await p.evaluate(() => window.sandhi.tools['story.update'](JSON.parse('{"notes":{"__proto__":{"care":{"toString":null}}}}')));
+  await call('view.focus', { principle: 'care' }); await call('view.focus', { principle: 'all' });
+  check('import.note_ids_checked', polluted.class === 'invalid' && errs.length === 0, { polluted: polluted.class, errs });
+  const before = JSON.stringify((await call('story.get', {})).data.story);
+  await p.evaluate(() => { const dt = new DataTransfer(); dt.items.add(new File(['x'.repeat(13e6)], 'big.sandhi.json', { type: 'application/json' })); document.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })); });
+  const told = await p.waitForFunction(() => /more than a story this page can hold/.test(document.querySelector('#toast').textContent), null, { timeout: 3000 }).then(() => true, () => false);
+  check('import.big_file_refused', told && JSON.stringify((await call('story.get', {})).data.story) === before, told);
+  // a story at the limits (400 beats, 100 threads) loads and draws in bounded time
+  const big = { sandhi: 1, title: 'Limits', logline: '', belief: '', notes: {}, beats: Array.from({ length: 400 }, (_, i) => ({ id: 'b' + (i + 1), label: '', spine: 'because', joint: null, text: 'A beat.', fortune: 0, tags: [], marks: [], driver: null, avastha: null, kis: null, drafts: [], by: 'writer' })),
+    threads: Array.from({ length: 100 }, (_, i) => ({ id: 't' + (i + 1), label: 'thread ' + i, plant: 'b1', payoffs: ['b2'] })) };
+  const t0 = Date.now(); const lr = await call('story.load', { story: big }); const drawMs = Date.now() - t0;
+  const over = await call('story.load', { story: { ...big, beats: [...big.beats, { ...big.beats[0], id: 'b401' }] } });
+  check('import.limits_draw_in_time', lr.ok && drawMs < 8000 && over.class === 'invalid', { drawMs, over: over.class });
+  await call('story.demo', {});
+  // a kept story that fails the schema is set aside, and the writer is told
+  await p.evaluate(() => localStorage.setItem('sandhi:story', JSON.stringify({ story: { sandhi: 1, title: 'broken' }, dirty: true })));
+  await p.reload(); await p.evaluate(() => window.sandhi.ready);
+  const aside = await p.evaluate(() => localStorage.getItem('sandhi:story:rejected'));
+  const toldAside = await p.waitForFunction(() => /did not pass the schema check/.test(document.querySelector('#toast').textContent), null, { timeout: 2000 }).then(() => true, () => false);
+  check('import.bad_kept_story_set_aside', toldAside && aside && aside.includes('broken'), { toldAside, aside: aside && aside.slice(0, 60) });
+  check('import.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+
 // ---- 4. layout: phone width, dark scheme
 const phone = await browser.newContext({ viewport: { width: 375, height: 812 } });
 const pp = await phone.newPage(); await pp.goto(base); await pp.evaluate(() => window.sandhi.ready);
