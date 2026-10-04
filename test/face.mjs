@@ -769,6 +769,24 @@ async function readPage(opts) {
   await ctx2.close();
 }
 
+{ // UX leftovers: the example is named; a phone chart names every stage; a phone hides readers it cannot run
+  const { ctx2, p, call } = await readPage({});
+  const ex = await p.textContent('#savestate');
+  await call('beat.update', { id: 'b1', patch: { fortune: 1 } });
+  const mine = await p.textContent('#savestate');
+  check('ux.example_named', /example story/.test(ex) && /not saved to a file/.test(mine), { ex, mine });
+  await ctx2.close();
+  const ph = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await ph.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } });
+  const pp2 = await ph.newPage(); await pp2.goto(base); await pp2.evaluate(() => window.sandhi.ready);
+  const spineSegs = await pp2.evaluate(() => { const y = [...document.querySelectorAll('#chart .rowl')][0].getAttribute('y'); return [...document.querySelectorAll('#chart rect')].filter(r => Math.abs(+r.getAttribute('y') + 14 - +y) < 6).length + ' rects, ' + document.querySelectorAll('#chart .segt').length + ' names'; });
+  const named = await pp2.evaluate(() => document.querySelectorAll('#chart .segt').length >= document.querySelectorAll('#chart rect').length);
+  await pp2.click('[data-ui="read-open"]'); await pp2.waitForFunction(() => document.querySelector('#reader').open);
+  const others = await pp2.evaluate(() => document.querySelector('#other-readers').checkVisibility());
+  check('ux.phone_chart_and_readers', named && !others, { spineSegs, named, others });
+  await ph.close();
+}
+
 // ---- 4. layout: phone width, dark scheme
 const phone = await browser.newContext({ viewport: { width: 375, height: 812 } });
 const pp = await phone.newPage(); await pp.goto(base); await pp.evaluate(() => window.sandhi.ready);

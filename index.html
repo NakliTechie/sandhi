@@ -278,6 +278,7 @@ footer code{font-size:11.5px}
 .empty{color:var(--faint);font-size:13px;margin:0}
 @media (max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}aside{position:static}.about{grid-template-columns:minmax(0,1fr)}#panel{grid-template-columns:minmax(0,1fr)}}
 #undo .ico,#redo .ico{display:none}
+@media (pointer:coarse) and (max-width:600px){#other-readers:not([open]){display:none}}   /* a phone runs no model server and no Gemini Nano (UX L4) */
 @media (max-width:600px){.brand span,#savestate{display:none}.top{gap:8px}.actions{gap:4px}.actions .btn{padding:4px 9px;font-size:12px}#undo .lbl,#redo .lbl{display:none}#undo .ico,#redo .ico{display:inline}.tradsw{float:none;margin:0 0 6px}}
 @media (max-width:600px){.top{padding:10px 16px 8px}main{padding:0 16px 32px}footer{padding:16px}}
 /* the page is drawn by its scripts: until the first render, nothing shows, so nothing visible moves (layout shift 0.63 on a slow phone) */
@@ -1718,8 +1719,10 @@ function renderRecent() {
   $('#recent').innerHTML = list.length ? list.map((x, k) => `<button type="button" data-ui="recent" data-k="${k}">${esc(x.title)} <span class="faint">· ${esc(new Date(x.at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }))}</span></button>`).join('')
     : '<p class="mlab">None yet: a story you replace waits here.</p>';
 }
+const SEED_JSON = JSON.stringify(C.seed());
 function renderSaveState() {
-  $('#savestate').textContent = !app.kept ? 'Not kept in this browser: its storage is full · save to a file' : app.dirty ? 'In this browser · not saved to a file' : app.savedNote || 'In this browser';
+  const example = JSON.stringify(S()) === SEED_JSON;   // the untouched demo is named as such, never "saved" (UX M3)
+  $('#savestate').textContent = !app.kept ? 'Not kept in this browser: its storage is full · save to a file' : app.savedNote || (example ? 'The example story · New starts yours' : app.dirty ? 'In this browser · not saved to a file' : 'In this browser');
   if (app.dirty) app.savedNote = null;
   $('#undo').disabled = !app.undo.length; $('#redo').disabled = !app.redo.length;
 }
@@ -1763,7 +1766,8 @@ function phaseRow(s, [k, label, vocab], yy, geo) {
 }
 function phaseSeg(item, i, j, yy, alt, { L, w, RH }) {
   const x0 = L + w * i + 1, x1 = L + w * (j + 1) - 1, fits = (t) => !!t && x1 - x0 > t.length * 6 + 8;
-  const shown = fits(item.name) ? item.name : fits(item.short) ? item.short : '';
+  const room = Math.floor((x1 - x0 - 8) / 6);   // a narrow segment (a phone) shows as much of the name as fits, never a blank (UX L12)
+  const shown = fits(item.name) ? item.name : fits(item.short) ? item.short : room >= 2 ? item.name.slice(0, room - 1) + '.' : '';
   const g = `<rect class="${alt % 2 ? 'seg-b' : 'seg-a'}" x="${x0}" y="${yy}" width="${Math.max(2, x1 - x0)}" height="${RH}" rx="4"><title>${esc(item.name)}${item.gloss ? ' · ' + esc(item.gloss) : ''}, beats ${i + 1}${j > i ? '–' + (j + 1) : ''}</title></rect>`;
   return shown ? g + `<text class="segt" x="${(x0 + x1) / 2}" y="${yy + RH / 2 + 4}" text-anchor="middle" pointer-events="none">${esc(shown)}</text>` : g;
 }
