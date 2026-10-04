@@ -1,0 +1,12 @@
+# Workers static-assets uploads EVERYTHING under assets.directory (repo root) unless listed here.
+.git
+.gitignore
+.assetsignore
+.claude
+.wrangler
+wrangler.jsonc
+node_modules
+plan
+test
+*.md
+.DS_Store
