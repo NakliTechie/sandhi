@@ -4,8 +4,8 @@
 //   node test/live.mjs --base http://127.0.0.1:1234/v1 --model <id>
 //   node test/live.mjs --base https://openrouter.ai/api/v1 --model <id> --key-env OPENROUTER_API_KEY
 // Writes test/receipts/live-<model>.json. The score measures agreement with one editorial reading, not truth.
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import vm from 'node:vm';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { loadPage, score as scoreAgainst, plain } from './score.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const base = arg('base', 'http://127.0.0.1:1234/v1').replace(/\/+$/, ''), model = arg('model'), keyEnv = arg('key-env');
@@ -15,12 +15,7 @@ const extra = reasoning === 'default' ? {} : { reasoning_effort: reasoning };
 if (!model) { console.error('pass --model <id> (GET ' + base + '/models lists them)'); process.exit(2); }
 const key = keyEnv ? process.env[keyEnv] : null;
 if (keyEnv && !key) { console.error(`env var ${keyEnv} is empty`); process.exit(2); }
-
-const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const ctx = vm.createContext({ crypto: globalThis.crypto, TextEncoder });
-for (const id of ['sandhi-core', 'sandhi-ladder']) vm.runInContext(new RegExp(`<script id="${id}">([\\s\\S]*?)</script>`).exec(page)[1], ctx);
-const C = ctx.SandhiCore, L = ctx.SandhiLadder, plain = (o) => JSON.parse(JSON.stringify(o));
-const seed = plain(C.seed()), prose = seed.beats.map(b => b.text).join('\n\n');
+const { C, L, seed, prose } = loadPage();
 
 // one call, stepping down the JSON mode on HTTP 400 exactly as the page does
 async function call(prompt, schema) {
@@ -35,23 +30,7 @@ async function call(prompt, schema) {
   throw new Error('every JSON mode was rejected');
 }
 
-// agreement with the explainer's reading of its own story
-function score(story) {
-  const startOf = (t) => prose.indexOf(t.slice(0, 60));
-  const seedAt = new Map(seed.beats.map((b, i) => [startOf(b.text), i]));
-  const aligned = story.beats.map(b => ({ b, s: seedAt.get(startOf(b.text)) })).filter(x => x.s !== undefined);
-  const contains = (b, i) => b.text.includes(seed.beats[i].text.slice(0, 40));
-  const agree = (k) => aligned.filter(x => x.s > 0).filter(x => (x.b[k] || null) === (seed.beats[x.s][k] || null)).length;
-  const beatOf = (id) => story.beats.find(b => b.id === id);
-  const whistle = story.threads.some(t => t.plant && contains(beatOf(t.plant), 1) && t.payoffs.some(p => contains(beatOf(p), 7)));
-  return {
-    beats: story.beats.length, boundaries_matching_seed: `${aligned.length}/10`,
-    turn_on_the_whistle: story.beats.some(b => b.marks.includes('turn') && contains(b, 7)),
-    low_on_the_gull: story.beats.some(b => b.marks.includes('low') && contains(b, 6)),
-    joints_agree: `${agree('joint')}/${aligned.filter(x => x.s > 0).length}`, spine_agree: `${agree('spine')}/${aligned.filter(x => x.s > 0).length}`,
-    threads: story.threads.length, whistle_thread: whistle, arc: plain(C.arcMatch(story)).best, checks: plain(C.checks(story)).map(c => c.class)
-  };
-}
+const score = (story) => scoreAgainst(story, seed, prose, C);
 
 const strategy = arg('strategy', 'whole');
 // the page's split strategy: one call finds the beats, a second labels them

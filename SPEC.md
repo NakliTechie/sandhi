@@ -106,5 +106,6 @@ Readers follow the house AI ladder (Edge-First doctrine; ported from Draft's `si
 | Parity | `node test/parity.mjs` | manifest ⊇ command bus; closed classes |
 | Ladder | `node test/ladder.mjs` | rung order and readiness, labels, request modes, reply parsing, fingerprints, https hosts |
 | Face + TTFV | `node test/face.mjs` | first value ≤ 5 s cold ×3; agent face drives the story; splash and tour; read mode with a stand-in Nano (whole and two-pass); every ladder rung intercepted: Anthropic (request shape, refusal, rejected key), OpenRouter (model list, json_schema → json_object step-down), Ollama on 127.0.0.1 (found only on request); keys as fingerprints only |
+| Reader eval (opt-in) | `node test/live.mjs --base … --model …` · `node test/cli-read.mjs prompt|score` | a real model's reading of *The whistle* scored against the explainer's labels; not a gate (results in `plan/history.md`) |
 
 Roadmap and status: `plan/workplan.md`.
