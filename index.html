@@ -153,7 +153,7 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 
 /* coverage */
 #coverage{margin-top:18px}
-.mwrap{overflow-x:auto}
+.mwrap{overflow-x:auto;position:relative}   /* contains the matrix's screen-reader text, so it cannot widen the page */
 table.matrix{border-collapse:collapse}
 .matrix th,.matrix td{padding:0;font-weight:400}
 .matrix thead th{font-size:11px;color:var(--faint);text-align:center;padding-bottom:4px}
