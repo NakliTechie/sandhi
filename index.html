@@ -343,6 +343,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
         <button class="btn" data-ui="read-models" type="button">Load models</button>
       </div></div>
   </fieldset>
+  <p id="read-measured" class="faint"></p>
   <p id="read-privacy"></p>
   <div id="read-progress" role="status"></div>
   <div id="read-result"></div>
@@ -1918,7 +1919,19 @@ new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width); if (w &
 // ---- the read dialog: paste, choose a rung on the ladder, read, review, then use or discard (read.accept is person-only)
 const reader = $('#reader');
 $('#provider').innerHTML = Object.entries(LD.PROVIDERS).map(([id, x]) => `<option value="${id}">${esc(x.label)}</option>`).join('');
-const NANO_TEXT = { ready: 'ready · a preview: fast, but in our tests it missed the story’s turn', download: 'needs about 22 GB free disk; Chrome downloads it once', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
+const NANO_TEXT = { ready: 'ready · a preview, below the floor in our tests', download: 'needs about 22 GB free disk; Chrome downloads it once', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
+// what the reader evals measured (SPEC §5), shown beside the chosen reader: the writer chooses knowing the floor (Edge-First honesty)
+const MEASURED = {
+  "gemini-nano": "Measured: Gemini Nano missed the turn in 8 of 8 reads of a 394-word story, and could not finish a 7,082-word one (2 of 2 reads failed after about 10 minutes).",
+  "qwen3.5:4b": "Measured: Qwen 3.5 4B on Ollama found the turn in 5 of 12 reads across four stories, and linked a planted thread in 1 of 12.",
+  "qwen3.5:2b": "Measured: Qwen 3.5 2B on Ollama missed the turn in 4 of 4 reads it finished; 1 of 5 ran out of room to answer.",
+  "claude-opus-5-5": "Measured: Claude Opus 5.5, reading with this page's prompt, marked the turn in 4 of 4 stories, every quote matching the text."
+};
+const MEASURED_NONE = 'This model is not measured yet. In our tests small local models often missed the turn; large provider models found it (SPEC §5).';
+function measuredLine(st) {
+  const id = st.rung === 'device' ? 'gemini-nano' : st.rung === 'machine' ? st.machine.model : st.rung === 'provider' ? st.provider.model : null;
+  return !st.rung ? '' : (id && Object.hasOwn(MEASURED, id) ? MEASURED[id] : MEASURED_NONE);
+}
 function machineText(m) {
   if (!m.checked) return 'not looked for yet';
   if (m.access === 'denied') return 'Chrome blocks local network access for this site (Site settings → Local network access)';
@@ -1937,6 +1950,7 @@ async function renderReader(probe) {
   $('#key-forget').hidden = !st.provider.key;
   for (const [id, v] of [['#provider-base', st.provider.base], ['#provider-model', st.provider.model || ''], ['#machine-model', st.machine.model || '']]) if (document.activeElement !== $(id)) $(id).value = v;
   const hint = { machine: 'a model server on this machine', device: 'Gemini Nano', provider: 'your provider' }[st.suggested];
+  $('#read-measured').textContent = measuredLine(st);
   $('#read-privacy').textContent = !st.rung ? `Choose who reads it.${hint ? ` Available here: ${hint}.` : ''}` : st.local ? `Read by ${st.where}.` : `Read by ${st.where}, billed to your account.`;
 }
 function fillModels(listId, models) { $(listId).innerHTML = models.map(m => `<option value="${esc(m)}">`).join(''); }

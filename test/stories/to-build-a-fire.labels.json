@@ -1,0 +1,26 @@
+{
+ "title": "To Build a Fire",
+ "author": "Jack London (1908)",
+ "source": "Project Gutenberg #2429 (Lost Face)",
+ "turn": [
+  "the fire was blotted out",
+  "the man broke through"
+ ],
+ "low": [
+  "comfortable and satisfying sleep he had ever known",
+  "caught the scent of death"
+ ],
+ "threads": [
+  {
+   "label": "The old-timer's warning",
+   "plant": "The old-timer on Sulphur Creek had told him about it the previous fall",
+   "payoff": "You were right, old hoss; you were right"
+  },
+  {
+   "label": "The dog's instinct",
+   "plant": "It knew that it was no time for travelling",
+   "payoff": "trotted up the trail in the direction of the camp it knew"
+  }
+ ],
+ "note": "Hand labels by Claude (sandhi session, 2026-10-04): one editorial reading, kept small. Two turn quotes: the fall through the ice that wets his feet, and the snow that blots out the fire (the reversal). 7,081 words: past Gemini Nano's one-call window, so the page reads it in parts."
+}

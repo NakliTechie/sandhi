@@ -26,6 +26,11 @@ const used = new Set([...src.matchAll(/(?:fail|readerFail)\('([a-z_]+)'/g)].map(
 for (const n of ['read.accept', 'reader.key']) if (!new RegExp(`name: '${n.replace('.', '\\.')}'[^\\n]*\\n?[^\\n]*personOnly: true`).test(app)) findings.push(`${n}: not marked personOnly`);
 if (!/t\.personOnly && door !== 'ui'/.test(src)) findings.push('bus does not refuse person-only tools off the ui door');
 
+// every measured claim the reader picker shows ("N of M") is in SPEC §5, so the page never claims a result the spec does not hold
+const measured = /const MEASURED = \{([\s\S]*?)\n\};/.exec(src);
+const spec5 = spec.slice(spec.indexOf('## §5'), spec.indexOf('## §6'));
+if (!measured) findings.push('no MEASURED table in index.html');
+else for (const n of new Set(measured[1].match(/\d+ of \d+/g) || [])) if (!spec5.includes(n)) findings.push(`picker claims "${n}", which SPEC §5 does not state`);
 if (new Set(names).size !== names.length) findings.push('duplicate tool names');
 for (const c of cmds) if (!names.includes(c)) findings.push(`data-cmd="${c}" has no manifest entry`);
 for (const c of calls) if (!names.includes(c)) findings.push(`dispatch of '${c}' names no manifest entry`);

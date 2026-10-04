@@ -125,10 +125,13 @@ How well a model reads structure, measured with the page's own prompt, schema an
 | Claude subagent (Opus 5.5) | turn ✓ low ✓, joints 7/9, threads ✓ | turn ✓, threads 2/2 | turn ✓, threads 2/2 | turn ✓, low ✓, threads 0/2 |
 | opencode `space-bunny-free` | turn ✓ low ✓, joints 4/9, threads ✓ | turn ✓, threads 2/2 | turn ✓, threads 2/2, 1 beat quote dropped | turn ✓, low ✗, threads 1/2 |
 | codex `gpt-5.6-sol` | turn ✓ low ✓, joints 8/9, threads ✓ | — | — | — |
-| Ollama `qwen3.5:4b` (no thinking) | turn ✓ in 1 of 2 runs, joints ≤2/7 | — | — | — |
-| Gemini Nano (Chrome 153) | turn ✗ in 8 of 8 runs, joints ≤4/9 | — | — | — |
+| Ollama `qwen3.5:4b`, through the page (`test/page-read.mjs`, 16,384-token window, no thinking) | turn ✓ in 3 of 6 reads, low ✓ in 4 of 6, thread ✗ in 6 of 6 | turn ✓ in 1 of 2, threads 2/2 in 1 of 2 | turn ✗ in 2 of 2, threads 0/2 | turn ✓ in 1 of 2, low ✗ in 2 of 2, threads 0/2 |
+| Ollama `qwen3.5:2b`, through the page | turn ✗ in 2 of 2, low ✗ in 2 of 2 | turn ✗ (1 read) | the answer ran out of room (`too_long`, 1 read) | turn ✗ (1 read) |
+| Gemini Nano (Chrome 153) | turn ✗ in 8 of 8 reads, joints ≤4/9 | — | — | — |
 
-Every quote from the codex and Claude readers matched the text (0 dropped); space-bunny dropped one beat quote, in *Cask*. The Necklace threads the Claude reader missed were real readings anchored elsewhere (it planted "paste" at the jeweller's line and ended the friend thread before the last scene): the labels are strict on purpose. Not measured: any reader on a manuscript longer than one call (the two-pass read), and any provider called from the page with a real key.
+Every quote from the codex and Claude readers matched the text (0 dropped); space-bunny dropped one beat quote, in *Cask*. The Necklace threads the Claude reader missed were real readings anchored elsewhere (it planted "paste" at the jeweller's line and ended the friend thread before the last scene): the labels are strict on purpose. Together, Qwen 3.5 4B found the turn in 5 of 12 reads and linked a planted thread in 1 of 12; Qwen 3.5 2B missed the turn in 4 of 4 reads it finished, and 1 of 5 ran out of room to answer. Claude Opus 5.5, reading with the page's prompt, marked the turn in 4 of 4 stories. No 3B–8B model reached the floor, so the LocalMind device rung waits (workplan Batch B).
+
+**Past one call: *To Build a Fire* (Jack London, 7,082 words, hand labels in `test/stories/`).** Gemini Nano on the deployed page in real Chrome 153 read it in parts (11 and 17 scenes), then failed at the outline in 2 of 2 reads after about 10 minutes (`reader_error`, then `too_long`). The two-pass pipeline itself is proved with a stand-in reader (`face.mjs` read.nano_two_pass). Not measured yet: any provider called from the page with a real key.
 
 ## §6 Where it is going, and what came before
 

@@ -224,6 +224,8 @@ async function readPage(opts) {
   check('read.agent_cannot_send_off_device', [offRun, offRung, offProv].every(x => x.class === 'person_only') && (await call('reader.status', {})).data.rung === 'device', [offRun.class, offRung.class, offProv.class]);
   await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);
   const shown = await p.evaluate(() => document.querySelectorAll('#read-result li').length);
+  const measuredNano = await p.textContent('#read-measured');
+  check('read.picker_shows_measured', /8 of 8/.test(measuredNano) && /7,082-word/.test(measuredNano), measuredNano);   // Edge-First honesty: the writer sees the floor
   const unchanged = JSON.stringify((await call('story.get', {})).data.story);
   await p.evaluate(() => document.querySelector('[data-ui="read-accept"]').click());   // a scripted click is not the writer's
   check('read.accept_scripted_click_refused', JSON.stringify((await call('story.get', {})).data.story) === unchanged, 'a scripted click accepted');
@@ -438,8 +440,9 @@ async function readPage(opts) {
   await p.waitForFunction(() => document.querySelectorAll('#machine-models option').length === 1);   // the probe fills the model list
   await p.fill('#machine-model', 'llama3.2'); await p.locator('#machine-model').blur();
   await p.waitForFunction(() => /Ollama on this machine/.test(document.querySelector('#read-privacy').textContent));
-  const privacy = await p.textContent('#read-privacy');
+  const privacy = await p.textContent('#read-privacy'), measuredLocal = await p.textContent('#read-measured');
   const r = await call('read.run', { text: prose });
+  check('read.picker_unmeasured_model', /not measured yet/.test(measuredLocal), measuredLocal);
   check('ladder.machine_model_must_be_chosen', noModel.class === 'no_reader' && /No model is chosen/.test(noModel.message), noModel);
   check('ladder.machine_not_probed_at_load', unprobed.machine.checked === false && unprobed.machine.server === null, unprobed.machine);
   check('ladder.machine_read', r.ok && r.data.reader === 'machine' && r.data.model === 'llama3.2' && r.data.beats === 10 && sent.length >= 1 && !sent[0].headers.authorization && /Ollama on this machine: the story stays on your machine/.test(privacy), { r, privacy });
