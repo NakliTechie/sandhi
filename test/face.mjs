@@ -33,12 +33,15 @@ for (let i = 0; i < 3; i++) {
   } catch { mark = null; }
   const beats = await page.evaluate(() => document.querySelectorAll('#beats .beat').length);
   const dots = await page.evaluate(() => document.querySelectorAll('#chart .dot').length);
-  samples.push({ run: i, first_value_ms: mark, beats, dots });
+  await page.waitForFunction(() => document.querySelector('#splash').open, null, { timeout: 2000 }).catch(() => {});
+  const splash = await page.evaluate(() => document.querySelector('#splash').open);
+  samples.push({ run: i, first_value_ms: mark, beats, dots, splash });
   await ctx.close();
 }
 const indeterminate = samples.some(s => s.first_value_ms === null);
 const worst = indeterminate ? null : Math.max(...samples.map(s => s.first_value_ms));
 check('ttfv.cold_le_5000ms', !indeterminate && worst <= BAR_MS && samples.every(s => s.beats === 10 && s.dots === 10), samples);
+check('splash.cold_load_shows_it', samples.every(s => s.splash), samples.map(s => s.splash));
 
 // ---- 2. agent face
 const ctx = await browser.newContext({ acceptDownloads: true });
@@ -104,12 +107,29 @@ const dimmed = await page.evaluate(() => document.querySelectorAll('#beats .beat
 check('face.focus_dims_untagged', r.ok && dimmed === 8, dimmed);
 await call('view.focus', { principle: 'all' });
 
-// ---- 3. a UI click goes through the same bus; autosave survives a reload
+// ---- 3. splash + tour, then a UI click goes through the same bus; autosave survives a reload
+check('splash.open_on_first_visit', await page.evaluate(() => document.querySelector('#splash').open), 'closed');
+await page.click('#splash-close');
+check('splash.closes', !(await page.evaluate(() => document.querySelector('#splash').open)), 'still open');
+await page.keyboard.press('?');
+check('splash.question_key_reopens', await page.evaluate(() => document.querySelector('#splash').open && document.querySelector('#splash-close').textContent === 'Back to the story'), 'not reopened');
+await page.click('#splash [data-ui="tour"]');
+const tourTitles = [];
+for (let k = 0; k < 7; k++) {
+  tourTitles.push(await page.evaluate(() => document.querySelector('.tour-layer h2') && document.querySelector('.tour-layer h2').textContent));
+  if (k < 6) await page.keyboard.press('ArrowRight');
+}
+const spot = await page.evaluate(() => { const box = document.querySelector('.tour-spot').getBoundingClientRect(); return box.width > 20 && box.height > 20; });
+await page.keyboard.press('Escape');
+const tourGone = await page.evaluate(() => !document.querySelector('.tour-layer') && !document.querySelector('#splash').open);
+check('tour.seven_steps_then_escape', tourTitles[0] === 'The shape of the story' && tourTitles[6] === 'Your story, your file' && new Set(tourTitles).size === 7 && spot && tourGone, { tourTitles, spot, tourGone });
 await page.click('#matrix tbody tr:nth-child(1) td.c:nth-child(3) button');   // principle 1 (care), beat 2
 const b2 = (await call('story.get', {})).data.story.beats[1];
 const j = (await call('journal', { n: 5 })).data.entries;
 check('ui.click_goes_through_bus', b2.tags.includes('care') && j.some(e => e.tool === 'beat.update' && e.door === 'ui'), { tags: b2.tags, journal: j });
 await page.reload(); await page.evaluate(() => window.sandhi.ready);
+await page.waitForTimeout(150);
+check('splash.not_shown_again', !(await page.evaluate(() => document.querySelector('#splash').open)), 'shown again');
 const after = (await call('story.get', {})).data.story;
 check('ui.autosave_survives_reload', after.beats[1].tags.includes('care') && after.title === 'The whistle', after.beats[1].tags);
 check('ui.journal_persists', (await call('journal', { n: 200 })).data.entries.length >= 20, 'journal short');
@@ -119,6 +139,10 @@ await ctx.close();
 // ---- 4. layout: phone width, dark scheme
 const phone = await browser.newContext({ viewport: { width: 375, height: 812 } });
 const pp = await phone.newPage(); await pp.goto(base); await pp.evaluate(() => window.sandhi.ready);
+await pp.click('#splash [data-ui="tour"]');
+const cardFits = await pp.evaluate(() => { const box = document.querySelector('.tour-card').getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight; });
+check('tour.card_fits_phone', cardFits, 'tour card off screen at 375 px');
+await pp.keyboard.press('Escape');
 const sw = await pp.evaluate(() => document.documentElement.scrollWidth);
 check('layout.no_hscroll_375', sw <= 375, sw);
 await phone.close();

@@ -175,6 +175,28 @@ table.matrix{border-collapse:collapse}
 .who .dis b{color:var(--muted)}
 #panel textarea{width:100%;min-height:6em;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:6px 8px;font:14px/1.6 var(--serif);field-sizing:content}
 
+/* splash + tour (Slate's first-run pattern) */
+#splash{border:1px solid var(--line-strong);border-radius:14px;background:var(--card);color:var(--ink);padding:28px 28px 22px;width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 32px)}
+#splash::backdrop{background:rgba(28,26,22,.42)}
+#splash .sp-mark{width:40px;height:40px;margin-bottom:10px}
+#splash h2{font-size:22px;font-weight:500;margin:0}
+#splash .sp-tag{font:16px/1.5 var(--serif);color:var(--muted);margin:2px 0 18px}
+#splash ul{list-style:none;margin:0 0 16px;padding:0;display:flex;flex-direction:column;gap:12px;font-size:13.5px;color:var(--muted)}
+#splash li b{display:block;font-weight:500;color:var(--ink)}
+#splash .sp-priv{font-size:12px;color:var(--faint);margin:0 0 18px}
+.sp-actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn.primary:hover{background:var(--ink);color:var(--bg);opacity:.9}
+.tour-layer{position:fixed;inset:0;z-index:40}
+.tour-dim{position:fixed;inset:0;z-index:40;background:rgba(28,26,22,.55)}
+.tour-spot{position:fixed;z-index:41;border:2px solid var(--accent);border-radius:12px;pointer-events:none}
+.tour-card{position:fixed;z-index:42;width:min(360px,calc(100vw - 24px));padding:16px 18px;border:1px solid var(--line-strong);border-radius:12px;background:var(--card);color:var(--ink)}
+.tour-progress{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--accent-ink);margin:0 0 6px}
+.tour-card h2{font-size:16px;font-weight:500;margin:0 0 6px}
+.tour-card p{font-size:13.5px;line-height:1.6;color:var(--muted);margin:0}
+.tour-actions{display:flex;gap:8px;margin-top:14px}
+.tour-actions .skip{margin-right:auto}
+
 footer{max-width:1200px;margin:0 auto;padding:18px 24px 28px;border-top:1px solid var(--line);font-size:12px;color:var(--faint);display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between}
 footer code{font-size:11.5px}
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13px;padding:8px 14px;border-radius:8px;max-width:min(560px,calc(100vw - 32px));display:none;z-index:20}
@@ -195,6 +217,7 @@ footer code{font-size:11.5px}
     <button class="btn" data-cmd="story.demo" title="Load the demo story from the explainer">The whistle</button>
     <button class="btn" data-cmd="undo" id="undo">Undo</button>
     <button class="btn" data-cmd="redo" id="redo">Redo</button>
+    <button class="btn" data-ui="help" aria-label="About sandhi and the tour" title="About and tour (?)">?</button>
     <span id="savestate" aria-live="polite"></span>
     <input type="file" id="file" accept=".json,application/json" hidden>
   </nav>
@@ -238,6 +261,22 @@ footer code{font-size:11.5px}
   <span>Your story stays in this browser and in the files you save. No model runs in this version: the checks compare your own labels.</span>
   <span>Agent face: <code>window.sandhi</code> · <a href="https://assets.chiragpatnaik.com/how-stories-work">How stories work</a> · <a href="https://naklitechie.com">NakliTechie</a></span>
 </footer>
+<dialog id="splash" aria-labelledby="splash-h">
+  <svg class="sp-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 25 L16 12 L28 25" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="12" r="4.5" fill="var(--ink)"/></svg>
+  <h2 id="splash-h">sandhi</h2>
+  <p class="sp-tag">Write a story on its spine, and see its joints.</p>
+  <ul>
+    <li><b>Beats on a spine</b>Once upon a time… every day… one day… because of that… until finally. Each beat gets its fortune, its phase and the principles it serves.</li>
+    <li><b>Joints and threads</b>Every beat joins the last with <i>therefore</i> or <i>but</i>. Whatever the story plants should pay off.</li>
+    <li><b>Thirteen principles</b>What Aristotle, the Nāṭyaśāstra, Chekhov, Vonnegut and Pixar agree on, from <a href="https://assets.chiragpatnaik.com/how-stories-work" target="_blank" rel="noopener">How stories work</a>. The demo story, <i>The whistle</i>, uses all of them.</li>
+  </ul>
+  <p class="sp-priv">Your story stays in this browser and in the files you save. No account, nothing sent anywhere.</p>
+  <div class="sp-actions">
+    <button class="btn primary" data-ui="tour" autofocus>Take the tour</button>
+    <button class="btn" data-ui="splash-close" id="splash-close">Explore The whistle</button>
+    <button class="btn" data-cmd="story.new">Start a blank story</button>
+  </div>
+</dialog>
 <div id="toast" role="status"></div>
 
 <script id="sandhi-core">
@@ -935,7 +974,11 @@ document.addEventListener('change', (e) => {
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
 function onUiControl(u) {
-  if (u.dataset.ui === 'open') { $('#file').click(); return; }
+  const kind = u.dataset.ui;
+  if (kind === 'help') { openSplash(false); return; }
+  if (kind === 'tour') { startTour(); return; }
+  if (kind === 'splash-close') { splash.close(); return; }
+  if (kind === 'open') { $('#file').click(); return; }
   if (u.dataset.ui !== 'keep-draft') return;
   flushPending();
   const b = S().beats.find(x => x.id === u.dataset.id); if (!b) return;
@@ -945,7 +988,7 @@ function onUiControl(u) {
 document.addEventListener('click', (e) => {
   for (const m of document.querySelectorAll('details.menu[open]')) if (!m.contains(e.target)) m.open = false;
   const c = e.target.closest('[data-cmd]');
-  if (c) { flushPending(); const m = c.closest('details.menu'); if (m) m.open = false; ui(c.dataset.cmd, c.dataset.args ? JSON.parse(c.dataset.args) : {}); return; }
+  if (c) { flushPending(); const m = c.closest('details.menu'); if (m) m.open = false; if (c.closest('#splash')) splash.close(); ui(c.dataset.cmd, c.dataset.args ? JSON.parse(c.dataset.args) : {}); return; }
   const u = e.target.closest('[data-ui]');
   if (u) { onUiControl(u); return; }
   const g = e.target.closest('[data-goto]');
@@ -964,11 +1007,19 @@ async function openText(text) {
 $('#file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) openText(await f.text()); });
 document.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
 document.addEventListener('drop', async (e) => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (!f) return; e.preventDefault(); openText(await f.text()); });
+// keyboard: Enter commits a one-line field; Cmd/Ctrl+S saves; Cmd/Ctrl+Z undoes outside text; ? opens the splash
+function shortcut(e, typing) {
+  const mod = e.metaKey || e.ctrlKey, key = e.key.toLowerCase();
+  if (mod && key === 's') return () => { flushPending(); ui('story.save', {}); };
+  if (mod && key === 'z' && !typing) return () => ui(e.shiftKey ? 'redo' : 'undo', {});
+  if (e.key === '?' && !typing && !tour.layer) return () => openSplash(false);
+  return null;
+}
 document.addEventListener('keydown', (e) => {
-  const mod = e.metaKey || e.ctrlKey, typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'range';
-  if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea[rows="1"]')) { e.preventDefault(); e.target.blur(); }
-  else if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); flushPending(); ui('story.save', {}); }
-  else if (mod && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); ui(e.shiftKey ? 'redo' : 'undo', {}); }
+  if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea[rows="1"]')) { e.preventDefault(); e.target.blur(); return; }
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'range';
+  const run = shortcut(e, typing);
+  if (run) { e.preventDefault(); run(); }
 });
 
 // fortune chart: drag a dot, or focus it and press arrow keys
@@ -1005,6 +1056,93 @@ document.addEventListener('keydown', (e) => {
 let lastW = 0;
 new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width); if (w && w !== lastW) { lastW = w; requestAnimationFrame(renderChart); } }).observe($('#chart'));
 
+// ---- splash and tour: first visit only; `?` brings both back (Slate's first-run pattern)
+const SEEN = 'sandhi:intro-seen';
+const TOUR = [
+  { target: '#chart', title: 'The shape of the story', body: "Each dot is one beat's fortune, from ill to good. Drag a dot to move it. Under the line: each beat's phase in three traditions, and the closest of six classic arcs." },
+  { target: '#beats .joint:not(.opt)', title: 'The joints', body: 'Between two beats sits the word that joins them. Therefore or but keeps the chain tight. "And then" means the story has gone slack.' },
+  { target: '#beats .beat', title: 'A beat', body: "Write what happens. Then label it: its stage on the spine, its fortune, whether luck or the hero's choice moves it, and the principles it serves. Mark the turn and the low point." },
+  { target: '#checks', title: 'Checks', body: 'sandhi compares your labels: empty beats, slack joints, plants that never fire, luck after the turn. Each check names the next step.' },
+  { target: '#threads', title: 'Plants and payoffs', body: "Chekhov's gun, the Nāṭyaśāstra's seed. Name what the story plants, where, and where it pays off." },
+  { target: '#coverage', title: 'Thirteen principles', body: 'Tap a dot to tag a beat with a principle. Tap a name to read what the masters said, and note how it works in your story.' },
+  { target: '.actions', title: 'Your story, your file', body: 'It autosaves in this browser. Save writes a .sandhi.json file; Open, or drop one on the page, reads it back. Press ? to see all this again.' }
+];
+const splash = $('#splash');
+function openSplash(first) {
+  $('#splash-close').textContent = first ? 'Explore The whistle' : 'Back to the story';
+  if (!splash.open) splash.showModal();
+}
+splash.addEventListener('close', () => store.set(SEEN, '1'));
+const tour = { layer: null, i: 0, steps: TOUR, back: null };
+function tourTarget() { return document.querySelector(tour.steps[tour.i].target) || $('#chart'); }
+function placeTour() {
+  if (!tour.layer) return;
+  const t = tourTarget(), pad = 6, m = 12, gap = 16;
+  const r = t.getBoundingClientRect(), spot = tour.layer.querySelector('.tour-spot'), card = tour.layer.querySelector('.tour-card');
+  const top = Math.max(4, r.top - pad), height = Math.min(innerHeight - 8 - top, r.height + pad * 2);
+  const left = Math.max(4, r.left - pad), width = Math.min(innerWidth - 8, r.width + pad * 2), h = Math.max(24, height);
+  Object.assign(spot.style, { top: top + 'px', left: left + 'px', width: width + 'px', height: h + 'px' });
+  // the dim layer has a hole where the spotlight is (evenodd polygon), so the target stays bright
+  tour.layer.querySelector('.tour-dim').style.clipPath = `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${left}px ${top}px, ${left + width}px ${top}px, ${left + width}px ${top + h}px, ${left}px ${top + h}px, ${left}px ${top}px)`;
+  const c = card.getBoundingClientRect();
+  const below = r.bottom + gap + c.height <= innerHeight - m, above = r.top - gap - c.height >= m;
+  const y = below ? r.bottom + gap : above ? r.top - gap - c.height : innerHeight - c.height - m;
+  const x = below || above ? r.left + r.width / 2 - c.width / 2 : innerWidth - c.width - m;
+  card.style.top = Math.max(m, Math.min(innerHeight - c.height - m, y)) + 'px';
+  card.style.left = Math.max(m, Math.min(innerWidth - c.width - m, x)) + 'px';
+  card.style.visibility = 'visible';
+}
+function tourStep(i) {
+  tour.i = i;
+  const step = tour.steps[i], L = tour.layer;
+  L.querySelector('.tour-progress').textContent = `Tour · ${i + 1} of ${tour.steps.length}`;
+  L.querySelector('h2').textContent = step.title;
+  L.querySelector('p').textContent = step.body;
+  L.querySelector('.back').disabled = i === 0;
+  L.querySelector('.next').textContent = i === tour.steps.length - 1 ? 'Finish' : 'Next';
+  L.querySelector('.tour-card').style.visibility = 'hidden';
+  const t = tourTarget(), r = t.getBoundingClientRect();
+  if (r.top < 0 || r.bottom > innerHeight) t.scrollIntoView({ block: r.height > innerHeight * 0.7 ? 'start' : 'center', behavior: 'instant' });
+  requestAnimationFrame(() => { placeTour(); if (tour.layer) L.querySelector('.next').focus(); });
+}
+function endTour() {
+  if (!tour.layer) return;
+  tour.layer.remove(); tour.layer = null; store.set(SEEN, '1');
+  removeEventListener('resize', placeTour); removeEventListener('scroll', placeTour, true);
+  document.removeEventListener('keydown', tourKeys, true);
+  if (tour.back && tour.back.isConnected) tour.back.focus();
+}
+function tourKeys(e) {
+  if (!tour.layer) return;
+  e.stopPropagation();
+  if (e.key === 'Escape') { e.preventDefault(); endTour(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); if (tour.i < tour.steps.length - 1) tourStep(tour.i + 1); else endTour(); }
+  else if (e.key === 'ArrowLeft' && tour.i > 0) { e.preventDefault(); tourStep(tour.i - 1); }
+  else if (e.key === 'Tab') {
+    const b = [...tour.layer.querySelectorAll('button:not([disabled])')], first = b[0], last = b[b.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+}
+function startTour() {
+  if (splash.open) splash.close();
+  if (tour.layer) return;
+  tour.back = document.activeElement;
+  tour.steps = TOUR.filter(s => document.querySelector(s.target));
+  tour.layer = document.createElement('div');
+  tour.layer.className = 'tour-layer';
+  tour.layer.innerHTML = `<div class="tour-dim" aria-hidden="true"></div><div class="tour-spot" aria-hidden="true"></div><section class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-h" aria-describedby="tour-p">
+    <div class="tour-progress"></div><h2 id="tour-h"></h2><p id="tour-p" aria-live="polite"></p>
+    <div class="tour-actions"><button class="btn skip" type="button">Skip</button><button class="btn back" type="button">Back</button><button class="btn primary next" type="button">Next</button></div></section>`;
+  document.body.appendChild(tour.layer);
+  tour.layer.querySelector('.skip').addEventListener('click', endTour);
+  tour.layer.querySelector('.back').addEventListener('click', () => { if (tour.i > 0) tourStep(tour.i - 1); });
+  tour.layer.querySelector('.next').addEventListener('click', () => { if (tour.i < tour.steps.length - 1) tourStep(tour.i + 1); else endTour(); });
+  document.addEventListener('keydown', tourKeys, true);   // capture: works before focus reaches the card
+  addEventListener('resize', placeTour); addEventListener('scroll', placeTour, true);
+  tourStep(0);
+}
+
 // ---- boot: the story renders before anything else is touched (first value)
 (function boot() {
   try { const j = JSON.parse(store.get(JKEY) || '[]'); if (Array.isArray(j)) app.journal = j.slice(-200); } catch { /* a corrupt journal starts empty */ }
@@ -1014,6 +1152,7 @@ new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width); if (w &
   renderAll();
   performance.mark('sandhi:first-value');
   bootResolve(statusData());
+  if (!store.get(SEEN)) requestAnimationFrame(() => openSplash(true));
 })();
 </script>
 </body>
