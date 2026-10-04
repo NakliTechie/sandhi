@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-6VMDCFM2GM"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-6VMDCFM2GM');</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How stories work — Chirag Patnaik</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://assets.chiragpatnaik.com/how-stories-work.html">
+<meta property="og:url" content="https://assets.chiragpatnaik.com/how-stories-work.html">
+<meta property="og:title" content="How stories work">
+<meta property="og:description" content="Thirteen storytelling principles the masters keep rediscovering, each one illustrated, then all of them used in a single story.">
+<meta property="og:type" content="website">
+<meta name="author" content="Chirag Patnaik">
+<style>
+:root{
+  --cream:#F7F2E7;--cream-card:#FFFDF7;
+  --cream-border:rgba(60,45,15,0.35);--cream-border-soft:rgba(60,45,15,0.14);
+  --cream-text:#2C2A24;--cream-muted:#6B665A;--cream-faint:#938D7E;
+  --accent:#BA7517;--accent-bg:#F1E0C2;--accent-ink:#633806;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--cream);color:var(--cream-text)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.6}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.site-header{max-width:1200px;margin:0 auto;padding:28px 24px 12px;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:16px;border-bottom:1px solid var(--cream-border-soft)}
+.site-header .brand{font-size:16px;font-weight:500;color:var(--cream-text);text-decoration:none}
+.site-header nav{display:flex;gap:20px;flex-wrap:wrap}
+.site-header nav a{font-size:13px;color:var(--cream-muted);text-decoration:none}
+.site-header nav a:hover{color:var(--cream-text);text-decoration:underline;text-underline-offset:3px}
+main{max-width:1200px;margin:0 auto;padding:24px 24px 48px}
+h1{font-size:22px;font-weight:500;margin:0 0 6px}
+.subtitle{font-size:14px;font-style:italic;color:var(--cream-muted);margin:0 0 8px}
+.lede{max-width:720px;color:var(--cream-text);margin:0 0 8px}
+.lede.muted{color:var(--cream-muted)}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--cream-faint);margin:2.5rem 0 0.75rem}
+h2.sec{font-size:18px;font-weight:500;margin:0 0 6px}
+.card{background:var(--cream-card);border:1px solid var(--cream-border-soft);border-radius:10px;padding:14px 16px}
+.note{font-size:12px;font-style:italic;color:var(--cream-muted);margin:8px 0 0;line-height:1.5}
+
+/* matrix */
+.matrix-wrap{overflow-x:auto}
+table.matrix{border-collapse:collapse;width:auto;min-width:560px}
+.matrix th,.matrix td{padding:0;text-align:center;font-weight:400}
+.matrix thead th{font-size:11px;color:var(--cream-muted);height:150px;vertical-align:bottom;padding-bottom:6px}
+.matrix thead th span{writing-mode:vertical-rl;transform:rotate(180deg);display:inline-block;white-space:nowrap}
+.matrix thead th small{color:var(--cream-faint)}
+.matrix tbody tr{border-top:1px solid var(--cream-border-soft)}
+.matrix tbody th{text-align:left;font-size:13px;padding:7px 10px 7px 0;white-space:nowrap;cursor:pointer;color:var(--cream-text)}
+.matrix tbody th:hover{text-decoration:underline;text-underline-offset:3px}
+.matrix tbody th .num{color:var(--cream-faint);display:inline-block;width:22px}
+.matrix td.cell{width:34px;height:32px;cursor:default}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--accent);vertical-align:middle}
+.dot.dis{background:transparent;border:1.5px solid var(--cream-muted)}
+.matrix td.cnt{text-align:left;padding-left:10px;width:90px}
+.bar{display:inline-block;height:6px;background:var(--cream-faint);border-radius:3px;vertical-align:middle}
+.cntn{font-size:11px;color:var(--cream-muted);margin-left:6px;vertical-align:middle}
+.legend-inline{font-size:12px;color:var(--cream-muted);margin-top:10px;display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.legend-inline .dot{margin-right:6px}
+
+/* principles grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.pcard{display:flex;flex-direction:column;gap:8px;scroll-margin-top:16px}
+.pcard.flash{border-color:var(--accent)}
+.phead{display:flex;align-items:baseline;gap:8px}
+.pnum{font-size:11px;color:var(--cream-faint);min-width:18px}
+.pname{font-size:15px;font-weight:500}
+.pline{font-size:13px;color:var(--cream-text);margin:0}
+.illo{background:var(--cream);border-radius:8px;border:1px solid var(--cream-border-soft)}
+.illo svg{display:block;width:100%;height:auto}
+.sublabel{font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--cream-faint);margin:4px 0 0}
+.who{list-style:none;margin:0;padding:0;font-size:12.5px;color:var(--cream-muted);line-height:1.5}
+.who li{padding:3px 0;display:flex;gap:8px}
+.who li b{font-weight:500;color:var(--cream-text);min-width:92px;flex-shrink:0}
+.who li.dis b{color:var(--cream-muted)}
+.who li.dis b::after{content:" (pushes back)";font-weight:400;color:var(--cream-faint)}
+.instory{font-size:13px;color:var(--cream-muted);margin:0;line-height:1.55}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:11px;padding:2px 9px;border-radius:999px;border:1px solid var(--cream-border);background:transparent;color:var(--cream-muted);cursor:pointer;font-family:inherit}
+.chip:hover{background:rgba(60,45,15,0.06)}
+
+/* story */
+.story-head{max-width:720px}
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.pill{font-size:12px;padding:5px 12px;border-radius:999px;background:transparent;color:var(--cream-muted);border:1px solid var(--cream-border);cursor:pointer;font-family:inherit;transition:all 0.12s ease}
+.pill:hover{background:rgba(60,45,15,0.06);border-color:rgba(60,45,15,0.55)}
+.pill.active{background:#2C2A24;color:var(--cream);border-color:#2C2A24}
+.chart-card{position:relative}
+.chart-card .ct{font-size:14px;font-weight:500;margin:0}
+.chart-card .cs{font-size:12px;font-style:italic;color:var(--cream-muted);margin:2px 0 8px}
+.chart-card svg.main{cursor:zoom-in}
+.dl{position:absolute;top:12px;right:12px;font-size:11px;padding:3px 9px;border-radius:6px;border:1px solid var(--cream-border);background:var(--cream-card);color:var(--cream-muted);cursor:pointer;font-family:inherit;opacity:0;transition:opacity 0.12s ease}
+.chart-card:hover .dl,.dl:focus{opacity:1}
+@media (hover:none){.dl{opacity:1}}
+.beats{display:flex;flex-direction:column;gap:10px;margin-top:12px;max-width:820px}
+.beat{display:grid;grid-template-columns:44px 1fr;gap:4px 12px;scroll-margin-top:16px;transition:opacity 0.12s ease}
+.beat.dim{opacity:0.32}
+.beat.hit{border-color:var(--accent)}
+.bnum{font-size:20px;font-weight:500;color:var(--cream-faint);line-height:1.2}
+.beat.hit .bnum{color:var(--accent)}
+.bspine{font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--cream-faint)}
+.btext{font-size:14.5px;line-height:1.7;margin:2px 0 6px;color:var(--cream-text)}
+.btags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:500;background:rgba(60,45,15,0.08);color:var(--cream-muted)}
+.tag.on{background:var(--accent-bg);color:var(--accent-ink)}
+.draft{grid-column:2;font-size:12.5px;color:var(--cream-muted);border-left:2px solid var(--cream-border-soft);padding:2px 0 2px 10px;margin-top:4px}
+.draft s{color:var(--cream-faint)}
+
+/* arcs */
+.arcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.arc{padding:10px 12px}
+.arc .an{font-size:13px;font-weight:500;margin:0}
+.arc .ad{font-size:11.5px;color:var(--cream-muted);margin:0}
+.arc svg{display:block;width:100%;height:auto;margin:6px 0 2px}
+.arc.ours{border-color:var(--accent)}
+
+/* notes */
+.notes{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.notes .card h3{font-size:14px;font-weight:500;margin:0 0 6px}
+.notes .card p{font-size:13px;color:var(--cream-muted);margin:0;line-height:1.55}
+
+/* tooltip + lightbox */
+#tt{position:fixed;display:none;pointer-events:none;background:#F7F2E7;border:1px solid rgba(60,45,15,0.22);padding:11px 14px;font-size:12px;line-height:1.6;color:#2C2A24;max-width:260px;z-index:9000}
+#tt .h{font-weight:500;font-size:13px}
+#tt .r{border-top:1px solid rgba(60,45,15,0.12);margin:6px 0}
+#tt .m{color:#6B665A}
+#lb{position:fixed;inset:0;background:rgba(247,242,231,0.97);display:none;z-index:9500;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+#lb.open{display:flex}
+#lb .inner{width:min(1100px,100%);max-height:80vh;overflow:auto}
+#lb .inner svg{width:100%;height:auto}
+#lb .bar2{display:flex;gap:10px;margin-top:14px;align-items:center}
+#lb button{font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--cream-border);background:var(--cream-card);color:var(--cream-muted);cursor:pointer;font-family:inherit}
+#lb .lt{font-size:13px;color:var(--cream-muted);margin-bottom:10px}
+
+footer{max-width:1200px;margin:0 auto;padding:24px 24px 12px;border-top:1px solid var(--cream-border-soft);font-size:12px;color:var(--cream-faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+footer a{color:var(--cream-muted);text-decoration:none}
+footer a:hover{color:var(--cream-text);text-decoration:underline;text-underline-offset:3px}
+.sources{font-size:12px;color:var(--cream-muted);line-height:1.6;max-width:820px}
+.sources a{color:var(--cream-muted)}
+@media (max-width:600px){main{padding:16px 16px 40px}.site-header{padding:20px 16px 12px}footer{padding:20px 16px 12px}.beat{grid-template-columns:30px 1fr}.bnum{font-size:17px}}
+</style>
+<link rel="stylesheet" href="/_sidebar.css">
+<script src="/_sidebar.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="https://chiragpatnaik.com">Chirag Patnaik</a>
+  <nav>
+    <a href="/">Assets</a>
+    <a href="https://chiragpatnaik.com">Website</a>
+    <a href="https://naklitechie.com">Manifesto</a>
+    <a href="https://naklitechie.substack.com">Substack</a>
+    <a href="https://naklitechie.github.io">Portfolio</a>
+    <a href="https://github.com/naklitechie">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <h2 class="sr-only">An illustrated explorer of thirteen storytelling principles drawn from Aristotle, the Nāṭyaśāstra, Chekhov, Vonnegut, Pixar and others, all applied to one original story.</h2>
+  <h1>How stories work</h1>
+  <p class="subtitle">Thirteen principles the masters keep rediscovering — each one drawn, then all of them used in a single story.</p>
+  <time style="font-size:12px;color:#938D7E;display:block;margin-bottom:16px;">Sunday, 261004</time>
+  <p class="lede">A Greek philosopher, an Indian treatise on drama, a Russian playwright, an American novelist and the people behind Toy Story and South Park never sat in the same room. Yet when they wrote down what makes a story work, they kept arriving at the same handful of ideas.</p>
+  <p class="lede muted">This page lines those ideas up, draws each one, and then tells a short story that uses every one of them — so you can watch the machinery run.</p>
+
+  <div class="label">Where the masters agree</div>
+  <div class="card">
+    <h2 class="sec">Thirteen principles, nine traditions, 2,300 years</h2>
+    <p class="note" style="margin:0 0 10px">A filled dot means that tradition states the principle in its own words. A hollow ring means it pushes back. Hover or tap a dot for what they said; tap a principle to jump to it.</p>
+    <div class="matrix-wrap"><table class="matrix" id="matrix"></table></div>
+    <div class="legend-inline"><span><span class="dot"></span>says it</span><span><span class="dot dis"></span>pushes back</span><span><span class="bar" style="width:24px"></span><span class="cntn">number of traditions that agree</span></span></div>
+    <p class="note">Mapping is an editorial reading of each source, paraphrased. Older traditions rarely phrase things as rules, so a dot there means the idea is clearly present, not that the words match.</p>
+  </div>
+
+  <div class="label">The thirteen principles</div>
+  <div class="grid" id="principles"></div>
+
+  <div class="label" id="story">One story, every principle</div>
+  <div class="story-head">
+    <h2 class="sec">The whistle</h2>
+    <p class="lede muted">Ten beats, built on the Story Spine — <em>once upon a time… every day… one day… because of that… until finally</em>. Pick a principle to see exactly where it works.</p>
+  </div>
+  <div class="card chart-card" data-title="The whistle — fortune line">
+    <p class="ct">How Tavi’s fortune moves, beat by beat</p>
+    <p class="cs">Vonnegut’s method: good fortune up, ill fortune down, time left to right. Fortune scores are editorial, not measured.</p>
+    <button class="dl" type="button">PNG</button>
+    <div id="fortune"></div>
+  </div>
+  <div class="pills" id="storypills"></div>
+  <div class="beats" id="beats"></div>
+
+  <div class="label">The shape of it</div>
+  <div class="card chart-card" data-title="Six emotional arcs" style="margin-bottom:0">
+    <p class="ct">Six shapes most stories reduce to</p>
+    <p class="cs">Reagan et al. (2016) ran sentiment analysis on 1,327 Project Gutenberg novels and found six core arcs. Drawn here as idealised shapes, not the measured curves.</p>
+    <button class="dl" type="button">PNG</button>
+    <div class="arcs" id="arcs"></div>
+    <p class="note">The whistle is a Man in a hole. In the study, Icarus, Oedipus and Man-in-a-hole variants were among the most downloaded. The sample is English-language and mostly 19th-century, so treat it as one canon, not all storytelling.</p>
+  </div>
+
+  <div class="label">Why it works — and what we left out</div>
+  <div class="notes">
+    <div class="card"><h3>Brains fall into step</h3><p>Princeton researchers scanned a storyteller and her listeners. The listeners’ brain activity tracked hers, the coupling vanished when they couldn’t understand her, and the closer the coupling, the more of the story they understood. Stephens, Silbert &amp; Hasson, PNAS 2010.</p></div>
+    <div class="card"><h3>Stories change minds</h3><p>People more absorbed — “transported” — in a story are more persuaded by it (Green &amp; Brock, 2000). A 2014 meta-analysis of 76 papers and over 21,000 participants found the effect holds, shifting beliefs, attitudes and intentions. That power cuts both ways: it works for liars too.</p></div>
+    <div class="card"><h3>Guidelines, not rules</h3><p>The famous “22 Pixar rules” were tips a Pixar story artist, Emma Coats, tweeted in 2011. Others labelled them Pixar’s rules; she later said she wished she’d called them guidelines. The Story Spine itself came from improv teacher Kenn Adams.</p></div>
+    <div class="card"><h3>Where the masters disagree</h3><p>Vonnegut says tell readers everything early; Stanton and Hemingway say make them work it out. Most Western advice says a story needs conflict; kishōtenketsu builds a whole form around a twist instead. When two masters disagree, both are tools, not laws.</p></div>
+    <div class="card"><h3>Left out on purpose</h3><p>Talks on storytelling often claim stories “release oxytocin” and make us trust. Studies have also linked oxytocin to envy, tribalism and less cooperation, and TED added a correction note to the best-known talk. The claim doesn’t survive scrutiny well enough to include.</p></div>
+  </div>
+
+  <div class="label">Sources</div>
+  <div class="sources" id="sourcelist">
+    Aristotle, <em>Poetics</em> (c. 335 BCE), chs. 6–15. · Bharata, <em>Nāṭyaśāstra</em>, ch. 21 (arthaprakṛtis, avasthās, sandhis); A. B. Keith, <em>The Sanskrit Drama</em> (1924). · Kishōtenketsu (qǐ chéng zhuǎn hé), four-part form from classical Chinese verse. · Anton Chekhov, letters (1889). · Ernest Hemingway, <em>Death in the Afternoon</em> (1932). · Kurt Vonnegut, <em>Bagombo Snuff Box</em> (1999) and “shapes of stories” lecture. · Emma Coats, story-basics tweets (2011). · Trey Parker &amp; Matt Stone, NYU Tisch class, mtvU <em>Stand In</em> (2011). · Andrew Stanton, “The clues to a great story”, TED (2012). · Reagan, Mitchell, Kiley, Danforth &amp; Dodds, “The emotional arcs of stories are dominated by six basic shapes”, <em>EPJ Data Science</em> 5:31 (2016). · Stephens, Silbert &amp; Hasson, PNAS 107(32) (2010). · Green &amp; Brock, <em>JPSP</em> 79(5) (2000); van Laer et al., <em>Journal of Consumer Research</em> (2014). · The story “The whistle” is original to this page.
+  </div>
+</main>
+
+<footer>
+  <div>&copy; Chirag Patnaik &middot; <a href="https://chiragpatnaik.com">chiragpatnaik.com</a> &middot; <a href="/">More</a></div>
+  <div>Sources listed above &middot; as of October 2026</div>
+</footer>
+
+<div id="tt"></div>
+<div id="lb" role="dialog" aria-modal="true" aria-label="Chart viewer">
+  <div class="lt" id="lbt"></div>
+  <div class="inner" id="lbi"></div>
+  <div class="bar2"><button type="button" id="lbp">← Prev</button><button type="button" id="lbd">Download PNG</button><button type="button" id="lbn">Next →</button><button type="button" id="lbc">Close</button></div>
+</div>
+
+<script>
+/* DATA:BEGIN */
+const SOURCES = [
+  {id:"ari", name:"Aristotle", when:"c. 335 BCE"},
+  {id:"nat", name:"Nāṭyaśāstra", when:"c. 200 BCE–200 CE"},
+  {id:"kis", name:"Kishōtenketsu", when:"classical"},
+  {id:"che", name:"Chekhov", when:"1889"},
+  {id:"hem", name:"Hemingway", when:"1932"},
+  {id:"von", name:"Vonnegut", when:"1999"},
+  {id:"coa", name:"Coats / Pixar", when:"2011"},
+  {id:"ps",  name:"Parker & Stone", when:"2011"},
+  {id:"sta", name:"Stanton", when:"2012"}
+];
+
+const PRINCIPLES = [
+  {id:"care", name:"Make me care",
+   line:"Before anything happens, give the audience someone to root for — usually someone trying hard, not someone already winning.",
+   src:{ari:"Pity and fear work only for someone like ourselves — neither saint nor villain.",
+        von:"Give readers at least one person they can cheer for.",
+        coa:"We admire characters more for trying than for succeeding.",
+        sta:"His greatest commandment: make me care — emotionally, intellectually, aesthetically."},
+   story:"Tavi is the smallest child on the island and spills half the water he carries up the tower. We like him before the fog arrives, because he keeps climbing.",
+   beats:[1,4]},
+  {id:"want", name:"Want something",
+   line:"Every character should be reaching for something. No want, no story — just weather.",
+   src:{nat:"The hero’s striving moves through five stages, from first effort to reaching the fruit.",
+        von:"Everyone should want something, even if it’s only a glass of water.",
+        sta:"Well-drawn characters have a spine — one inner drive they keep obeying."},
+   story:"Tavi wants to be useful. When the fog comes, that small want becomes a big, concrete one: get the boats home.",
+   beats:[1,4]},
+  {id:"stakes", name:"Make it hard",
+   line:"Put the goal out of reach. What happens if they fail? The harder the climb, the more we learn about the climber.",
+   src:{nat:"The fourth juncture, vimarśa, is a pause of doubt and obstacle before the end.",
+        von:"Be a sadist — do terrible things to sweet characters so we see who they are.",
+        coa:"Find what your character is comfortable with, then throw the opposite at them. Stack the odds.",
+        kis:"The four-part form builds interest through a turn, not a fight. Conflict is optional."},
+   dissent:["kis"],
+   story:"The fog comes early, every boat is out — his sister’s too — the bell-ringer falls and the rope snaps. Each try fails worse than the last.",
+   beats:[3,5,6,9]},
+  {id:"cause", name:"Therefore, but",
+   line:"Link every event to the last with “therefore” or “but”. If “and then” fits between two beats, the story has gone slack.",
+   src:{ari:"Events should follow by probability or necessity. Plots that are just one episode after another are the weakest.",
+        nat:"Sandhi means joint: five junctures join the action like the joints of a limb.",
+        coa:"The Story Spine: one day… because of that… because of that… until finally.",
+        ps:"If “and then” belongs between your beats, you’re in trouble. It should be “therefore” or “but”."},
+   story:"Rope snaps, therefore Tavi climbs. He reaches the bell, but can’t ring it. Therefore the lantern — but the fog swallows it. No beat just happens.",
+   beats:[3,4,5,6]},
+  {id:"plant", name:"Plant, then pay off",
+   line:"Anything that will matter at the end should be quietly planted near the start — and anything planted should matter.",
+   src:{che:"If there’s a gun on the wall in the first act, it must go off by the last.",
+        nat:"The bīja — the seed — is sown early and grows into the outcome."},
+   story:"Two seeds in beat 2: Tavi’s piercing whistle that everyone hushes, and Oren saying boats follow steady, not loud. Both bloom in beat 8.",
+   beats:[2,8]},
+  {id:"two", name:"Let them add 2 + 2",
+   line:"Don’t hand the audience the answer. Give them the pieces and let them get there a moment before the character does.",
+   src:{sta:"The unifying theory of two plus two: make the audience put things together.",
+        hem:"Leave things out on purpose. Readers feel the part of the iceberg under the water.",
+        von:"Tell readers as much as possible, as soon as possible — so much they could finish the story themselves."},
+   dissent:["von"],
+   story:"In beat 7 nobody says “whistle”. A gull lands next to Tavi; the gull and the boy look at each other. You remember beat 2 — and you know before he does.",
+   beats:[2,7]},
+  {id:"surprise", name:"Surprising, yet inevitable",
+   line:"The best turns are ones you didn’t see coming — and then, looking back, couldn’t have gone any other way.",
+   src:{ari:"The strongest moments come unexpectedly yet as a consequence of what went before — reversal and recognition.",
+        kis:"The third part, ten, is a turn that changes how you see the first two.",
+        coa:"Discard the first thing that comes to mind. List what wouldn’t happen next.",
+        sta:"Good stories are inevitable, but not predictable."},
+   story:"The answer isn’t a bigger bell or a rescue boat. It’s the annoying whistle — unexpected, but planted in plain sight from the start.",
+   beats:[8]},
+  {id:"earn", name:"Earn the ending",
+   line:"Bad luck may get a hero into trouble. Only their own choices should get them out.",
+   src:{ari:"The knot should be untied by the plot itself, not by a god lowered on a crane.",
+        coa:"Coincidences that get characters into trouble are great. Coincidences that get them out are cheating."},
+   story:"Luck causes the trouble (fog, a slip, a snapped rope). But Tavi gets out by his own idea and his own cracked lips. An early draft had a dolphin guide the boats — cut.",
+   beats:[3,8,9]},
+  {id:"change", name:"Something must change",
+   line:"By the end, someone — usually the hero — is different. A story where nothing changes is a description.",
+   src:{ari:"Every plot turns on a change of fortune.",
+        nat:"The play closes in phalāgama — the fruit, finally reached.",
+        von:"Draw fortune over time and the line must move.",
+        sta:"Change is fundamental to story."},
+   story:"Tavi stops trying to be big and quiet. The island changes too: the thing they hushed now has a place in the tower.",
+   beats:[10]},
+  {id:"cut", name:"Cut to the bone",
+   line:"Simplify. Combine characters. Start late. If a piece can go without anything breaking, it should go.",
+   src:{ari:"Unity of action: if a part can be removed without loss, it was never part of the whole.",
+        che:"If the gun isn’t going to go off, take it off the wall.",
+        von:"Every sentence must reveal character or move the action. Start as close to the end as possible.",
+        coa:"Simplify. Focus. Combine characters. Hop over detours."},
+   story:"Ten beats, three characters. The sister has almost no lines; she is the reason, not a subplot. No villain, no backstory for Oren, no talking gull.",
+   beats:[1,7]},
+  {id:"ride", name:"Shape the ride",
+   line:"A story is a journey through feelings. Plan the rises and drops so the low point is low enough to make the ending soar.",
+   src:{ari:"A whole has a beginning, a middle and an end — complication, then unravelling.",
+        nat:"The aim of drama is rasa: the flavour of feeling the audience gets to taste.",
+        kis:"Four movements: introduction, development, twist, conclusion.",
+        von:"Stories have shapes you can draw — fortune going up and down."},
+   story:"Down from beat 3, lower at 6, the floor at 7 — then the turn. Tavi’s line is a classic Man in a hole (see the chart).",
+   beats:[6,7,9,10]},
+  {id:"why", name:"Know why you’re telling it",
+   line:"Under the plot sits a belief. Find it, and every choice gets easier.",
+   src:{coa:"Why must you tell this story? What belief is burning in you that it feeds on?",
+        von:"Write to please just one person.",
+        sta:"Draw on what you know and what you value."},
+   story:"The belief here: the thing people tell you to hide may be exactly what someone needs. Every beat was chosen to serve that line.",
+   beats:[10]},
+  {id:"finish", name:"Finish, then fix",
+   line:"A story in your head can’t be fixed. Get a whole draft down, then rewrite it until it works.",
+   src:{coa:"Finish it, let go even if it’s not perfect. On paper, you can start fixing it.",
+        ps:"They go back over finished beats and swap every “and then” for “therefore” or “but”."},
+   story:"Beat 8 was rewritten twice — once to remove the dolphin, once to make the whistle steady instead of loud, so it pays off Oren’s line.",
+   beats:[8]}
+];
+
+const BEATS = [
+  {n:1, spine:"Once upon a time", f:1,
+   text:"Tavi was the smallest child on an island where the fog came in like a tide. Every evening old Oren climbed the two hundred steps of the tower and rang the great bell, and the fishing boats followed the sound home. Tavi wanted, more than anything, to be useful. So he carried water up to Oren — one step at a time, spilling half of it on the way.",
+   tags:["care","want","cut"]},
+  {n:2, spine:"Every day", f:0,
+   text:"Tavi also whistled. Not a pretty whistle — a sharp, piercing one that sent the gulls flapping off the roofs. “Hush, Tavi,” said everyone. Only Oren said something different: “A bell isn’t loud, you know. It’s steady. Boats don’t follow loud. They follow steady.” Tavi didn’t see why that mattered.",
+   tags:["plant","two"]},
+  {n:3, spine:"One day", f:-3,
+   text:"The fog came early and thick, and every boat was still out — his sister Ama’s among them. Oren hurried up the tower, slipped on the wet stairs and hurt his ankle. Grabbing the bell rope to stop his fall, he snapped it.",
+   tags:["stakes","cause","earn"]},
+  {n:4, spine:"Because of that", f:-1,
+   text:"Someone had to climb. The grown-ups were down at the harbour lighting fires the fog swallowed. So Tavi went — two hundred steps, the way he’d carried the water.",
+   tags:["care","want","cause"]},
+  {n:5, spine:"But", f:-3,
+   text:"At the top, the broken rope hung far out of reach. He hit the bell with a stone. It made a thin clink, and the fog ate it whole.",
+   tags:["stakes","cause"]},
+  {n:6, spine:"Therefore", f:-4,
+   text:"He lit the lantern. The fog turned it into a smudge of orange that showed nothing. Somewhere out on the water, a horn sounded — far off, and heading the wrong way.",
+   tags:["stakes","cause","ride"]},
+  {n:7, spine:"The low point", f:-5,
+   text:"Tavi sat down on the cold stones. Too small to ring the bell. Too small to shout over the sea. A gull landed on the rail beside him. Tavi looked at the gull. The gull looked at Tavi.",
+   tags:["two","ride","cut"]},
+  {n:8, spine:"The turn", f:-2,
+   text:"He put two fingers in his mouth and whistled. The gull shot off into the dark. Then he remembered what Oren had said, and he whistled again — not louder. Steadier. One, two, three… breath… one, two, three.",
+   tags:["plant","surprise","earn","finish"],
+   draft:"<s>Draft 1: a dolphin appeared and led the boats home.</s> Cut — luck can’t get the hero out. <s>Draft 2: he whistled as loud as he could.</s> Changed to steady, to pay off beat 2."},
+  {n:9, spine:"Because of that", f:3,
+   text:"He whistled until his lips cracked and his cheeks ached, and he kept going. Out of the fog came one boat, then three, then nine. The last one in was Ama’s.",
+   tags:["earn","stakes","ride"]},
+  {n:10, spine:"Until finally", f:4,
+   text:"Next morning the island mended the rope. But on foggy nights now, two sounds come from the tower: the bell, and a whistle — sharp, steady and unmistakable. Nobody tells Tavi to hush any more.",
+   tags:["change","why","ride"]}
+];
+
+const ARCS = [
+  {id:"rags", name:"Rags to riches", d:"A steady rise.", fn:t=>-0.8+1.6*t},
+  {id:"tragedy", name:"Riches to rags", d:"A steady fall — tragedy.", fn:t=>0.8-1.6*t},
+  {id:"hole", name:"Man in a hole", d:"Fall, then rise. The whistle.", fn:t=>0.55-1.35*Math.sin(Math.PI*t)+0.2*t, ours:true},
+  {id:"icarus", name:"Icarus", d:"Rise, then fall.", fn:t=>-0.55+1.35*Math.sin(Math.PI*t)-0.2*t},
+  {id:"cinderella", name:"Cinderella", d:"Rise, fall, rise.", fn:t=>-0.7+1.1*t+0.7*Math.sin(2*Math.PI*t)},
+  {id:"oedipus", name:"Oedipus", d:"Fall, rise, fall.", fn:t=>0.7-1.1*t-0.7*Math.sin(2*Math.PI*t)}
+];
+/* DATA:END */
+
+const INK="#2C2A24", MUTED="#6B665A", FAINT="#938D7E", ACC="#BA7517", SOFT="rgba(60,45,15,0.14)", CREAM="#F7F2E7";
+const NS="http://www.w3.org/2000/svg";
+function el(tag, attrs){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
+function tx(attrs, text){const e=el("text",attrs);e.textContent=text;return e;}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+const P = Object.fromEntries(PRINCIPLES.map((p,i)=>[p.id,Object.assign(p,{n:i+1})]));
+const S = Object.fromEntries(SOURCES.map(s=>[s.id,s]));
+
+/* ---------- tooltip ---------- */
+const tt=document.getElementById("tt");
+function showTT(html,x,y){tt.innerHTML=html;tt.style.display="block";
+  const pad=14,r=tt.getBoundingClientRect();let lx=x+pad,ly=y+pad;
+  if(lx+r.width>window.innerWidth-4)lx=Math.max(4,x-r.width-pad);
+  if(ly+r.height>window.innerHeight-4)ly=Math.max(4,y-r.height-pad);
+  tt.style.left=lx+"px";tt.style.top=ly+"px";}
+function hideTT(){tt.style.display="none";}
+document.addEventListener("scroll",hideTT,{passive:true});
+
+/* ---------- illustrations (original line drawings) ---------- */
+function fig(x,y,s,c,opts){opts=opts||{};c=c||INK;
+  const h=y-30*s, sw=1.6;
+  const lean=opts.hunch?6*s:0;
+  return `<circle cx="${x+lean}" cy="${h}" r="${5.5*s}" fill="none" stroke="${c}" stroke-width="${sw}"/>`+
+  `<line x1="${x+lean}" y1="${h+5.5*s}" x2="${x}" y2="${y-11*s}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>`+
+  `<line x1="${x}" y1="${y-11*s}" x2="${x-5*s}" y2="${y}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>`+
+  `<line x1="${x}" y1="${y-11*s}" x2="${x+5*s}" y2="${y}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>`+
+  (opts.arms==="up"?`<path d="M${x+lean*0.6-8*s} ${h-2*s} L${x+lean*0.6} ${h+10*s} L${x+lean*0.6+8*s} ${h-2*s}" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>`:
+   `<path d="M${x+lean*0.7-7*s} ${h+17*s} L${x+lean*0.7} ${h+10*s} L${x+lean*0.7+7*s} ${h+17*s}" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>`);}
+function lbl(x,y,t,c,anchor,size,italic){return `<text x="${x}" y="${y}" font-size="${size||10}" fill="${c||MUTED}" text-anchor="${anchor||"middle"}"${italic?' font-style="italic"':""}>${t}</text>`;}
+const W0=240,H0=130;
+const ILLO = {
+  care(){let st="";const pts=[];for(let i=0;i<6;i++){pts.push(`${30+i*30},${112-i*14}`,`${60+i*30},${112-i*14}`);}
+    st=`<polyline points="30,112 ${pts.join(" ")}" fill="none" stroke="${FAINT}" stroke-width="1.2"/>`;
+    return st+fig(98,84,0.95,INK)+`<rect x="104" y="70" width="9" height="11" fill="none" stroke="${ACC}" stroke-width="1.5"/>`+
+    `<circle cx="110" cy="88" r="1.6" fill="${ACC}"/><circle cx="106" cy="96" r="1.4" fill="${ACC}"/><circle cx="111" cy="104" r="1.2" fill="${ACC}"/>`+
+    lbl(205,40,"still climbing",ACC,"middle",10,true);},
+  want(){return fig(46,104,1.1,INK)+`<path d="M66 70 C110 40 150 40 172 66" fill="none" stroke="${ACC}" stroke-width="1.5" stroke-dasharray="4 3"/><path d="M166 58 L173 67 L162 69" fill="none" stroke="${ACC}" stroke-width="1.5"/>`+
+    `<path d="M176 78 L198 78 L194 108 L180 108 Z" fill="none" stroke="${INK}" stroke-width="1.5"/><line x1="178" y1="88" x2="196" y2="88" stroke="${ACC}" stroke-width="1.2"/>`+lbl(172,124,"even a glass of water",MUTED,"middle",9.5,true);},
+  stakes(){return fig(40,108,1,INK)+`<rect x="100" y="22" width="22" height="86" fill="none" stroke="${INK}" stroke-width="1.5"/>`+
+    `<line x1="100" y1="44" x2="122" y2="44" stroke="${SOFT}"/><line x1="100" y1="66" x2="122" y2="66" stroke="${SOFT}"/><line x1="100" y1="88" x2="122" y2="88" stroke="${SOFT}"/>`+
+    `<line x1="190" y1="108" x2="190" y2="74" stroke="${INK}" stroke-width="1.5"/><path d="M190 74 L212 81 L190 88" fill="${ACC}" stroke="none"/>`+lbl(111,124,"what if they fail?",MUTED,"middle",9.5,true);},
+  cause(){const xs=[30,90,150,210];let a="",b="";
+    xs.forEach(x=>{a+=`<circle cx="${x}" cy="36" r="9" fill="none" stroke="${FAINT}" stroke-width="1.3"/>`;b+=`<circle cx="${x}" cy="94" r="9" fill="${CREAM}" stroke="${INK}" stroke-width="1.5"/>`;});
+    for(let i=0;i<3;i++){a+=lbl(xs[i]+30,39,"and then",FAINT,"middle",9,true);}
+    const w=["therefore","but","therefore"];let l="";for(let i=0;i<3;i++){l+=`<line x1="${xs[i]+9}" y1="94" x2="${xs[i+1]-9}" y2="94" stroke="${ACC}" stroke-width="1.8"/>`+lbl(xs[i]+30,84,w[i],ACC,"middle",9.5,true);}
+    return a+l+b+lbl(12,16,"slack",FAINT,"start",9)+lbl(12,72,"a chain",INK,"start",9);},
+  plant(){return `<line x1="20" y1="104" x2="220" y2="104" stroke="${FAINT}" stroke-width="1"/>`+
+    `<ellipse cx="44" cy="98" rx="5" ry="3.5" fill="${ACC}"/>`+lbl(44,120,"act 1: planted",MUTED,"middle",9.5)+
+    `<path d="M50 94 C 100 20, 150 20, 192 70" fill="none" stroke="${ACC}" stroke-width="1.3" stroke-dasharray="4 3"/>`+
+    `<line x1="196" y1="104" x2="196" y2="72" stroke="${INK}" stroke-width="1.5"/><circle cx="196" cy="66" r="7" fill="none" stroke="${ACC}" stroke-width="1.8"/><circle cx="196" cy="66" r="2.2" fill="${ACC}"/>`+
+    `<path d="M196 92 C 188 86, 186 82, 188 78" fill="none" stroke="${INK}" stroke-width="1.2"/>`+lbl(196,120,"act 3: blooms",MUTED,"middle",9.5);},
+  two(){return lbl(78,72,"2 + 2 =",INK,"middle",26)+`<rect x="138" y="44" width="40" height="38" rx="4" fill="none" stroke="${ACC}" stroke-width="1.5" stroke-dasharray="4 3"/>`+
+    lbl(158,72,"?",ACC,"middle",22)+lbl(120,112,"the audience fills in the answer",MUTED,"middle",9.5,true);},
+  surprise(){return `<circle cx="24" cy="66" r="4" fill="${INK}"/><circle cx="216" cy="66" r="4" fill="${INK}"/>`+
+    `<line x1="28" y1="66" x2="212" y2="66" stroke="${FAINT}" stroke-width="1.2" stroke-dasharray="3 4"/>`+lbl(120,58,"what you expected",FAINT,"middle",9,true)+
+    `<path d="M28 68 C 70 130, 150 130, 212 68" fill="none" stroke="${ACC}" stroke-width="1.8"/>`+
+    `<circle cx="70" cy="101" r="2.2" fill="${ACC}"/><circle cx="120" cy="114" r="2.2" fill="${ACC}"/><circle cx="170" cy="101" r="2.2" fill="${ACC}"/>`+lbl(120,30,"looking back, every clue was there",MUTED,"middle",9.5,true);},
+  earn(){return `<line x1="60" y1="8" x2="60" y2="80" stroke="${FAINT}" stroke-width="1.4"/><path d="M52 8 L68 8" stroke="${FAINT}"/>`+lbl(60,96,"rescued by luck",FAINT,"middle",9.5,true)+
+    `<line x1="40" y1="30" x2="80" y2="70" stroke="${MUTED}" stroke-width="1.5"/><line x1="80" y1="30" x2="40" y2="70" stroke="${MUTED}" stroke-width="1.5"/>`+
+    `<line x1="160" y1="110" x2="170" y2="20" stroke="${INK}" stroke-width="1.5"/><line x1="186" y1="110" x2="196" y2="20" stroke="${INK}" stroke-width="1.5"/>`+
+    [100,82,64,46,28].map(y=>{const o=(110-y)/90*10;return `<line x1="${160+o}" y1="${y}" x2="${186+o}" y2="${y}" stroke="${ACC}" stroke-width="1.6"/>`;}).join("")+lbl(178,124,"built by the hero",INK,"middle",9.5,true);},
+  change(){return fig(60,108,0.8,FAINT,{hunch:true})+lbl(60,124,"before",FAINT,"middle",9.5)+
+    `<path d="M92 76 L146 76" stroke="${ACC}" stroke-width="1.5"/><path d="M140 70 L147 76 L140 82" fill="none" stroke="${ACC}" stroke-width="1.5"/>`+
+    fig(182,108,1.15,INK,{arms:"up"})+lbl(182,124,"after",INK,"middle",9.5);},
+  cut(){let g="";let k=0;for(let r=0;r<3;r++)for(let c=0;c<5;c++){const x=34+c*36,y=18+r*30;const keep=[1,7,13].includes(k);
+      g+=`<rect x="${x}" y="${y}" width="28" height="22" rx="3" fill="${keep?ACC:"none"}" fill-opacity="${keep?0.85:0}" stroke="${keep?ACC:FAINT}" stroke-width="1.2"${keep?"":' stroke-dasharray="3 3"'}/>`;k++;}
+    return g+lbl(120,122,"keep only what fires",MUTED,"middle",9.5,true);},
+  ride(){let d="";for(let i=0;i<=40;i++){const t=i/40;const y=64-(0.55-1.35*Math.sin(Math.PI*t)+0.2*t)*36;d+=(i?"L":"M")+(30+t*190).toFixed(1)+" "+y.toFixed(1);}
+    return `<line x1="30" y1="64" x2="220" y2="64" stroke="${SOFT}"/><line x1="24" y1="20" x2="24" y2="110" stroke="${FAINT}"/>`+lbl(20,22,"good",FAINT,"end",8.5)+lbl(20,112,"ill",FAINT,"end",8.5)+
+    `<path d="${d}" fill="none" stroke="${ACC}" stroke-width="2"/>`+lbl(125,124,"fortune over time",MUTED,"middle",9.5,true);},
+  why(){return `<circle cx="120" cy="66" r="48" fill="none" stroke="${SOFT}"/><circle cx="120" cy="66" r="32" fill="none" stroke="${SOFT}"/><circle cx="120" cy="66" r="17" fill="none" stroke="${SOFT}"/>`+
+    `<path d="M120 50 C 128 60, 132 66, 128 76 C 126 82, 114 82, 112 76 C 109 68, 114 62, 118 58 C 118 64, 121 66, 123 66 C 124 60, 122 55, 120 50 Z" fill="${ACC}"/>`+lbl(120,126,"the belief at the centre",MUTED,"middle",9.5,true);},
+  finish(){return lbl(30,32,"draft 1",FAINT,"start",9)+`<path d="M78 28 q10 -8 20 0 t20 0 t20 0 t20 0 t20 0" fill="none" stroke="${FAINT}" stroke-width="1.3"/><line x1="76" y1="22" x2="182" y2="34" stroke="${MUTED}" stroke-width="1.2"/>`+
+    lbl(30,68,"draft 2",MUTED,"start",9)+`<path d="M78 64 q12 -5 24 0 t24 0 t24 0 t24 0" fill="none" stroke="${MUTED}" stroke-width="1.4"/>`+
+    lbl(30,104,"finished",INK,"start",9)+`<line x1="78" y1="100" x2="210" y2="100" stroke="${ACC}" stroke-width="2"/>`;}
+};
+function illo(id){return `<svg viewBox="0 0 ${W0} ${H0}" role="img" aria-label="Illustration: ${esc(P[id].name)}" style="font-family:inherit">${ILLO[id]()}</svg>`;}
+
+/* ---------- matrix ---------- */
+(function(){
+  const t=document.getElementById("matrix");
+  let h="<thead><tr><th></th>"+SOURCES.map(s=>`<th><span>${esc(s.name)} <small>${esc(s.when)}</small></span></th>`).join("")+"<th></th></tr></thead><tbody>";
+  const max=SOURCES.length;
+  PRINCIPLES.forEach(p=>{
+    const dis=p.dissent||[];const agree=Object.keys(p.src).filter(k=>!dis.includes(k)).length;
+    h+=`<tr><th data-p="${p.id}"><span class="num">${p.n}</span>${esc(p.name)}</th>`;
+    SOURCES.forEach(s=>{const q=p.src[s.id];
+      h+=`<td class="cell" data-p="${p.id}" data-s="${s.id}">${q?`<span class="dot${dis.includes(s.id)?" dis":""}"></span>`:""}</td>`;});
+    h+=`<td class="cnt"><span class="bar" style="width:${(agree/max*60).toFixed(0)}px;background:${ACC}"></span><span class="cntn">${agree}</span></td></tr>`;
+  });
+  t.innerHTML=h+"</tbody>";
+  function cellTT(td,e){const p=P[td.dataset.p],s=S[td.dataset.s],q=p.src[s.id];if(!q){hideTT();return;}
+    const dis=(p.dissent||[]).includes(s.id);
+    showTT(`<div class="h">${esc(s.name)} <span class="m">· ${esc(s.when)}</span></div><div class="m">${p.n}. ${esc(p.name)}${dis?" — pushes back":""}</div><div class="r"></div>${esc(q)}`,e.clientX,e.clientY);}
+  t.querySelectorAll("td.cell").forEach(td=>{
+    td.addEventListener("mousemove",e=>cellTT(td,e));td.addEventListener("mouseleave",hideTT);
+    td.addEventListener("click",e=>{e.stopPropagation();cellTT(td,e);});});
+  t.querySelectorAll("tbody th").forEach(th=>th.addEventListener("click",()=>goPrinciple(th.dataset.p)));
+  document.addEventListener("click",e=>{if(!e.target.closest("td.cell"))hideTT();});
+})();
+
+/* ---------- principle cards ---------- */
+function goPrinciple(id){const c=document.getElementById("p-"+id);if(!c)return;c.scrollIntoView({behavior:"smooth",block:"start"});
+  c.classList.add("flash");setTimeout(()=>c.classList.remove("flash"),1600);}
+(function(){
+  const g=document.getElementById("principles");
+  g.innerHTML=PRINCIPLES.map(p=>{const dis=p.dissent||[];
+    const who=SOURCES.filter(s=>p.src[s.id]).map(s=>`<li class="${dis.includes(s.id)?"dis":""}"><b>${esc(s.name)}</b><span>${esc(p.src[s.id])}</span></li>`).join("");
+    return `<article class="card pcard" id="p-${p.id}">
+      <div class="phead"><span class="pnum">${p.n}</span><span class="pname">${esc(p.name)}</span></div>
+      <div class="illo">${illo(p.id)}</div>
+      <p class="pline">${esc(p.line)}</p>
+      <div class="sublabel">Who said it</div><ul class="who">${who}</ul>
+      <div class="sublabel">In the story</div><p class="instory">${esc(p.story)}</p>
+      <div class="chips"><button class="chip" type="button" data-show="${p.id}">See it in the story →</button>${p.beats.map(b=>`<button class="chip" type="button" data-beat="${b}" data-show="${p.id}">Beat ${b}</button>`).join("")}</div>
+    </article>`;}).join("");
+  g.addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;
+    setFilter(b.dataset.show);const target=b.dataset.beat?document.getElementById("beat-"+b.dataset.beat):document.getElementById("story");
+    target.scrollIntoView({behavior:"smooth",block:"start"});});
+})();
+
+/* ---------- story ---------- */
+let filter="all";
+(function(){
+  const pills=document.getElementById("storypills");
+  pills.innerHTML=`<button class="pill active" type="button" data-f="all">All</button>`+PRINCIPLES.map(p=>`<button class="pill" type="button" data-f="${p.id}">${p.n}. ${esc(p.name)}</button>`).join("");
+  pills.addEventListener("click",e=>{const b=e.target.closest(".pill");if(b)setFilter(b.dataset.f);});
+  document.getElementById("beats").innerHTML=BEATS.map(b=>`<article class="card beat" id="beat-${b.n}" data-tags="${b.tags.join(" ")}">
+     <div class="bnum">${b.n}</div>
+     <div><div class="bspine">${esc(b.spine)}</div><p class="btext">${esc(b.text)}</p>
+       <div class="btags">${b.tags.map(t=>`<span class="tag" data-t="${t}">${esc(P[t].name)}</span>`).join("")}</div></div>
+     ${b.draft?`<div class="draft">${b.draft}</div>`:""}
+   </article>`).join("");
+})();
+function setFilter(f){filter=f;
+  document.querySelectorAll("#storypills .pill").forEach(p=>p.classList.toggle("active",p.dataset.f===f));
+  document.querySelectorAll(".beat").forEach(b=>{const on=f==="all"||b.dataset.tags.split(" ").includes(f);
+    b.classList.toggle("dim",!on);b.classList.toggle("hit",on&&f!=="all");
+    b.querySelectorAll(".tag").forEach(t=>t.classList.toggle("on",t.dataset.t===f));});
+  if(window.__fortuneHighlight)window.__fortuneHighlight(f);}
+
+/* ---------- fortune chart ---------- */
+(function(){
+  const W=600,H=320,L=56,R=578,T=28,B=262;
+  const xs=n=>L+(n-1)*(R-L)/9, ys=v=>T+(5-v)*(B-T)/10;
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,width:"100%",class:"main",style:"display:block;font-family:inherit"});
+  [-4,-2,2,4].forEach(v=>svg.appendChild(el("line",{x1:L,y1:ys(v),x2:R,y2:ys(v),stroke:SOFT,"stroke-width":1})));
+  svg.appendChild(el("line",{x1:L,y1:ys(0),x2:R,y2:ys(0),stroke:"rgba(60,45,15,0.35)","stroke-width":1}));
+  /* range-frame y axis: from data min to data max */
+  const fs=BEATS.map(b=>b.f),mn=Math.min(...fs),mx=Math.max(...fs);
+  svg.appendChild(el("line",{x1:L-10,y1:ys(mx),x2:L-10,y2:ys(mn),stroke:FAINT,"stroke-width":1}));
+  svg.appendChild(tx({x:L-14,y:ys(mx)+4,"font-size":11,fill:FAINT,"text-anchor":"end"},"good"));
+  svg.appendChild(tx({x:L-14,y:ys(0)+4,"font-size":11,fill:FAINT,"text-anchor":"end"},"0"));
+  svg.appendChild(tx({x:L-14,y:ys(mn)+4,"font-size":11,fill:FAINT,"text-anchor":"end"},"ill"));
+  svg.appendChild(el("line",{x1:xs(1),y1:B+12,x2:xs(10),y2:B+12,stroke:FAINT,"stroke-width":1}));
+  BEATS.forEach(b=>svg.appendChild(tx({x:xs(b.n),y:B+28,"font-size":11,fill:MUTED,"text-anchor":"middle"},String(b.n))));
+  svg.appendChild(tx({x:(L+R)/2,y:B+48,"font-size":11,fill:FAINT,"text-anchor":"middle","font-style":"italic"},"beat"));
+  /* annotations on the data */
+  function ann(n,dx,dy,text,anchor){const x=xs(n),y=ys(BEATS[n-1].f);
+    svg.appendChild(el("line",{x1:x+(dx>0?6:-6),y1:y+(dy>0?6:-6),x2:x+dx,y2:y+dy,stroke:MUTED,"stroke-width":0.8,"stroke-dasharray":"3 2"}));
+    svg.appendChild(tx({x:x+dx+(anchor==="start"?3:anchor==="end"?-3:0),y:y+dy+(dy>0?10:-3),"font-size":11,fill:MUTED,"font-style":"italic","text-anchor":anchor},text));}
+  ann(3,0,30,"one day: fog, fall, snapped rope","middle");
+  ann(7,16,2,"floor: the gull","start");
+  ann(8,-26,-40,"the turn: steady, not loud","end");
+  ann(10,-12,26,"changed","end");
+  const pts=BEATS.map(b=>`${xs(b.n)},${ys(b.f)}`).join(" ");
+  svg.appendChild(el("polyline",{points:pts,fill:"none",stroke:ACC,"stroke-width":2.2,"stroke-linejoin":"round"}));
+  const dots=BEATS.map(b=>{const c=el("circle",{cx:xs(b.n),cy:ys(b.f),r:4.5,fill:ACC,stroke:CREAM,"stroke-width":1.5});svg.appendChild(c);return c;});
+  const cross=el("line",{y1:T,y2:B,stroke:"rgba(60,45,15,0.35)","stroke-width":1,"stroke-dasharray":"2 3",display:"none"});
+  const hov=el("circle",{r:6.5,fill:ACC,stroke:CREAM,"stroke-width":2,display:"none"});
+  svg.appendChild(cross);svg.appendChild(hov);
+  const ov=el("rect",{x:L-20,y:T-10,width:R-L+40,height:B-T+20,fill:"transparent",style:"cursor:crosshair"});
+  svg.appendChild(ov);
+  function near(e){const r=svg.getBoundingClientRect();const x=(e.clientX-r.left)*W/r.width;return Math.max(1,Math.min(10,Math.round((x-L)/((R-L)/9))+1));}
+  function move(e){const n=near(e),b=BEATS[n-1];cross.setAttribute("x1",xs(n));cross.setAttribute("x2",xs(n));cross.setAttribute("display","");
+    hov.setAttribute("cx",xs(n));hov.setAttribute("cy",ys(b.f));hov.setAttribute("display","");
+    showTT(`<div class="h">Beat ${n} · ${esc(b.spine)}</div><div class="m">Fortune ${b.f>0?"+":""}${b.f}</div><div class="r"></div>${esc(b.text.slice(0,110))}…<div class="r"></div><div class="m">${b.tags.map(t=>esc(P[t].name)).join(" · ")}</div>`,e.clientX,e.clientY);}
+  ov.addEventListener("mousemove",move);
+  ov.addEventListener("mouseleave",()=>{cross.setAttribute("display","none");hov.setAttribute("display","none");hideTT();});
+  ov.addEventListener("click",e=>{e.stopPropagation();const n=near(e);if(e.pointerType==="touch"||matchMedia("(hover:none)").matches){move(e);return;}
+    document.getElementById("beat-"+n).scrollIntoView({behavior:"smooth",block:"center"});});
+  window.__fortuneHighlight=f=>{BEATS.forEach((b,i)=>{const on=f==="all"||b.tags.includes(f);dots[i].setAttribute("r",on&&f!=="all"?6:4.5);dots[i].setAttribute("fill",on?ACC:"#D9CBB0");});};
+  document.getElementById("fortune").appendChild(svg);
+})();
+
+/* ---------- arcs (small multiples, shared scale) ---------- */
+(function(){
+  const box=document.getElementById("arcs");
+  ARCS.forEach(a=>{
+    const W=160,H=70,L=6,R=154,T=8,B=62;let d="";
+    for(let i=0;i<=48;i++){const t=i/48,v=Math.max(-1,Math.min(1,a.fn(t)));d+=(i?"L":"M")+(L+t*(R-L)).toFixed(1)+" "+(T+(1-v)/2*(B-T)).toFixed(1);}
+    const div=document.createElement("div");div.className="card arc"+(a.ours?" ours":"");
+    div.innerHTML=`<p class="an">${esc(a.name)}</p><svg viewBox="0 0 ${W} ${H}" style="font-family:inherit"><line x1="${L}" y1="${(T+B)/2}" x2="${R}" y2="${(T+B)/2}" stroke="${SOFT}"/><path d="${d}" fill="none" stroke="${a.ours?ACC:MUTED}" stroke-width="${a.ours?2.2:1.6}"/></svg><p class="ad">${esc(a.d)}</p>`;
+    const msg=`<div class="h">${esc(a.name)}</div><div class="m">${esc(a.d)}</div>`+(["icarus","oedipus","hole"].includes(a.id)?`<div class="r"></div>Among the most downloaded arcs in Reagan et al. (2016).`:"");
+    div.addEventListener("mousemove",e=>showTT(msg,e.clientX,e.clientY));div.addEventListener("mouseleave",hideTT);
+    box.appendChild(div);});
+})();
+
+/* ---------- lightbox + PNG download ---------- */
+(function(){
+  const cards=[...document.querySelectorAll(".chart-card")];let cur=0;
+  const lb=document.getElementById("lb"),inner=document.getElementById("lbi"),lt=document.getElementById("lbt");
+  function chartSVG(card){ /* single SVG for fortune; composite for arcs */
+    const one=card.querySelector("#fortune svg");if(one)return one.cloneNode(true);
+    const arcs=[...card.querySelectorAll(".arc")];const cols=3,cw=200,ch=120;
+    const s=el("svg",{viewBox:`0 0 ${cols*cw} ${Math.ceil(arcs.length/cols)*ch}`,width:"100%",style:"display:block;font-family:inherit"});
+    arcs.forEach((a,i)=>{const g=el("g",{transform:`translate(${(i%cols)*cw+20},${Math.floor(i/cols)*ch+10})`});
+      g.appendChild(tx({x:0,y:14,"font-size":13,fill:INK},a.querySelector(".an").textContent));
+      const inS=a.querySelector("svg").cloneNode(true);inS.setAttribute("x",0);inS.setAttribute("y",22);inS.setAttribute("width",160);inS.setAttribute("height",70);g.appendChild(inS);
+      s.appendChild(g);});return s;}
+  function open(i){cur=(i+cards.length)%cards.length;inner.innerHTML="";const s=chartSVG(cards[cur]);s.querySelectorAll("rect[fill=transparent]").forEach(r=>r.remove());inner.appendChild(s);
+    lt.textContent=cards[cur].dataset.title;lb.classList.add("open");hideTT();}
+  function close(){lb.classList.remove("open");}
+  function png(card){const s=chartSVG(card);s.querySelectorAll("rect[fill=transparent]").forEach(r=>r.remove());
+    const vb=s.getAttribute("viewBox").split(" ").map(Number);const sc=3;
+    s.setAttribute("width",vb[2]);s.setAttribute("height",vb[3]);s.setAttribute("xmlns",NS);
+    s.setAttribute("style","font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif");
+    s.querySelectorAll("svg").forEach(x=>x.setAttribute("xmlns",NS));
+    const data="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(new XMLSerializer().serializeToString(s));
+    const img=new Image();img.onload=()=>{const c=document.createElement("canvas");c.width=vb[2]*sc;c.height=(vb[3]+30)*sc;const x=c.getContext("2d");
+      x.fillStyle=CREAM;x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,vb[2]*sc,vb[3]*sc);
+      x.fillStyle=FAINT;x.font=`${11*sc}px -apple-system,system-ui,sans-serif`;x.textAlign="right";x.fillText("chiragpatnaik.com",c.width-10*sc,c.height-10*sc);
+      x.textAlign="left";x.fillText(card.dataset.title,10*sc,c.height-10*sc);
+      const a=document.createElement("a");a.download=card.dataset.title.toLowerCase().replace(/[^a-z0-9]+/g,"-")+".png";a.href=c.toDataURL("image/png");a.click();};
+    img.src=data;}
+  cards.forEach((c,i)=>{c.querySelector(".dl").addEventListener("click",e=>{e.stopPropagation();png(c);});
+    c.addEventListener("click",e=>{if(e.target.closest(".dl"))return;if(e.target.closest("#fortune")&&!matchMedia("(hover:none)").matches)return;
+      if(e.target.closest("svg")||e.target.closest(".arc"))open(i);});});
+  /* fortune chart: open lightbox via title/subtitle click on desktop since overlay click scrolls to beat */
+  cards.forEach((c,i)=>c.querySelectorAll(".ct,.cs").forEach(h=>{h.style.cursor="zoom-in";h.addEventListener("click",()=>open(i));}));
+  document.getElementById("lbp").onclick=()=>open(cur-1);document.getElementById("lbn").onclick=()=>open(cur+1);
+  document.getElementById("lbc").onclick=close;document.getElementById("lbd").onclick=()=>png(cards[cur]);
+  lb.addEventListener("click",e=>{if(e.target===lb)close();});
+  document.addEventListener("keydown",e=>{if(!lb.classList.contains("open"))return;if(e.key==="Escape")close();if(e.key==="ArrowLeft")open(cur-1);if(e.key==="ArrowRight")open(cur+1);});
+})();
+</script>
+</body>
+</html>
