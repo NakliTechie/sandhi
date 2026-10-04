@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 33 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
+check('face.manifest', man.length === 34 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -337,7 +337,7 @@ async function readPage(opts) {
   const names = await p5.evaluate(() => window.__mc.map(t => t.name));
   const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
   const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
-  check('door.model_context', names.length === 31 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  check('door.model_context', names.length === 32 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
   await ctx5.close();
 }
 { // a page opened as a file stores no key: every local file shares its storage
@@ -690,6 +690,8 @@ async function readPage(opts) {
   await p.click('.storymenu > summary');
   const recentShown = await p.evaluate(() => document.querySelector('#recent button') && document.querySelector('#recent button').textContent);
   await p.click('#recent button'); await p.waitForTimeout(150);
+  const rl = await call('story.recent', {});
+  check('ux.recent_for_agents', rl.ok && rl.data.stories[0].title === 'Mine, not saved', rl.data);
   check('ux.recent_story_back', /Mine, not saved/.test(recentShown || '') && (await call('story.get', {})).data.story.title === 'Mine, not saved', { recentShown });
   const before = JSON.stringify((await call('story.get', {})).data.story);
   await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);

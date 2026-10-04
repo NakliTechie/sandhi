@@ -54,7 +54,7 @@ node cli-read.mjs score <reply> <name> --story gift-of-the-magi   # score a mode
 node page-read.mjs --model qwen3.5:4b --story to-build-a-fire     # the real page reads with a local model
 ```
 
-Agents: `window.sandhi` exposes 33 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
+Agents: `window.sandhi` exposes 34 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
 
 ## Verify it yourself
 

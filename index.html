@@ -1447,6 +1447,13 @@ const TOOLS = [
       app.dirty = false; app.savedNote = `Downloaded ${filename}`; persist();
       return ok({ filename, bytes: new TextEncoder().encode(text).length });
     } },
+  { name: 'story.recent', description: 'The last three stories a replace pushed aside (newest first): k, title, when, beat count. Pass k to get that story in full; story.load brings it back (undoable).',
+    inputSchema: { type: 'object', properties: { k: { type: 'integer', minimum: 0, maximum: 2 } } },
+    handler: async (a) => {
+      const list = recentList();
+      if (a.k === undefined) return ok({ stories: list.map((x, k) => ({ k, title: x.title, at: x.at, beats: x.story.beats.length })) });
+      return list[a.k] ? ok({ story: C.clone(list[a.k].story) }) : fail('not_found', `no recent story ${a.k}`, 'Call story.recent for the list.');
+    } },
   { name: 'story.paste', description: 'Replace the story with pasted prose, one beat per paragraph, every label left to the writer. No model, nothing guessed. Undo brings the old story back.', mutating: true,
     inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     handler: async (a) => {
@@ -1636,8 +1643,9 @@ const IRREVERSIBLE = new Set(['reader.select', 'read.discard']);
 const manifest = TOOLS.map(({ name, description, inputSchema, mutating, personOnly, spends }) => ({ name, description, inputSchema, mutating: !!mutating, reversible: !!mutating && !personOnly && !IRREVERSIBLE.has(name), personOnly: !!personOnly, spends: !!spends }));
 let bootResolve; const ready = new Promise(r => { bootResolve = r; });
 window.sandhi = { version: VERSION, manifest, tools: Object.fromEntries(TOOLS.map(t => [t.name, (args) => bus.dispatch(t.name, args, 'window')])), status: () => bus.dispatch('status', {}, 'window'), ready };
+// WebMCP (navigator.modelContext; no shipping browser yet): each result is an MCP tool result that keeps the envelope's fields
 if (navigator.modelContext && navigator.modelContext.registerTool) {
-  for (const t of TOOLS.filter(x => !x.personOnly)) try { navigator.modelContext.registerTool({ name: 'sandhi.' + t.name, description: t.description, inputSchema: t.inputSchema, execute: (args) => bus.dispatch(t.name, args, 'modelContext') }); } catch { /* one bad registration must not block the rest */ }
+  for (const t of TOOLS.filter(x => !x.personOnly)) try { navigator.modelContext.registerTool({ name: 'sandhi.' + t.name, description: t.description, inputSchema: t.inputSchema, execute: async (args) => { const env = await bus.dispatch(t.name, args, 'modelContext'); return { ...env, content: [{ type: 'text', text: JSON.stringify(env) }], structuredContent: env, isError: !env.ok }; } }); } catch { /* one bad registration must not block the rest */ }
 }
 
 // ---- UI
