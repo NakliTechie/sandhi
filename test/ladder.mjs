@@ -47,6 +47,8 @@ check('ladder.body_schema', bs.model === 'm' && bs.response_format.type === 'jso
   && bs.messages[0].content === 'SYS' && bs.messages[1].content === 'USER' && bs.max_tokens === undefined, bs);
 check('ladder.body_object', bo.response_format.type === 'json_object' && bo.messages[0].content.includes('JSON Schema') && bo.messages[0].content.includes('"required":["a"]'), bo);
 check('ladder.body_prompt', bp.response_format === undefined && bp.messages[0].content.includes('JSON Schema'), bp);
+const bx = plain(L.openaiBody('m', pr, schema, 'schema', { reasoning_effort: 'none' }));
+check('ladder.body_extra', bx.reasoning_effort === 'none' && bx.response_format.type === 'json_schema', bx);
 
 // 5. replies: plain JSON, fenced JSON, refusal, cut off, not JSON; Anthropic's shape too
 const oa = (content, extra) => ({ model: 'x/y', choices: [{ finish_reason: 'stop', message: { content, ...extra } }] });

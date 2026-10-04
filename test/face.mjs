@@ -278,15 +278,36 @@ async function readPage(opts) {
     && tries[1].body.messages[0].content.includes('JSON Schema') && tries[1].headers.authorization === `Bearer ${TEST_KEY}`, { r, tries: tries.map(x => x.body.response_format) });
   const again = sent.length; r = await call('read.run', { text: prose });
   check('ladder.openai_remembers_mode', r.ok && sent.length - again === 1 && sent[again].body.response_format.type === 'json_object', sent.slice(again).map(x => x.body.response_format));
+  // a custom provider: its address is entered with its key, in the page; an agent cannot move it
+  const toCustom = [];
+  await p.route('https://llm.example/v1/**', async (route) => { const q2 = route.request(); toCustom.push({ url: q2.url(), auth: q2.headers().authorization }); return route.fulfill(reply({ model: 'house-model', choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(FIX.whole) } }] })); });
+  await p.route('https://attacker.example/**', async (route) => { toCustom.push({ url: route.request().url(), attacker: true }); return route.fulfill(reply({})); });
+  await p.selectOption('#provider', 'custom');
+  await p.waitForFunction(() => !document.querySelector('#provider-base').hidden);
+  await p.fill('#provider-base', 'https://llm.example/v1');
+  await p.fill('#provider-key', TEST_KEY); await p.locator('#provider-key').blur();
+  await p.waitForFunction(() => /Another OpenAI-compatible API, key·/.test(document.querySelector('#key-state').textContent));
+  await p.fill('#provider-model', 'house-model'); await p.locator('#provider-model').blur();
+  await p.waitForFunction(() => document.querySelector('#provider-model').value === 'house-model');
+  const moved = await call('reader.select', { provider: 'custom', base: 'https://attacker.example/v1' });
+  r = await call('read.run', { text: prose });
+  check('ladder.custom_base_goes_with_key', moved.class === 'invalid' && r.ok && toCustom.length >= 1 && toCustom.every(x => !x.attacker && x.url.startsWith('https://llm.example/v1/') && x.auth === `Bearer ${TEST_KEY}`), { moved: moved.class, r: r.class, toCustom });
+  await p.selectOption('#provider', 'openrouter');
+  await p.waitForFunction(() => /OpenRouter, key·/.test(document.querySelector('#key-state').textContent));
+  // a provider that echoes part of the key in an error: the message the agent face returns has it scrubbed
+  await p.unroute('https://openrouter.ai/api/v1/**');
+  await p.route('https://openrouter.ai/api/v1/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: { message: 'Incorrect API key provided: sk-test-0000-not-a-real-key' } }) }));
+  r = await call('read.run', { text: prose });
+  check('ladder.error_scrubs_key', r.class === 'key_rejected' && !r.message.includes(TEST_KEY) && r.message.includes('[key]'), r);
   // the keys: in IndexedDB, shown as fingerprints, never in localStorage, the journal or the agent face
   const st = (await call('reader.status', {})).data;
   const ls = await p.evaluate(() => JSON.stringify(localStorage));
   const journal = JSON.stringify((await call('journal', { n: 200 })).data.entries);
-  check('ladder.keys_fingerprints_only', st.keys.length === 2 && st.keys.every(k => /^key·[0-9a-f]{8}$/.test(k.fingerprint)) && !JSON.stringify(st).includes(TEST_KEY) && !ls.includes(TEST_KEY) && !journal.includes(TEST_KEY), { keys: st.keys });
+  check('ladder.keys_fingerprints_only', st.keys.length === 3 && st.keys.every(k => /^key·[0-9a-f]{8}$/.test(k.fingerprint)) && !JSON.stringify(st).includes(TEST_KEY) && !ls.includes(TEST_KEY) && !journal.includes(TEST_KEY), { keys: st.keys });
   await p.click('#key-forget');
   await p.waitForFunction(() => /no key yet/.test(document.querySelector('#key-state').textContent));
   const after = (await call('reader.status', {})).data;
-  check('ladder.forget_key', after.provider.key === null && after.keys.length === 1 && after.keys[0].provider === 'anthropic', after.keys);
+  check('ladder.forget_key', after.provider.key === null && after.keys.length === 2 && !after.keys.some(k => k.provider === 'openrouter'), after.keys);
   check('ladder.provider_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
@@ -310,6 +331,33 @@ async function readPage(opts) {
   check('ladder.machine_not_probed_at_load', unprobed.machine.checked === false && unprobed.machine.server === null, unprobed.machine);
   check('ladder.machine_read', r.ok && r.data.reader === 'machine' && r.data.model === 'llama3.2' && r.data.beats === 10 && sent.length >= 1 && !sent[0].headers.authorization && /Ollama on this machine: the story stays on your machine/.test(privacy), { r, privacy });
   check('ladder.machine_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+
+{ // the writer's edits survive: an agent edit mid-typing, an unsaved field at reload, undo across a reload, two tabs
+  const { ctx2, p, errs, call } = await readPage({});
+  const b2 = '#beat-b2 textarea.btext';
+  await p.click(b2); await p.keyboard.press('End'); await p.keyboard.type(' AAAA BB');
+  await call('beat.update', { id: 'b5', patch: { fortune: -2 } });   // an agent edit inside the 350 ms typing window
+  await p.keyboard.type('BB CCCC');                                    // and the writer keeps typing into the re-rendered field
+  await p.waitForTimeout(600);
+  const kept = (await call('story.get', {})).data.story.beats[1].text;
+  check('persist.typing_survives_agent_edit', kept.includes(' AAAA BBBB CCCC') && kept.length === SEED.beats[1].text.length + ' AAAA BBBB CCCC'.length, kept.length);
+  await p.fill('#title', 'Edited, never blurred');
+  await p.reload(); await p.evaluate(() => window.sandhi.ready);
+  check('persist.unsaved_field_at_reload', (await call('story.get', {})).data.story.title === 'Edited, never blurred', (await call('story.get', {})).data.story.title);
+  await call('story.new', {});
+  await p.reload(); await p.evaluate(() => window.sandhi.ready);
+  const u = await call('undo', {});
+  const restored = (await call('story.get', {})).data.story;
+  check('persist.undo_across_reload', u.ok && restored.beats.length === 10 && restored.title === 'Edited, never blurred', { u: u.class, beats: restored.beats.length });
+  const other = await ctx2.newPage(); await other.goto(base); await other.evaluate(() => window.sandhi.ready);
+  await other.evaluate(() => window.sandhi.tools['story.update']({ title: 'From the other tab' }));
+  await p.waitForFunction(() => document.querySelector('#title').value === 'From the other tab', null, { timeout: 3000 }).catch(() => {});
+  const here = (await call('story.get', {})).data.story.title;
+  const back = await call('undo', {});
+  check('persist.two_tabs', here === 'From the other tab' && back.ok && (await call('story.get', {})).data.story.title === 'Edited, never blurred', { here });
+  check('persist.no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
 

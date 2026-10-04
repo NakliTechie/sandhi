@@ -133,6 +133,15 @@ check('read.fold.rejects_short', C.findQuote(folded, 'Tavi') === -1, 'short quot
 const chunks = plain(C.chunkText(prose, 900));
 const covered = chunks.map(c => prose.slice(c.start, c.end)).join('');
 check('read.chunks', chunks.length > 2 && covered === prose && chunks.every(c => c.end - c.start <= 900 || !prose.slice(c.start, c.end).trim().includes('\n\n')), chunks);
+// text without blank lines still splits: single newlines first, then sentence ends; a hard cut only with no break at all
+const lines = Array.from({ length: 200 }, (_, i) => `Line ${i} of a story with no blank lines between its paragraphs at all.`).join('\n');
+const lc = plain(C.chunkText(lines, 4000));
+check('read.chunks_single_newlines', lc.length >= 4 && lc.every(x => x.end - x.start <= 4000 && lines[x.end - 1] === '\n' || x.end === lines.length) && lc.map(x => lines.slice(x.start, x.end)).join('') === lines, lc.map(x => x.end - x.start));
+const sentences = Array.from({ length: 300 }, (_, i) => `Sentence ${i} goes on a little.`).join(' ');
+const sc = plain(C.chunkText(sentences, 2000));
+check('read.chunks_sentences', sc.length >= 4 && sc.every(x => x.end - x.start <= 2000) && sc.slice(0, -1).every(x => /\.\s$/.test(sentences.slice(x.end - 2, x.end))), sc.map(x => x.end - x.start));
+const blob = 'x'.repeat(5000);
+check('read.chunks_hard_cut', isDeepStrictEqual(plain(C.chunkText(blob, 2000)).map(x => x.end - x.start), [2000, 2000, 1000]), plain(C.chunkText(blob, 2000)));
 // two passes: scenes per chunk, then labels over all scene summaries
 const scenesJson = chunks.flatMap(c => seed.beats.filter(b => prose.indexOf(b.text) >= c.start && prose.indexOf(b.text) < c.end)
   .map(b => ({ start: first(b.text), summary: b.label, fortune: b.fortune, introduces: [], uses: [] })));

@@ -656,13 +656,25 @@ footer code{font-size:11.5px}
       marks: MARKS.filter(m => (r.marks || []).includes(m)), driver: pick(r.driver, DRIVER_SET), avastha: pick(r.avastha, AV_IDS), kis: pick(r.kis, KIS_IDS) };
   }
   // Paragraph-aligned chunks of at most maxChars (a paragraph longer than that becomes its own chunk).
+  // The last break inside a window, best kind first: a blank line, a single newline, a sentence end. -1 if none past a third.
+  function lastBreak(w) {
+    for (const re of [/\n\s*\n/g, /\n/g, /[.!?\u2026]["'\u201d\u2019)]*\s+/g]) {
+      let m, at = -1;
+      while ((m = re.exec(w))) at = m.index + m[0].length;
+      if (at > w.length / 3) return at;
+    }
+    return -1;
+  }
+  // Chunks of at most maxChars, cut at the best break inside each window; a hard cut only when a window has no break.
   function chunkText(text, maxChars) {
-    const out = [], re = /\n\s*\n/g;
-    let start = 0, last = 0, m;
-    const cut = (end) => { if (text.slice(start, end).trim()) out.push({ start, end }); start = end; };
-    while ((m = re.exec(text))) { if (m.index - start > maxChars && last > start) cut(last); last = m.index + m[0].length; }
-    if (text.length - start > maxChars && last > start) cut(last);
-    cut(text.length);
+    const out = [];
+    let start = 0;
+    while (text.length - start > maxChars) {
+      const cut = lastBreak(text.slice(start, start + maxChars)), end = start + (cut > 0 ? cut : maxChars);
+      if (text.slice(start, end).trim()) out.push({ start, end });
+      start = end;
+    }
+    if (text.slice(start).trim()) out.push({ start, end: text.length });
     return out;
   }
   // anchors: [{pos, labels}] in any order -> story with beats cut at the anchors; threadsAt: [{label, plant: pos|null, payoffs: [pos]}]
@@ -768,9 +780,10 @@ footer code{font-size:11.5px}
   // OpenAI-compatible chat body. JSON is asked for in three ways, strictest first; the page steps down on HTTP 400:
   // 'schema' (response_format json_schema), 'object' (json_object, schema in the prompt), 'prompt' (schema in the prompt only).
   const JSON_MODES = ['schema', 'object', 'prompt'];
-  function openaiBody(model, prompt, schema, mode) {
+  // extra: fields a rung adds, such as reasoning_effort 'none' for local models (thinking can use up a small model's whole context).
+  function openaiBody(model, prompt, schema, mode, extra) {
     const system = mode === 'schema' ? prompt.system : `${prompt.system}\nAnswer with one JSON object and nothing else. It follows this JSON Schema:\n${JSON.stringify(schema)}`;
-    const body = { model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt.user }] };
+    const body = { model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt.user }], ...extra };
     if (mode === 'schema') body.response_format = { type: 'json_schema', json_schema: { name: 'sandhi_read', strict: true, schema } };
     if (mode === 'object') body.response_format = { type: 'json_object' };
     return body;
@@ -817,7 +830,7 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } }
 };
-const app = { story: null, undo: [], redo: [], dirty: false, focus: 'all', last: null, coalesce: null, coalesceAt: 0, journal: [], open: new Set(), proposal: null, reading: false };
+const app = { story: null, undo: [], redo: [], dirty: false, focus: 'all', last: null, coalesce: null, coalesceAt: 0, coalesceStart: 0, journal: [], open: new Set(), proposal: null, reading: false };
 const ok = (data) => ({ ok: true, class: 'ok', data: data || {} });
 const fail = (cls, message, next, data) => ({ ok: false, class: cls, message, next, ...(data ? { data } : {}) });
 const S = () => app.story;
@@ -827,14 +840,16 @@ const PNAME = Object.fromEntries(C.PRINCIPLES.map(p => [p.id, p.name]));
 const PLINE = Object.fromEntries(C.PRINCIPLES.map(p => [p.id, p.line]));
 
 function persist() { store.set(KEY, JSON.stringify({ story: app.story, dirty: app.dirty })); }
+const UKEY = 'sandhi:undo';
+function persistUndo() { if (!store.set(UKEY, JSON.stringify(app.undo.slice(-30)))) store.set(UKEY, '[]'); }
 function journalAppend(e) { app.journal.push(e); if (app.journal.length > 200) app.journal.splice(0, app.journal.length - 200); store.set(JKEY, JSON.stringify(app.journal)); }
 
 // Every mutation: build a new story, validate it, then swap and autosave in one write (SPEC §0, row 6).
 function commit(next, key) {
   const v = C.validate(next);
   if (!v.ok) return fail('invalid', `${v.errors.length} field(s) fail schema sandhi:1`, 'Fix the fields listed in data.errors and call again.', { errors: v.errors.slice(0, 20) });
-  const now = Date.now();
-  if (!(key && key === app.coalesce && now - app.coalesceAt < 2000)) { app.undo.push(C.clone(app.story)); if (app.undo.length > 100) app.undo.shift(); }
+  const now = Date.now(), same = key && key === app.coalesce && now - app.coalesceAt < 2000 && now - app.coalesceStart < 5000;
+  if (!same) { app.undo.push(C.clone(app.story)); if (app.undo.length > 100) app.undo.shift(); app.coalesceStart = now; persistUndo(); }
   app.coalesce = key || null; app.coalesceAt = now;
   app.redo = []; app.story = next; app.dirty = true; persist();
   return null;
@@ -880,8 +895,9 @@ const vault = {
     try { return await new Promise((resolve, reject) => { const t = db.transaction('keys', mode), r = fn(t.objectStore('keys')); t.oncomplete = () => resolve(r.result); t.onerror = () => reject(t.error); }); }
     finally { db.close(); }
   },
-  get: (p) => vault.tx('readonly', s => s.get(p)).then(r => (r ? r.key : null)).catch(() => null),
-  set: (p, key) => vault.tx('readwrite', s => s.put({ provider: p, key })),
+  // a record is { provider, key, base }: base only for 'custom', so a key goes only to the address the writer typed with it
+  get: (p) => vault.tx('readonly', s => s.get(p)).then(r => (r && r.key ? r : null)).catch(() => null),
+  set: (p, key, base) => vault.tx('readwrite', s => s.put({ provider: p, key, base: base || '' })),
   del: (p) => vault.tx('readwrite', s => s.delete(p))
 };
 const LM_OPTS = { expectedInputs: [{ type: 'text', languages: ['en'] }], expectedOutputs: [{ type: 'text', languages: ['en'] }] };
@@ -912,6 +928,8 @@ async function nanoRun({ system, user }, schema) {
   const json = LD.extractJson(text);
   return parsed(json ? { json } : { error: 'not_json' }, 'gemini-nano');
 }
+// Local models answer without thinking: Qwen 3.5 4B on Ollama thought ~6,000 tokens and ran out of context on The whistle (2026-10-04).
+const LOCAL_EXTRA = { reasoning_effort: 'none' };
 // machine rung: an OpenAI-compatible server on 127.0.0.1; found only by an explicit probe (Chrome may ask to allow local network access)
 let machine = { checked: false, found: null };
 async function probeServer(id) {
@@ -931,19 +949,20 @@ const machineReader = {
     if (!f) throw readerFail('no_reader', 'No model server answered on this machine.', `Start Ollama (${LD.SERVERS.ollama.cors}) or LM Studio (${LD.SERVERS.lmstudio.cors}), then look again.`);
     const model = rcfg.models[f.id] || f.models[0];
     if (!model) throw readerFail('no_reader', `${LD.SERVERS[f.id].label} has no model loaded.`, 'Pull or load a model, then try again.');
-    return { model, maxInput: 3000, charsPerToken: 4, measure: async (t) => Math.ceil(t.length / 4), run: (p, schema) => openaiCall(LD.SERVERS[f.id].base, null, model, p, schema), close() { /* nothing held open */ } };
+    return { model, maxInput: 3000, charsPerToken: 4, measure: async (t) => Math.ceil(t.length / 4), run: (p, schema) => openaiCall(LD.SERVERS[f.id].base, null, model, p, schema, LOCAL_EXTRA), close() { /* nothing held open */ } };
   }
 };
 // provider rung: the writer's own provider and key; any OpenAI-compatible API, or Anthropic's own
-function providerTarget() {
-  const id = rcfg.provider, p = LD.PROVIDERS[id] || LD.PROVIDERS.openrouter;
-  return { id, p, base: (p.base || rcfg.base || '').replace(/\/+$/, ''), model: rcfg.models[id] || p.model || '' };
+// the chosen provider, its stored key record, and the address its key may go to: fixed in code, or (custom) stored with the key
+async function providerTarget() {
+  const id = rcfg.provider, p = LD.PROVIDERS[id] || LD.PROVIDERS.openrouter, rec = await vault.get(id);
+  return { id, p, rec, base: (p.base || (rec && rec.base) || '').replace(/\/+$/, ''), model: rcfg.models[id] || p.model || '' };
 }
 const providerReader = {
   async open() {
-    const { id, p, base, model } = providerTarget(), key = await vault.get(id);
+    const { p, rec, base, model } = await providerTarget(), key = rec && rec.key;
     if (!key) throw readerFail('no_reader', `No key is set for ${p.label}.`, 'In Read a story, paste your key for this provider.');
-    if (!base) throw readerFail('no_reader', 'No API address is set.', 'Enter the OpenAI-compatible base URL, such as https://host/v1.');
+    if (!base) throw readerFail('no_reader', 'No API address is set.', 'Enter the OpenAI-compatible base URL with the key, such as https://host/v1.');
     if (!model) throw readerFail('no_reader', `No model is chosen for ${p.label}.`, "Load the provider's models and pick one, or type a model id.");
     const anth = p.kind === 'anthropic';
     return { model, maxInput: anth ? 150000 : 24000, charsPerToken: 3.5, measure: async (t) => Math.ceil(t.length / 3.5), close() { /* nothing held open */ },
@@ -957,10 +976,11 @@ async function post(url, headers, body) {
   return { status: res.status, out: await res.json().catch(() => ({})) };
 }
 // providers word their errors differently: { error: { message } }, { error: "..." }, { message }, { detail }
+const scrub = (t) => String(t).replace(/(sk-|sk_|gsk_|xai-|AIza)[A-Za-z0-9_\-*.]{4,}/g, '[key]');   // providers sometimes echo part of a key
 function errorText(out, status) {
   const e = out && out.error;
-  if (e) return String(e.message || e);
-  return String((out && (out.message || out.detail)) || `HTTP ${status}`);
+  if (e) return scrub(e.message || e);
+  return scrub((out && (out.message || out.detail)) || `HTTP ${status}`);
 }
 function apiStatus(status, out, who) {
   const msg = errorText(out, status).slice(0, 300);
@@ -976,12 +996,12 @@ function parsed(r, model) {
 }
 // OpenAI-compatible: ask for JSON strictly first; on HTTP 400 ask more plainly (json_object, then the prompt alone). Remember what worked.
 const jsonMode = new Map();
-async function openaiCall(base, key, model, prompt, schema) {
+async function openaiCall(base, key, model, prompt, schema, extra) {
   const memo = `${base}|${model}`, modes = LD.JSON_MODES.slice(LD.JSON_MODES.indexOf(jsonMode.get(memo) || 'schema'));
   const headers = { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) };
   let res;
   for (const mode of modes) {
-    res = await post(`${base}/chat/completions`, headers, LD.openaiBody(model, prompt, schema, mode));
+    res = await post(`${base}/chat/completions`, headers, LD.openaiBody(model, prompt, schema, mode, extra));
     if (res.status === 400 && mode !== 'prompt') continue;
     apiStatus(res.status, res.out, hostOf(base));
     jsonMode.set(memo, mode);
@@ -1003,7 +1023,7 @@ async function anthropicCall(key, model, { system, user }, schema) {
 // the model ids the chosen rung offers: a local server's /models, or the provider's /models with the writer's key
 async function listModels() {
   if ((rcfg.rung || 'device') === 'machine') { await probeMachine(); return machine.found ? { source: LD.SERVERS[machine.found.id].label, models: machine.found.models } : null; }
-  const { id, p, base } = providerTarget(), key = await vault.get(id);
+  const { p, rec, base } = await providerTarget(), key = rec && rec.key;
   if (!key) throw readerFail('no_reader', `No key is set for ${p.label}.`, 'Paste your key first.');
   const headers = p.kind === 'anthropic' ? { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } : { authorization: `Bearer ${key}` };
   let res;
@@ -1015,7 +1035,7 @@ async function listModels() {
 const READERS = { machine: machineReader, device: nano, provider: providerReader };
 async function keyPrints() {
   const out = {};
-  for (const id of Object.keys(LD.PROVIDERS)) { const k = await vault.get(id); if (k) out[id] = await LD.fingerprint(k); }
+  for (const id of Object.keys(LD.PROVIDERS)) { const r = await vault.get(id); if (r) out[id] = await LD.fingerprint(r.key); }
   return out;
 }
 function machineInfo() {
@@ -1024,7 +1044,7 @@ function machineInfo() {
   return { checked: machine.checked, server: f.id, models: f.models.length, model: rcfg.models[f.id] || f.models[0] || null };
 }
 async function readerStatus(probe) {
-  const prints = await keyPrints(), t = providerTarget();
+  const prints = await keyPrints(), t = await providerTarget();
   const lad = await LD.detectLadder({ probeMachine: probe ? probeMachine : async () => (machine.found ? machine.found.id : null), nanoState: () => nano.state(), hasKey: async () => !!prints[t.id] });
   const rung = rcfg.rung || lad.ready || lad.best || 'device';
   return { rung, ladder: lad.rungs, ready: lad.ready, local: LD.rungIsLocal(rung), where: LD.rungLabel(rung, { server: machine.found && machine.found.id, provider: t.id }),
@@ -1032,11 +1052,17 @@ async function readerStatus(probe) {
     device: lad.device, provider: { id: t.id, label: t.p.label, kind: t.p.kind, base: t.base, model: t.model || null, key: prints[t.id] || null },
     keys: Object.entries(prints).map(([provider, fp]) => ({ provider, fingerprint: fp })) };
 }
+function keyError(id, key, base) {
+  if (!LD.PROVIDERS[id]) return fail('invalid', `no provider ${id}`, `Use one of: ${Object.keys(LD.PROVIDERS).join(', ')}.`);
+  const ok2 = /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/)/.test(base);
+  if (key && id === 'custom' && !ok2) return fail('invalid', 'A custom provider needs its address, starting with https:// (or http://127.0.0.1).', 'Enter the OpenAI-compatible base URL, such as https://host/v1, then the key.');
+  return null;
+}
 function selectError(a) {
   if (a.rung && !LD.ORDER.includes(a.rung)) return fail('invalid', `no rung ${a.rung}`, `Use one of: ${LD.ORDER.join(', ')}.`);
   if (a.provider && !LD.PROVIDERS[a.provider]) return fail('invalid', `no provider ${a.provider}`, `Use one of: ${Object.keys(LD.PROVIDERS).join(', ')}.`);
   if (a.server && !LD.SERVERS[a.server]) return fail('invalid', `no server ${a.server}`, `Use one of: ${Object.keys(LD.SERVERS).join(', ')}.`);
-  if (a.base && !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/)/.test(a.base.trim())) return fail('invalid', 'The address must start with https:// (or http://127.0.0.1 for a local server).', "Use the provider's OpenAI-compatible base URL, such as https://host/v1.");
+  if (a.base !== undefined) return fail('invalid', "The custom address is set with its key, in the page, so a key only ever goes where the writer sent it.", 'Ask the writer to enter the address and key together in Read a story.');
   return null;
 }
 async function selectReader(a) {
@@ -1044,7 +1070,6 @@ async function selectReader(a) {
   if (a.rung) rcfg.rung = a.rung;
   if (a.provider) rcfg.provider = a.provider;
   if (a.server) rcfg.server = a.server;
-  if (typeof a.base === 'string') rcfg.base = a.base.trim();
   const target = rcfg.rung === 'machine' ? a.server || (machine.found && machine.found.id) || rcfg.server || 'ollama' : rcfg.provider;
   if (typeof a.model === 'string') rcfg.models[target] = a.model.trim().slice(0, 200);
   saveCfg(); return ok(await readerStatus(false));
@@ -1144,7 +1169,7 @@ const TOOLS = [
     } },
   { name: 'beat.update', description: 'Change fields of one beat: label, spine, joint (into this beat), text, fortune, tags, marks, driver, avastha, kis, drafts. Arrays replace whole. Undo reverses it.', mutating: true,
     inputSchema: { type: 'object', properties: { id: { type: 'string' }, patch: BEAT_PATCH_SCHEMA }, required: ['id', 'patch'] },
-    handler: async (a) => {
+    handler: async (a, door) => {
       const bad = unknownKeys(a.patch, BEAT_PATCH);
       if (!a.patch || bad.length) return fail('invalid', bad.length ? `unknown beat field(s): ${bad.join(', ')}` : 'patch is required', `Use only: ${[...BEAT_PATCH].join(', ')}.`);
       const n = C.clone(S()), b = n.beats.find(x => x.id === a.id);
@@ -1152,7 +1177,7 @@ const TOOLS = [
       Object.assign(b, C.clone(a.patch));
       if (Object.keys(a.patch).some(k => k !== 'text' && k !== 'drafts')) { b.by = 'writer'; delete b.model; }
       if (Array.isArray(b.marks)) b.marks = C.MARKS.filter(m => b.marks.includes(m)).concat(b.marks.filter(m => !C.MARKS.includes(m)));
-      return commit(n, `beat.update:${a.id}:${Object.keys(a.patch).toSorted().join(',')}`) || ok({ id: a.id, position: posOf(a.id) + 1 });
+      return commit(n, `beat.update:${door}:${a.id}:${Object.keys(a.patch).toSorted().join(',')}`) || ok({ id: a.id, position: posOf(a.id) + 1 });
     } },
   { name: 'beat.remove', description: 'Remove a beat. Threads that point at it lose that plant or payoff. Undo restores both.', mutating: true,
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
@@ -1211,13 +1236,13 @@ const TOOLS = [
   { name: 'undo', description: 'Undo the last story change (100 steps).', mutating: true, inputSchema: NONE,
     handler: async () => {
       if (!app.undo.length) return fail('stack_empty', 'nothing to undo', 'Nothing to do; call status.');
-      app.redo.push(C.clone(S())); app.story = app.undo.pop(); app.coalesce = null; app.dirty = true; persist();
+      app.redo.push(C.clone(S())); app.story = app.undo.pop(); app.coalesce = null; app.dirty = true; persist(); persistUndo();
       return ok({ undo: app.undo.length, redo: app.redo.length });
     } },
   { name: 'redo', description: 'Redo the last undone change.', mutating: true, inputSchema: NONE,
     handler: async () => {
       if (!app.redo.length) return fail('stack_empty', 'nothing to redo', 'Nothing to do; call status.');
-      app.undo.push(C.clone(S())); app.story = app.redo.pop(); app.coalesce = null; app.dirty = true; persist();
+      app.undo.push(C.clone(S())); app.story = app.redo.pop(); app.coalesce = null; app.dirty = true; persist(); persistUndo();
       return ok({ undo: app.undo.length, redo: app.redo.length });
     } },
   { name: 'journal', description: 'The last n tool calls (default 20, max 200): tool, class, door, ms, time. The trajectory across sessions.', inputSchema: { type: 'object', properties: { n: { type: 'integer', minimum: 1, maximum: 200 } } },
@@ -1225,20 +1250,20 @@ const TOOLS = [
   { name: 'reader.status', description: 'The AI ladder, closest first: a model server on this machine, Gemini Nano in Chrome, your provider with your key. Which rungs can read, the chosen rung and where its words go, the provider and model, key fingerprints (never keys). probe: true also looks for a local server (Chrome may ask to allow local network access).',
     inputSchema: { type: 'object', properties: { probe: { type: 'boolean' } } },
     handler: async (a) => ok(await readerStatus(!!a.probe)) },
-  { name: 'reader.select', description: 'Choose the rung ("machine", "device", "provider"), the provider (openrouter, openai, anthropic, gemini, groq, mistral, deepseek, together, custom), the base URL for custom, the local server, and the model id for the chosen rung.', mutating: true,
-    inputSchema: { type: 'object', properties: { rung: { enum: ['machine', 'device', 'provider'] }, provider: { enum: Object.keys(LD.PROVIDERS) }, base: { type: 'string' }, server: { enum: Object.keys(LD.SERVERS) }, model: { type: 'string' } } },
+  { name: 'reader.select', description: 'Choose the rung ("machine", "device", "provider"), the provider (openrouter, openai, anthropic, gemini, groq, mistral, deepseek, together, custom), the local server, and the model id for the chosen rung. A custom address is set with its key, by the writer (reader.key).', mutating: true,
+    inputSchema: { type: 'object', properties: { rung: { enum: ['machine', 'device', 'provider'] }, provider: { enum: Object.keys(LD.PROVIDERS) }, server: { enum: Object.keys(LD.SERVERS) }, model: { type: 'string' } } },
     handler: async (a) => selectReader(a) },
   { name: 'reader.models', description: "The model ids the chosen rung offers: a local server's list, or your provider's list fetched with your key.", inputSchema: NONE,
     handler: async () => {
       try { const m = await listModels(); return m ? ok({ source: m.source, count: m.models.length, models: m.models.slice(0, 1000) }) : fail('no_reader', 'No model server answered on this machine.', 'Start Ollama or LM Studio and allow this site.'); }
       catch (e) { return fail(e.cls || 'reader_error', e.message, e.next || 'Try again.'); }
     } },
-  { name: 'reader.key', description: "Set or forget the key for a provider (an empty key forgets it). Person-only: the writer types the key into the page; agents never handle keys. Stored in this browser's IndexedDB and shown only as a fingerprint.", mutating: true, personOnly: true,
-    inputSchema: { type: 'object', properties: { provider: { enum: Object.keys(LD.PROVIDERS) }, key: { type: 'string' } }, required: ['key'] },
+  { name: 'reader.key', description: "Set or forget the key for a provider (an empty key forgets it); a custom provider's address is set here too, with its key. Person-only: the writer types the key into the page; agents never handle keys. Stored in this browser's IndexedDB and shown only as a fingerprint.", mutating: true, personOnly: true,
+    inputSchema: { type: 'object', properties: { provider: { enum: Object.keys(LD.PROVIDERS) }, key: { type: 'string' }, base: { type: 'string' } }, required: ['key'] },
     handler: async (a) => {
-      const id = a.provider || rcfg.provider, key = String(a.key || '').trim();
-      if (!LD.PROVIDERS[id]) return fail('invalid', `no provider ${id}`, `Use one of: ${Object.keys(LD.PROVIDERS).join(', ')}.`);
-      try { if (key) await vault.set(id, key); else await vault.del(id); } catch (e) { return fail('io_error', `The key store failed: ${e.message}`, 'Allow site storage for this page, then try again.'); }
+      const id = a.provider || rcfg.provider, key = String(a.key || '').trim(), base = String(a.base || '').trim();
+      const bad = keyError(id, key, base); if (bad) return bad;
+      try { if (key) await vault.set(id, key, id === 'custom' ? base : ''); else await vault.del(id); } catch (e) { return fail('io_error', `The key store failed: ${e.message}`, 'Allow site storage for this page, then try again.'); }
       if (key) { rcfg.provider = id; rcfg.rung = 'provider'; saveCfg(); }
       return ok({ provider: id, key: key ? await LD.fingerprint(key) : null });
     } },
@@ -1259,12 +1284,18 @@ const TOOLS = [
 const tools = Object.fromEntries(TOOLS.map(t => [t.name, t]));
 
 // ---- command bus: every door goes through here; every call is journaled with its door
+// unknown tools, and person-only tools on any door but the page, are refused before anything runs
+function refusal(name, t, door) {
+  if (!t) return fail('unknown_tool', `no tool ${name}`, 'Read window.sandhi.manifest for the tool names.');
+  if (t.personOnly && door !== 'ui') return fail('person_only', `${name} is person-only`, 'Ask the writer to do it in the page.');
+  return null;
+}
 const bus = {
   async dispatch(name, args, door) {
     door = door || 'ui';
-    const t = tools[name];
-    if (!t) { const env = fail('unknown_tool', `no tool ${name}`, 'Read window.sandhi.manifest for the tool names.'); journalAppend({ at: new Date().toISOString(), tool: name, class: env.class, door, ms: 0 }); return env; }
-    if (t.personOnly && door !== 'ui') { const env = fail('person_only', `${name} is person-only`, 'Ask the writer to do it in the page.'); journalAppend({ at: new Date().toISOString(), tool: name, class: env.class, door, ms: 0 }); return env; }
+    const t = tools[name], refused = refusal(name, t, door);
+    if (refused) { journalAppend({ at: new Date().toISOString(), tool: name, class: refused.class, door, ms: 0 }); return refused; }
+    if (t.mutating && door !== 'ui' && pending.size) flushPending();   // the writer's typing lands before an agent's edit re-renders the beats
     const t0 = performance.now(); let env;
     try { env = await t.handler(args || {}, door); }
     catch (e) { env = fail('internal', String(e && e.message || e), 'Report it with the journal; the story is unchanged.'); }
@@ -1552,7 +1583,27 @@ async function openText(text) {
 }
 $('#file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) openText(await f.text()); });
 document.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
-document.addEventListener('drop', async (e) => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (!f) return; e.preventDefault(); openText(await f.text()); });
+document.addEventListener('drop', async (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files[0]; if (!f) return; e.preventDefault();
+  if ($('#reader').open) { $('#read-text').value = await f.text(); $('#read-text').dispatchEvent(new Event('input')); return; }
+  openText(await f.text());
+});
+function saveActiveField() {
+  const el = document.activeElement, d = el && el.dataset;
+  if (!d) return;
+  if (d.sfield && el.value !== S()[d.sfield]) ui('story.update', { [d.sfield]: el.value });
+  else if (d.note && el.value !== (S().notes[d.note] || '')) ui('story.update', { notes: { [d.note]: el.value } });
+  else if (d.thread && d.tfield === 'label') { const t = S().threads.find(x => x.id === d.thread); if (t && t.label !== el.value) ui('thread.update', { id: t.id, patch: { label: el.value } }); }
+}
+addEventListener('pagehide', () => { saveActiveField(); flushPending(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { saveActiveField(); flushPending(); } });
+addEventListener('storage', (e) => {
+  if (e.key !== KEY || !e.newValue) return;
+  let o = null; try { o = JSON.parse(e.newValue); } catch { return; }
+  if (!o || !C.validate(o.story).ok || JSON.stringify(o.story) === JSON.stringify(app.story)) return;
+  app.undo.push(C.clone(app.story)); app.redo = []; app.story = o.story; app.dirty = !!o.dirty; app.coalesce = null;
+  renderAll(); toast('Updated from another tab.', "Undo brings this tab's version back.");
+});
 // keyboard: Enter commits a one-line field; Cmd/Ctrl+S saves; Cmd/Ctrl+Z undoes outside text; ? opens the splash
 function shortcut(e, typing) {
   const mod = e.metaKey || e.ctrlKey, key = e.key.toLowerCase();
@@ -1641,10 +1692,9 @@ $('#read-file').addEventListener('change', async (e) => { const f = e.target.fil
 const READER_CHANGES = {
   rung: (el) => ui('reader.select', { rung: el.value }),
   provider: (el) => ui('reader.select', { provider: el.value }),
-  'provider-base': (el) => ui('reader.select', { base: el.value }),
   'provider-model': (el) => ui('reader.select', { rung: 'provider', model: el.value }),
   'machine-model': (el) => ui('reader.select', { rung: 'machine', model: el.value }),
-  'provider-key': async (el) => { const r = await ui('reader.key', { provider: $('#provider').value, key: el.value }); el.value = ''; return r; }   // the key never stays in the page
+  'provider-key': async (el) => { const r = await ui('reader.key', { provider: $('#provider').value, key: el.value, base: $('#provider-base').value }); el.value = ''; return r; }   // the key never stays in the page
 };
 reader.addEventListener('change', async (e) => {
   const fn = READER_CHANGES[e.target.name === 'rung' ? 'rung' : e.target.id];
@@ -1765,11 +1815,16 @@ function startTour() {
 }
 
 // ---- boot: the story renders before anything else is touched (first value)
+// what this browser kept: the journal, the story, the undo history; anything corrupt starts fresh
+function restore() {
+  const read = (k, d) => { try { return JSON.parse(store.get(k) || 'null') || d; } catch { return d; } };
+  const j = read(JKEY, []), o = read(KEY, null), u = read(UKEY, []);
+  if (Array.isArray(j)) app.journal = j.slice(-200);
+  if (o && C.validate(o.story).ok) { app.story = o.story; app.dirty = !!o.dirty; } else app.story = C.seed();
+  if (Array.isArray(u)) app.undo = u.filter(x => C.validate(x).ok);
+}
 (function boot() {
-  try { const j = JSON.parse(store.get(JKEY) || '[]'); if (Array.isArray(j)) app.journal = j.slice(-200); } catch { /* a corrupt journal starts empty */ }
-  let story = null;
-  try { const o = JSON.parse(store.get(KEY) || 'null'); if (o && C.validate(o.story).ok) { story = o.story; app.dirty = !!o.dirty; } } catch { /* a corrupt autosave falls back to the demo */ }
-  app.story = story || C.seed();
+  restore();
   renderAll();
   performance.mark('sandhi:first-value');
   bootResolve(statusData());
