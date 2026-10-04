@@ -12,9 +12,9 @@ Open https://sandhi.naklitechie.com. Or download [`index.html`](index.html) and 
 
 Your story autosaves in the browser. **Save** writes a `.sandhi.json` file; **Open** (or drag the file onto the page) reads it back.
 
-**Status (v0.1):** write mode without a model. You label beats, joints, fortune, phases and threads; sandhi draws the views and runs the checks on those labels. The model-assisted parts below (proposals, questions, read mode) are Batch B and C in `plan/`.
+**Status (v0.2):** write mode, and read mode. In write mode you label beats, joints, fortune, phases and threads; sandhi draws the views and runs the checks on those labels. In read mode (**Read a story**) Gemini Nano on your device, or Claude with your own Anthropic key, marks a pasted story's structure; you review it before it replaces anything. Proposals and questions while you write are Batch C in `plan/`.
 
-Tests: `cd test && npm install && npm test` (core, parity, face + cold-load timing). Agent face: `window.sandhi` (21 tools, see [`SPEC.md`](SPEC.md) §0).
+Tests: `cd test && npm install && npm test` (core, parity, face + cold-load timing). Agent face: `window.sandhi` (28 tools, see [`SPEC.md`](SPEC.md) §0).
 
 ## What it does
 

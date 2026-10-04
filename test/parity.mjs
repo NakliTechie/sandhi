@@ -16,8 +16,12 @@ const cmds = new Set([...src.matchAll(/data-cmd="([a-z.]+)"/g)].map(m => m[1]));
 const calls = new Set([...src.matchAll(/(?:bus\.dispatch|\bui)\('([a-z.]+)'/g)].map(m => m[1]));
 const ternary = [...src.matchAll(/\bui\(e\.shiftKey \? '([a-z.]+)' : '([a-z.]+)'/g)].flatMap(m => [m[1], m[2]]);
 for (const t of ternary) calls.add(t);
-const CLASSES = new Set(['ok', 'invalid', 'not_found', 'stack_empty', 'io_error', 'unknown_tool', 'internal']);
-const used = new Set([...src.matchAll(/fail\('([a-z_]+)'/g)].map(m => m[1]));
+const CLASSES = new Set(['ok', 'invalid', 'not_found', 'stack_empty', 'io_error', 'unknown_tool', 'internal', 'person_only', 'busy',
+  'no_reader', 'reader_error', 'key_rejected', 'rate_limited', 'refused', 'too_long', 'nothing_found', 'no_proposal']);
+const used = new Set([...src.matchAll(/(?:fail|readerFail)\('([a-z_]+)'/g)].map(m => m[1]));
+// person-only tools exist in the manifest and are refused on every door but the page (SPEC §0)
+for (const n of ['read.accept', 'reader.key']) if (!new RegExp(`name: '${n.replace('.', '\\.')}'[^\\n]*\\n?[^\\n]*personOnly: true`).test(app)) findings.push(`${n}: not marked personOnly`);
+if (!/t\.personOnly && door !== 'ui'/.test(src)) findings.push('bus does not refuse person-only tools off the ui door');
 
 if (new Set(names).size !== names.length) findings.push('duplicate tool names');
 for (const c of cmds) if (!names.includes(c)) findings.push(`data-cmd="${c}" has no manifest entry`);

@@ -102,6 +102,50 @@ const rejects = {
 for (const [name, fn] of Object.entries(rejects)) check(`rejects.${name}`, !C.validate(mut(fn)).ok, 'accepted');
 check('accepts.model_provenance', C.validate(mut(s => { s.beats[0].by = 'model'; s.beats[0].model = 'gemini-nano'; })).ok, 'rejected');
 
+// 6. read mode, pure part: the model's quotes cut the writer's own prose; labels come from the model; bad quotes drop
+const S0 = plain(seed);   // this realm's copy, so isDeepStrictEqual compares values, not vm prototypes
+const prose = seed.beats.map(b => b.text).join('\n\n');
+const first = (t, n) => t.split(/\s+/).slice(0, n || 8).join(' ');
+const LABEL_KEYS = ['label', 'spine', 'joint', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis'];
+const labelsOf = (b) => Object.fromEntries(LABEL_KEYS.map(k => [k, k === 'joint' || k === 'driver' || k === 'avastha' || k === 'kis' ? (b[k] || 'none') : b[k]]));
+const idx = Object.fromEntries(seed.beats.map((b, i) => [b.id, i]));
+const wholeJson = {
+  title: 'The whistle',
+  beats: [...seed.beats.map(b => ({ start: first(b.text), ...labelsOf(b) })), { start: 'a dragon flew over the harbour and sang', ...labelsOf(seed.beats[0]) }],
+  threads: [...seed.threads.map(t => ({ label: t.label, plant: first(seed.beats[idx[t.plant]].text), payoffs: t.payoffs.map(b => first(seed.beats[idx[b]].text)) })),
+    { label: 'made up', plant: 'nothing like this sentence is in the story', payoffs: [] }]
+};
+// one quote with straight quotes and a hyphen where the text has curly quotes and an em dash
+wholeJson.threads[0].payoffs = ["Someone had to climb. The grown-ups were down"];
+const w = C.storyFromWhole(prose, plain(wholeJson), 'fixture');
+const ws = w.story && plain(w.story);
+check('read.whole.valid', ws && C.validate(ws).ok, ws ? C.validate(ws).errors : 'no story');
+check('read.whole.prose_is_writers', ws && ws.beats.length === 10 && ws.beats.every((b, i) => b.text === seed.beats[i].text), ws && ws.beats.map(b => b.text.slice(0, 30)));
+check('read.whole.labels', ws && ws.beats.every((b, i) => isDeepStrictEqual(Object.fromEntries(LABEL_KEYS.map(k => [k, b[k]])), Object.fromEntries(LABEL_KEYS.map(k => [k, S0.beats[i][k]])))), 'labels differ');
+check('read.whole.provenance', ws && ws.beats.every(b => b.by === 'model' && b.model === 'fixture'), 'by/model');
+check('read.whole.threads', ws && ws.threads.length === 6 && ws.threads.every((t, i) => t.plant === S0.threads[i].plant && isDeepStrictEqual(t.payoffs, S0.threads[i].payoffs)), ws && ws.threads);
+check('read.whole.drops_made_up_quotes', isDeepStrictEqual(plain(w.dropped), { beats: 1, quotes: 1 }), plain(w.dropped));
+check('read.whole.checks_clean', ws && C.checks(ws).length === 0, ws && plain(C.checks(ws)));
+const folded = C.foldText(prose);
+check('read.fold.curly_and_dashes', C.findQuote(folded, "So Tavi went - two hundred steps, the way he'd carried the water") >= 0, 'not found');
+check('read.fold.rejects_short', C.findQuote(folded, 'Tavi') === -1, 'short quote matched');
+// chunks: paragraph-aligned, cover the text, none over the limit unless one paragraph is
+const chunks = plain(C.chunkText(prose, 900));
+const covered = chunks.map(c => prose.slice(c.start, c.end)).join('');
+check('read.chunks', chunks.length > 2 && covered === prose && chunks.every(c => c.end - c.start <= 900 || !prose.slice(c.start, c.end).trim().includes('\n\n')), chunks);
+// two passes: scenes per chunk, then labels over all scene summaries
+const scenesJson = chunks.flatMap(c => seed.beats.filter(b => prose.indexOf(b.text) >= c.start && prose.indexOf(b.text) < c.end)
+  .map(b => ({ start: first(b.text), summary: b.label, fortune: b.fortune, introduces: [], uses: [] })));
+const anchored = C.anchorScenes(prose, [...scenesJson, { start: 'this scene never happened in the story at all', summary: 'x', fortune: 0, introduces: [], uses: [] }]);
+check('read.two_pass.anchor', anchored.scenes.length === 10 && anchored.dropped === 1, plain(anchored).dropped);
+const labelsJson = { title: 'The whistle', beats: seed.beats.map((b, k) => ({ scene: k + 1, ...labelsOf(b) })),
+  threads: seed.threads.map(t => ({ label: t.label, plant_scene: idx[t.plant] + 1, payoff_scenes: t.payoffs.map(b => idx[b] + 1) })) };
+const two = plain(C.storyFromLabels(prose, anchored.scenes, labelsJson, 'fixture').story);
+check('read.two_pass.same_as_whole', isDeepStrictEqual(two.beats, ws.beats) && isDeepStrictEqual(two.threads.map(t => [t.plant, t.payoffs]), ws.threads.map(t => [t.plant, t.payoffs])), 'differs');
+// schemas: every object closes additionalProperties and requires all its keys (structured-output rules)
+const closed = (o) => !o || typeof o !== 'object' || ((o.type !== 'object' || (o.additionalProperties === false && isDeepStrictEqual([...o.required].toSorted(), Object.keys(o.properties).toSorted()))) && Object.values(o).every(closed));
+check('read.schemas_closed', Object.values(plain(C.READ_SCHEMAS)).every(closed), 'open object in a schema');
+
 const failed = results.filter(r => !r.pass);
 const receipt = { gate: 'core', verdict: failed.length ? 'fail' : 'pass', checks: results.length, failed: failed.length, ...(failed.length ? { failures: failed } : {}) };
 console.log(JSON.stringify(receipt, null, 1));

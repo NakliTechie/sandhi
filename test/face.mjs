@@ -55,7 +55,8 @@ const call = (name, args) => page.evaluate(([n, a]) => window.sandhi.tools[n](a)
 const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .beat').length);
 
 const man = await page.evaluate(() => window.sandhi.manifest);
-check('face.manifest', man.length === 21 && man.every(t => t.name && t.description && t.inputSchema && t.personOnly === false), man.map(t => t.name));
+const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
+check('face.manifest', man.length === 28 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -115,14 +116,14 @@ await page.keyboard.press('?');
 check('splash.question_key_reopens', await page.evaluate(() => document.querySelector('#splash').open && document.querySelector('#splash-close').textContent === 'Back to the story'), 'not reopened');
 await page.click('#splash [data-ui="tour"]');
 const tourTitles = [];
-for (let k = 0; k < 7; k++) {
+for (let k = 0; k < 8; k++) {
   tourTitles.push(await page.evaluate(() => document.querySelector('.tour-layer h2') && document.querySelector('.tour-layer h2').textContent));
-  if (k < 6) await page.keyboard.press('ArrowRight');
+  if (k < 7) await page.keyboard.press('ArrowRight');
 }
 const spot = await page.evaluate(() => { const box = document.querySelector('.tour-spot').getBoundingClientRect(); return box.width > 20 && box.height > 20; });
 await page.keyboard.press('Escape');
 const tourGone = await page.evaluate(() => !document.querySelector('.tour-layer') && !document.querySelector('#splash').open);
-check('tour.seven_steps_then_escape', tourTitles[0] === 'The shape of the story' && tourTitles[6] === 'Your story, your file' && new Set(tourTitles).size === 7 && spot && tourGone, { tourTitles, spot, tourGone });
+check('tour.eight_steps_then_escape', tourTitles[0] === 'The shape of the story' && tourTitles[7] === 'Your story, your file' && new Set(tourTitles).size === 8 && spot && tourGone, { tourTitles, spot, tourGone });
 await page.click('#matrix tbody tr:nth-child(1) td.c:nth-child(3) button');   // principle 1 (care), beat 2
 const b2 = (await call('story.get', {})).data.story.beats[1];
 const j = (await call('journal', { n: 5 })).data.entries;
@@ -135,6 +136,131 @@ check('ui.autosave_survives_reload', after.beats[1].tags.includes('care') && aft
 check('ui.journal_persists', (await call('journal', { n: 200 })).data.entries.length >= 20, 'journal short');
 check('page.no_errors', errors.length === 0, errors);
 await ctx.close();
+
+
+// ---- 3b. read mode: a stand-in Gemini Nano answers from a fixture; Claude's API is intercepted (dummy test key, nothing leaves)
+const { default: vm } = await import('node:vm');
+const coreCtx = vm.createContext({});
+vm.runInContext((/<script id="sandhi-core">([\s\S]*?)<\/script>/.exec(html.toString()) || [])[1], coreCtx);
+const CORE = coreCtx.SandhiCore, SEED = JSON.parse(JSON.stringify(CORE.seed()));
+const prose = SEED.beats.map(b => b.text).join('\n\n');
+const first8 = (t) => t.split(/\s+/).slice(0, 8).join(' ');
+const LK = ['label', 'spine', 'joint', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis'];
+const labelsOf = (b) => Object.fromEntries(LK.map(k => [k, ['joint', 'driver', 'avastha', 'kis'].includes(k) ? (b[k] || 'none') : b[k]]));
+const ix = Object.fromEntries(SEED.beats.map((b, i) => [b.id, i]));
+const FIX = {
+  whole: { title: 'The whistle', beats: SEED.beats.map(b => ({ start: first8(b.text), ...labelsOf(b) })),
+    threads: SEED.threads.map(t => ({ label: t.label, plant: first8(SEED.beats[ix[t.plant]].text), payoffs: t.payoffs.map(b => first8(SEED.beats[ix[b]].text)) })) },
+  beats: SEED.beats.map(b => ({ start: first8(b.text), summary: b.label, fortune: b.fortune, labels: labelsOf(b) })),
+  threads: SEED.threads.map(t => ({ label: t.label, plant_scene: ix[t.plant] + 1, payoff_scenes: t.payoffs.map(b => ix[b] + 1) }))
+};
+const tok = (s) => Math.ceil(s.length / 4);
+const P = CORE.READ_PROMPTS, whole = P.whole(prose), emptyScenes = P.scenes('', 1, 1);
+const labelsP = P.labels(FIX.beats.map(b => ({ summary: b.summary, fortune: b.fortune, introduces: [], uses: [] })));
+const twoPassInput = Math.max(tok(labelsP.system + '\n' + labelsP.user), tok(emptyScenes.system + '\n' + emptyScenes.user) + 420) + 40;
+check('read.fixture_forces_two_pass', twoPassInput < tok(whole.system + '\n' + whole.user), { twoPassInput, whole: tok(whole.system + '\n' + whole.user) });
+// the stand-in: Chrome's LanguageModel surface, answering whole / scenes / labels prompts from the fixture
+const fakeNano = ({ FIX, windowTokens }) => {
+  window.__nanoCalls = [];
+  const answer = (user) => {
+    if (user.startsWith('Mark the structure')) return FIX.whole;
+    if (user.startsWith('This is part')) { const part = user.slice(user.indexOf(':\n', user.lastIndexOf('PART ')) + 2); return { scenes: FIX.beats.filter(b => part.includes(b.start)).map(b => ({ start: b.start, summary: b.summary, fortune: b.fortune, introduces: [], uses: [] })) }; }
+    const n = (user.match(/^Scene \d+/gm) || []).length;
+    return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ scene: k + 1, ...b.labels })), threads: FIX.threads };
+  };
+  const session = (init) => ({ contextWindow: windowTokens, measureContextUsage: async (t) => Math.ceil(t.length / 4),
+    prompt: async (user, opts) => { window.__nanoCalls.push({ kind: user.slice(0, 12), system: !!(init && init.initialPrompts), schema: !!(opts && opts.responseConstraint) }); return JSON.stringify(answer(user)); }, destroy() {} });
+  window.LanguageModel = { availability: async () => 'available', create: async (init) => session(init) };
+};
+async function readPage(opts) {
+  const ctx2 = await browser.newContext(opts && opts.ctx);
+  if (opts && opts.nano) await ctx2.addInitScript(fakeNano, { FIX, windowTokens: opts.nano });
+  else await ctx2.addInitScript(() => { delete window.LanguageModel; });   // a browser without Gemini Nano
+  await ctx2.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } });
+  const p = await ctx2.newPage(); const errs = [];
+  p.on('pageerror', e => errs.push(String(e)));
+  await p.goto(base); await p.evaluate(() => window.sandhi.ready);
+  return { ctx2, p, errs, call: (n, a) => p.evaluate(([x, y]) => window.sandhi.tools[x](y), [n, a]) };
+}
+{ // whole story on Nano, then the writer accepts it in the page
+  const { ctx2, p, errs, call } = await readPage({ nano: 6144 });
+  const st = await call('reader.status', {});
+  check('read.nano_ready', st.data.nano === 'ready' && st.data.reader === 'nano' && st.data.where === 'this device', st.data);
+  const r = await call('read.run', { text: prose });
+  check('read.nano_whole', r.ok && r.data.mode === 'whole' && r.data.calls === 1 && r.data.beats === 10 && r.data.threads === 6 && r.data.model === 'gemini-nano' && r.data.arc === 'hole' && r.data.dropped.beats === 0, r);
+  const before = (await call('story.get', {})).data.story;
+  const refused = await call('read.accept', {});
+  check('read.accept_person_only', refused.class === 'person_only' && JSON.stringify((await call('story.get', {})).data.story) === JSON.stringify(before), refused);
+  const keyRefused = await call('reader.key', { key: 'x' });
+  check('read.key_person_only', keyRefused.class === 'person_only', keyRefused);
+  await p.click('[data-ui="read-open"]');
+  const shown = await p.evaluate(() => document.querySelectorAll('#read-result li').length);
+  await p.click('[data-ui="read-accept"]');
+  const after = (await call('story.get', {})).data.story;
+  const sameProse = after.beats.length === 10 && after.beats.every((b, i) => b.text === SEED.beats[i].text);
+  const sameLabels = after.beats.every((b, i) => LK.every(k => JSON.stringify(b[k]) === JSON.stringify(SEED.beats[i][k])));
+  const byline = await p.evaluate(() => document.querySelectorAll('#beats .byline').length);
+  check('read.accept_in_page', shown === 10 && sameProse && sameLabels && after.beats.every(b => b.by === 'model' && b.model === 'gemini-nano') && byline === 10 && (await call('checks', {})).data.count === 0, { shown, sameProse, sameLabels, byline });
+  await call('beat.update', { id: 'b3', patch: { fortune: -2 } });
+  const b3 = (await call('story.get', {})).data.story.beats[2];
+  check('read.label_edit_makes_it_writers', b3.by === 'writer' && b3.model === undefined, b3);
+  await call('undo', {}); await call('undo', {});
+  const back = (await call('story.get', {})).data.story;
+  check('read.undo_restores_previous', back.beats.every(b => b.by === 'writer') && back.title === 'The whistle', back.beats.map(b => b.by));
+  check('read.nano_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // a Nano whose window cannot hold the instructions says so, and points at the other reader
+  const { ctx2, call } = await readPage({ nano: 1000 });
+  const r = await call('read.run', { text: prose });
+  check('read.nano_window_too_small', r.class === 'no_reader' && /1000 tokens/.test(r.message) && /Claude/.test(r.next), r);
+  await ctx2.close();
+}
+{ // a window too small for the whole story: parts, then the outline
+  const { ctx2, p, errs, call } = await readPage({ nano: twoPassInput + 1600 });
+  const r = await call('read.run', { text: prose });
+  const calls = await p.evaluate(() => window.__nanoCalls);
+  const story = (await call('read.get', {})).data.story;
+  check('read.nano_two_pass', r.ok && r.data.mode === 'two-pass' && r.data.calls === calls.length && calls.length >= 3 && r.data.beats === 10 && story.beats.every((b, i) => b.text === SEED.beats[i].text) && story.threads.length === 6 && calls.every(c => c.system && c.schema), { report: r.data || r, calls: calls.length });
+  check('read.two_pass_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // Claude with a key: request shape, then refusal and a rejected key
+  const { ctx2, p, errs, call } = await readPage({});
+  const sent = []; let mode = 'ok';
+  await p.route('https://api.anthropic.com/v1/messages', async (route) => {
+    const q = route.request(); sent.push({ headers: q.headers(), body: JSON.parse(q.postData()) });
+    if (mode === '401') return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }) });
+    const msg = { id: 'msg_test', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: mode === 'refusal' ? 'refusal' : 'end_turn', content: mode === 'refusal' ? [] : [{ type: 'text', text: JSON.stringify(FIX.whole) }], usage: { input_tokens: 1, output_tokens: 1 } };
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(msg) });
+  });
+  const none = await call('read.run', { text: prose });
+  check('read.no_reader_without_nano_or_key', none.class === 'no_reader' && !!none.next, none);
+  await p.click('[data-ui="read-open"]');
+  await p.check('#reader input[value="anthropic"]');
+  const TEST_KEY = 'sk-ant-test-0000-not-a-real-key';
+  await p.fill('#anthropic-key', TEST_KEY); await p.locator('#anthropic-key').blur();
+  await p.waitForFunction(() => document.querySelector('#key-state').textContent.includes('key set'));
+  const privacy = await p.textContent('#read-privacy');
+  const r = await call('read.run', { text: prose });
+  const q = sent[0] || { headers: {}, body: {} };
+  const shapeOk = q.headers['x-api-key'] === TEST_KEY && q.headers['anthropic-version'] === '2023-06-01' && q.headers['anthropic-dangerous-direct-browser-access'] === 'true'
+    && q.headers['anthropic-beta'] === 'server-side-fallback-2026-07-01' && q.body.model === 'claude-opus-5-5' && q.body.max_tokens === 16000 && q.body.fallbacks === 'default'
+    && q.body.output_config.effort === 'medium' && q.body.output_config.format.type === 'json_schema' && typeof q.body.system === 'string' && q.body.messages[0].role === 'user';
+  check('read.anthropic_request_shape', shapeOk && /Anthropic/.test(privacy), { headers: Object.keys(q.headers), body: Object.keys(q.body), privacy });
+  check('read.anthropic_whole', r.ok && r.data.model === 'claude-opus-5-5' && r.data.beats === 10 && r.data.reader === 'anthropic', r);
+  const stored = await p.evaluate(() => localStorage.getItem('sandhi:anthropic-key'));
+  const journal = JSON.stringify((await call('journal', { n: 200 })).data.entries);
+  check('read.key_not_kept_or_logged', stored === null && !journal.includes(TEST_KEY), { stored: !!stored, inJournal: journal.includes(TEST_KEY) });
+  mode = 'refusal';
+  const ref = await call('read.run', { text: prose });
+  check('read.anthropic_refusal', ref.class === 'refused' && !!ref.next, ref);
+  mode = '401';
+  const bad = await call('read.run', { text: prose });
+  check('read.anthropic_key_rejected', bad.class === 'key_rejected' && /invalid x-api-key/.test(bad.message), bad);
+  check('read.anthropic_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 
 // ---- 4. layout: phone width, dark scheme
 const phone = await browser.newContext({ viewport: { width: 375, height: 812 } });

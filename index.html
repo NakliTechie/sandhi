@@ -197,6 +197,28 @@ table.matrix{border-collapse:collapse}
 .tour-actions{display:flex;gap:8px;margin-top:14px}
 .tour-actions .skip{margin-right:auto}
 
+/* read dialog */
+#reader{border:1px solid var(--line-strong);border-radius:14px;background:var(--card);color:var(--ink);padding:22px 24px 18px;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 32px)}
+#reader::backdrop{background:rgba(28,26,22,.42)}
+#reader h2{font-size:18px;font-weight:500;margin:0 0 4px}
+#reader .intro{font-size:13px;color:var(--muted);margin:0 0 12px}
+#read-text{width:100%;min-height:9em;max-height:40vh;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px 10px;font:14px/1.6 var(--serif);resize:vertical}
+.rrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:8px 0 14px;font-size:12.5px;color:var(--faint)}
+.readers{border:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.readers label{display:flex;align-items:baseline;gap:8px}
+.readers input[type=radio]{accent-color:var(--accent)}
+#anthropic-fields{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:2px 0 0 24px;font-size:12.5px;color:var(--muted)}
+#anthropic-fields input[type=password],#anthropic-fields input[type=text]{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:4px 8px;font-size:13px;min-width:0}
+#anthropic-fields[hidden]{display:none}
+#anthropic-key{flex:1 1 220px}
+#anthropic-model{width:170px}
+#read-privacy{font-size:12px;color:var(--faint);margin:0 0 12px}
+#read-progress{font-size:13px;color:var(--accent-ink);min-height:1.4em;margin:0 0 8px}
+#read-result .sum{font-size:13.5px;margin:0 0 8px}
+#read-result ol{margin:0 0 12px;padding-left:22px;font-size:13px;color:var(--muted);max-height:30vh;overflow:auto}
+#read-result li b{font-weight:500;color:var(--ink)}
+.byline{font-size:11px;color:var(--accent-ink);background:var(--accent-bg);border-radius:999px;padding:1px 8px}
+
 footer{max-width:1200px;margin:0 auto;padding:18px 24px 28px;border-top:1px solid var(--line);font-size:12px;color:var(--faint);display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between}
 footer code{font-size:11.5px}
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13px;padding:8px 14px;border-radius:8px;max-width:min(560px,calc(100vw - 32px));display:none;z-index:20}
@@ -215,6 +237,7 @@ footer code{font-size:11.5px}
     <button class="btn" data-ui="open" title="Open a .sandhi.json file">Open</button>
     <button class="btn" data-cmd="story.save" title="Save this story as a .sandhi.json file">Save</button>
     <button class="btn" data-cmd="story.demo" title="Load the demo story from the explainer">The whistle</button>
+    <button class="btn" data-ui="read-open" title="Paste a story and let a model mark its structure">Read a story</button>
     <button class="btn" data-cmd="undo" id="undo">Undo</button>
     <button class="btn" data-cmd="redo" id="redo">Redo</button>
     <button class="btn" data-ui="help" aria-label="About sandhi and the tour" title="About and tour (?)">?</button>
@@ -258,7 +281,7 @@ footer code{font-size:11.5px}
 </main>
 
 <footer>
-  <span>Your story stays in this browser and in the files you save. No model runs in this version: the checks compare your own labels.</span>
+  <span>Your story stays in this browser and in the files you save. A model runs only when you ask it to read: Gemini Nano on this device, or Claude with your own key. The checks compare labels.</span>
   <span>Agent face: <code>window.sandhi</code> · <a href="https://assets.chiragpatnaik.com/how-stories-work">How stories work</a> · <a href="https://naklitechie.com">NakliTechie</a></span>
 </footer>
 <dialog id="splash" aria-labelledby="splash-h">
@@ -270,12 +293,31 @@ footer code{font-size:11.5px}
     <li><b>Joints and threads</b>Every beat joins the last with <i>therefore</i> or <i>but</i>. Whatever the story plants should pay off.</li>
     <li><b>Thirteen principles</b>What Aristotle, the Nāṭyaśāstra, Chekhov, Vonnegut and Pixar agree on, from <a href="https://assets.chiragpatnaik.com/how-stories-work" target="_blank" rel="noopener">How stories work</a>. The demo story, <i>The whistle</i>, uses all of them.</li>
   </ul>
-  <p class="sp-priv">Your story stays in this browser and in the files you save. No account, nothing sent anywhere.</p>
+  <p class="sp-priv">Your story stays in this browser and in the files you save. No account. Nothing leaves the page unless you choose Claude, with your own key, to read a story.</p>
   <div class="sp-actions">
     <button class="btn primary" data-ui="tour" autofocus>Take the tour</button>
     <button class="btn" data-ui="splash-close" id="splash-close">Explore The whistle</button>
     <button class="btn" data-cmd="story.new">Start a blank story</button>
   </div>
+</dialog>
+<dialog id="reader" aria-labelledby="reader-h">
+  <h2 id="reader-h">Read a story</h2>
+  <p class="intro">Paste a short story or a chapter. A model marks its beats, phases, turn, joints and threads. It never rewrites your prose: each beat is your own text, cut where the model's exact quote lands. You see the result before anything changes.</p>
+  <textarea id="read-text" placeholder="Paste the story here, or open a .txt or .md file" aria-label="Story text"></textarea>
+  <div class="rrow"><button class="btn" data-ui="read-file" type="button">Open a text file</button><span id="read-count">0 words</span><input type="file" id="read-file" accept=".txt,.md,text/plain,text/markdown" hidden></div>
+  <fieldset class="readers"><legend class="lab">Who reads it</legend>
+    <label><input type="radio" name="reader" value="nano"> Gemini Nano, on this device <span id="nano-state" class="faint"></span></label>
+    <label><input type="radio" name="reader" value="anthropic"> Claude, with your Anthropic key <span id="key-state" class="faint"></span></label>
+    <div id="anthropic-fields">
+      <input type="password" id="anthropic-key" placeholder="Anthropic API key" autocomplete="off" aria-label="Anthropic API key">
+      <label><input type="checkbox" id="key-remember"> remember on this device</label>
+      <label>model <input type="text" id="anthropic-model" aria-label="Claude model id" spellcheck="false"></label>
+    </div>
+  </fieldset>
+  <p id="read-privacy"></p>
+  <div id="read-progress" role="status"></div>
+  <div id="read-result"></div>
+  <div class="sp-actions" id="read-actions"><button class="btn primary" data-ui="read-run" type="button">Read it</button><button class="btn primary" data-ui="read-accept" type="button" hidden>Use this structure</button><button class="btn" data-cmd="read.discard" type="button" hidden>Discard</button><button class="btn" data-ui="read-close" type="button">Close</button></div>
 </dialog>
 <div id="toast" role="status"></div>
 
@@ -418,7 +460,7 @@ footer code{font-size:11.5px}
   function validateBeat(v, b, p, beatIds) {
     if (!v.obj(b, p)) return;
     v.keys(b, BEAT_KEYS, p); v.id(b.id, beatIds, `${p}.id`);
-    v.str(b.label, `${p}.label`, 200); v.str(b.text, `${p}.text`, 50000);
+    v.str(b.label, `${p}.label`, 200); v.str(b.text, `${p}.text`, 200000);
     v.oneOf(b.spine, SPINE_IDS, `${p}.spine`); v.oneOf(b.joint, JOINT_SET, `${p}.joint`, true);
     if (!Number.isInteger(b.fortune) || b.fortune < -5 || b.fortune > 5) v.e(`${p}.fortune`, 'must be an integer from -5 to 5');
     v.list(b.tags, PIDS, `${p}.tags`); v.list(b.marks, MARK_SET, `${p}.marks`);
@@ -538,8 +580,130 @@ footer code{font-size:11.5px}
       threads: [], notes: Object.fromEntries(d.PRINCIPLES.filter(p => p.story).map(p => [p.id, p.story])) };
   }
 
+  // ---- read mode, pure part (SPEC §3): prompts, schemas, quote anchoring, story assembly.
+  // The model never writes prose into the story: beats are the writer's own text, cut where the model's exact quotes land.
+  const en = (values) => ({ type: 'string', enum: values });
+  const obj = (properties) => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
+  const LABEL_PROPS = {
+    label: { type: 'string' }, spine: en(SPINE.map(x => x.id)), joint: en([...JOINTS, 'none']), fortune: { type: 'integer' },
+    marks: { type: 'array', items: en(MARKS) }, driver: en([...DRIVERS, 'none']), avastha: en([...AVASTHA.map(x => x.id), 'none']),
+    kis: en([...KIS.map(x => x.id), 'none']), tags: { type: 'array', items: en(PRINCIPLES.map(p => p.id)) }
+  };
+  const READ_SCHEMAS = {
+    whole: obj({ title: { type: 'string' }, beats: { type: 'array', items: obj({ start: { type: 'string' }, ...LABEL_PROPS }) },
+      threads: { type: 'array', items: obj({ label: { type: 'string' }, plant: { type: 'string' }, payoffs: { type: 'array', items: { type: 'string' } } }) } }),
+    scenes: obj({ scenes: { type: 'array', items: obj({ start: { type: 'string' }, summary: { type: 'string' }, fortune: { type: 'integer' },
+      introduces: { type: 'array', items: { type: 'string' } }, uses: { type: 'array', items: { type: 'string' } } }) } }),
+    labels: obj({ title: { type: 'string' }, beats: { type: 'array', items: obj({ scene: { type: 'integer' }, ...LABEL_PROPS }) },
+      threads: { type: 'array', items: obj({ label: { type: 'string' }, plant_scene: { type: 'integer' }, payoff_scenes: { type: 'array', items: { type: 'integer' } } }) } })
+  };
+  const GUIDE = [
+    'You read a story and mark its structure. You never rewrite or invent text. Every quote you give is copied exactly from the story.',
+    'A beat is one turn of events, not a paragraph. Story Spine stage of a beat: ' + SPINE.map(x => `${x.id} = "${x.name}"`).join('; ') + '. Setup is once and everyday, the inciting event is oneday, the chain of consequences is because, the resolution is until, the new normal is since.',
+    'joint = the word joining a beat to the one before it: therefore (it happens because of the previous beat), but (it happens despite it), and-then (it merely follows), none (the first beat, or setup).',
+    "fortune = the protagonist's fortune at the end of the beat, an integer from -5 (worst) to 5 (best), 0 neutral.",
+    'marks: turn = the beat where the story turns (at most one beat); low = the lowest point.',
+    "driver: luck = chance moves the beat; choice = the protagonist's own choice moves it; none = neither.",
+    'avastha (Natyashastra stage): ' + AVASTHA.map(x => `${x.id} = ${x.gloss}`).join('; ') + '; none if unclear.',
+    'kis (kishotenketsu part): ' + KIS.map(x => `${x.id} = ${x.gloss}`).join('; ') + '.',
+    'tags = the principles a beat serves, zero or more: ' + PRINCIPLES.map(p => `${p.id} = ${p.name}: ${p.line}`).join(' | '),
+    'Threads are things planted early that pay off later: an object, a line, a habit, a fact.'
+  ].join('\n');
+  const sceneLine = (x, k) => `Scene ${k + 1} (fortune ${x.fortune}): ${x.summary}${x.introduces.length ? ' Introduces: ' + x.introduces.join(', ') + '.' : ''}${x.uses.length ? ' Uses: ' + x.uses.join(', ') + '.' : ''}`;
+  const READ_PROMPTS = {
+    whole: (text) => ({ system: GUIDE, user: `Mark the structure of this story. Split it into beats in story order, usually 6 to 14. For each beat, "start" is the beat's first 6 to 12 words, copied exactly. For each thread, "plant" and every "payoffs" entry are exact quotes of 6 to 12 words.\n\nSTORY:\n${text}` }),
+    scenes: (chunk, i, n) => ({ system: GUIDE, user: `This is part ${i} of ${n} of a story. Split this part into scenes in order. For each scene: "start" = its first 6 to 12 words, copied exactly; "summary" = what happens, at most 30 words; "fortune" as defined; "introduces" = short names of things planted here that may matter later; "uses" = short names of earlier things that matter here.\n\nPART ${i}:\n${chunk}` }),
+    labels: (scenes) => ({ system: GUIDE, user: `Here is a whole story as numbered scene summaries. Label every scene as one beat ("scene" = its number). Choose the turn and the low point for the story as a whole. Link threads: for each thing planted in one scene and used in later scenes, give plant_scene and payoff_scenes.\n\n${scenes.map(sceneLine).join('\n')}` })
+  };
+
+  const FOLD = { '‘': "'", '’': "'", '‚': "'", '‛': "'", '′': "'", '“': '"', '”': '"', '„': '"', '‟': '"', '″': '"', '–': '-', '—': '-', '―': '-', '−': '-', '…': '...' };
+  // A folded copy of the text (quotes, dashes, case and whitespace normalised) and, per folded char, its index in the original.
+  function foldText(t) {
+    let out = '', space = false;
+    const map = [];
+    for (let i = 0; i < t.length; i++) {
+      const f = FOLD[t[i]] === undefined ? t[i] : FOLD[t[i]];
+      if (/\s/.test(f)) { if (!space && out) { out += ' '; map.push(i); } space = true; continue; }
+      space = false;
+      for (const ch of f.toLowerCase()) { out += ch; map.push(i); }
+    }
+    return { out, map };
+  }
+  // Folded index of an exact quote (or its first six words), searching from `from`; -1 when absent or too short to trust.
+  function findQuote(folded, quote, from) {
+    const q = foldText(String(quote || '')).out.replace(/^[\s"'.,;:!?-]+|[\s"'.,;:!?-]+$/g, '');
+    for (const t of [q, q.split(' ').slice(0, 6).join(' ')]) {
+      if (t.length < 12) continue;
+      let k = folded.out.indexOf(t, from || 0);
+      if (k < 0 && from) k = folded.out.indexOf(t);
+      if (k >= 0) return k;
+    }
+    return -1;
+  }
+  const pick = (v, set) => (set.has(v) ? v : null);
+  function coerceLabels(r) {
+    const f = Math.round(Number(r.fortune));
+    return { label: String(r.label || '').slice(0, 200), spine: SPINE_IDS.has(r.spine) ? r.spine : 'because', joint: pick(r.joint, JOINT_SET),
+      fortune: Number.isFinite(f) ? Math.max(-5, Math.min(5, f)) : 0, tags: [...new Set((r.tags || []).filter(t => PIDS.has(t)))],
+      marks: MARKS.filter(m => (r.marks || []).includes(m)), driver: pick(r.driver, DRIVER_SET), avastha: pick(r.avastha, AV_IDS), kis: pick(r.kis, KIS_IDS) };
+  }
+  // Paragraph-aligned chunks of at most maxChars (a paragraph longer than that becomes its own chunk).
+  function chunkText(text, maxChars) {
+    const out = [], re = /\n\s*\n/g;
+    let start = 0, last = 0, m;
+    const cut = (end) => { if (text.slice(start, end).trim()) out.push({ start, end }); start = end; };
+    while ((m = re.exec(text))) { if (m.index - start > maxChars && last > start) cut(last); last = m.index + m[0].length; }
+    if (text.length - start > maxChars && last > start) cut(last);
+    cut(text.length);
+    return out;
+  }
+  // anchors: [{pos, labels}] in any order -> story with beats cut at the anchors; threadsAt: [{label, plant: pos|null, payoffs: [pos]}]
+  function assemble(text, anchors, threadsAt, model, title) {
+    const a = anchors.toSorted((x, y) => x.pos - y.pos).filter((x, i, all) => i === 0 || x.pos !== all[i - 1].pos);
+    const beats = a.map((x, i) => ({ id: 'b' + (i + 1), ...x.labels, text: text.slice(i ? x.pos : 0, i + 1 < a.length ? a[i + 1].pos : text.length).trim(), drafts: [], by: 'model', model }));
+    if (beats.length) beats[0].joint = null;
+    const beatAt = (pos) => beats[Math.max(0, a.findLastIndex(x => x.pos <= pos))].id;
+    const threads = threadsAt.map((t, i) => {
+      const plant = t.plant === null ? null : beatAt(t.plant);
+      return { id: 't' + (i + 1), label: t.label.slice(0, 200) || `thread ${i + 1}`, plant, payoffs: [...new Set(t.payoffs.map(beatAt))].filter(b => b !== plant) };
+    }).filter(t => t.plant || t.payoffs.length);
+    return { sandhi: SCHEMA, title: String(title || 'Untitled').slice(0, 200), logline: '', belief: '', beats, threads, notes: {} };
+  }
+  function storyFromWhole(text, json, model) {
+    const folded = foldText(text), dropped = { beats: 0, quotes: 0 }, anchors = [];
+    const locate = (q) => { const k = findQuote(folded, q, 0); if (k < 0) dropped.quotes++; return k < 0 ? null : folded.map[k]; };
+    let from = 0;
+    for (const b of (json && json.beats) || []) {
+      const k = findQuote(folded, b.start, from);
+      if (k < 0) { dropped.beats++; continue; }
+      anchors.push({ pos: folded.map[k], labels: coerceLabels(b) }); from = k + 1;
+    }
+    const threads = ((json && json.threads) || []).map(t => ({ label: String(t.label || ''), plant: t.plant ? locate(t.plant) : null, payoffs: (t.payoffs || []).map(locate).filter(p => p !== null) }));
+    return { story: anchors.length ? assemble(text, anchors, threads, model, json.title) : null, dropped };
+  }
+  // pass 1 output (scenes from every chunk, in order) -> anchored scenes; unanchored scenes are dropped before pass 2 numbers them
+  function anchorScenes(text, scenes) {
+    const folded = foldText(text), out = [];
+    let from = 0, dropped = 0;
+    for (const x of scenes) {
+      const k = findQuote(folded, x.start, from);
+      if (k < 0) { dropped++; continue; }
+      out.push({ pos: folded.map[k], summary: String(x.summary || '').slice(0, 400), fortune: coerceLabels(x).fortune, introduces: (x.introduces || []).map(String), uses: (x.uses || []).map(String) });
+      from = k + 1;
+    }
+    return { scenes: out, dropped };
+  }
+  function storyFromLabels(text, scenes, json, model) {
+    const byScene = new Map(((json && json.beats) || []).map(b => [b.scene, b]));
+    const anchors = scenes.map((x, k) => ({ pos: x.pos, labels: coerceLabels(byScene.get(k + 1) || { fortune: x.fortune, label: '' }) }));
+    const at = (n) => (Number.isInteger(n) && n >= 1 && n <= scenes.length ? scenes[n - 1].pos : null);
+    const threads = ((json && json.threads) || []).map(t => ({ label: String(t.label || ''), plant: at(t.plant_scene), payoffs: (t.payoff_scenes || []).map(at).filter(p => p !== null) }));
+    return { story: scenes.length ? assemble(text, anchors, threads, model, json && json.title) : null, dropped: { beats: 0, quotes: 0, unlabelled: scenes.filter((x, k) => !byScene.has(k + 1)).length } };
+  }
+
   root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
-    seed: () => clone(SEED), validate, blankStory, newBeat, nextId, checks, arcMatch, coverage, toExplainer, fromExplainer, clone, wordCount, spineName };
+    seed: () => clone(SEED), validate, blankStory, newBeat, nextId, checks, arcMatch, coverage, toExplainer, fromExplainer, clone, wordCount, spineName,
+    READ_SCHEMAS, READ_PROMPTS, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels };
 })(globalThis);
 </script>
 
@@ -550,7 +714,7 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } }
 };
-const app = { story: null, undo: [], redo: [], dirty: false, focus: 'all', last: null, coalesce: null, coalesceAt: 0, journal: [], open: new Set() };
+const app = { story: null, undo: [], redo: [], dirty: false, focus: 'all', last: null, coalesce: null, coalesceAt: 0, journal: [], open: new Set(), proposal: null, reading: false };
 const ok = (data) => ({ ok: true, class: 'ok', data: data || {} });
 const fail = (cls, message, next, data) => ({ ok: false, class: cls, message, next, ...(data ? { data } : {}) });
 const S = () => app.story;
@@ -583,7 +747,8 @@ function statusData() {
   for (const x of list) classes[x.class] = (classes[x.class] || 0) + 1;
   return { version: VERSION, title: s.title, beats: s.beats.length, words: s.beats.reduce((n, b) => n + C.wordCount(b.text), 0), threads: s.threads.length,
     checks: { count: list.length, classes }, arc: a.best ? { best: a.best, name: a.name, r: a.r } : { best: null, reason: a.reason },
-    focus: app.focus, dirty: app.dirty, undo: app.undo.length, redo: app.redo.length, last: app.last };
+    focus: app.focus, dirty: app.dirty, undo: app.undo.length, redo: app.redo.length, last: app.last,
+    read: { reading: app.reading, proposal: app.proposal ? { beats: app.proposal.report.beats, model: app.proposal.report.model } : null } };
 }
 const BEAT_PATCH_SCHEMA = { type: 'object', properties: {
   label: { type: 'string' }, spine: { enum: C.SPINE.map(x => x.id) }, joint: { enum: [...C.JOINTS, null] }, text: { type: 'string' },
@@ -591,6 +756,123 @@ const BEAT_PATCH_SCHEMA = { type: 'object', properties: {
   marks: { type: 'array', items: { enum: C.MARKS } }, driver: { enum: [...C.DRIVERS, null] }, avastha: { enum: [...C.AVASTHA.map(x => x.id), null] },
   kis: { enum: [...C.KIS.map(x => x.id), null] }, drafts: { type: 'array', items: { type: 'object', properties: { n: { type: 'integer' }, text: { type: 'string' }, note: { type: 'string' } } } } } };
 const NONE = { type: 'object', properties: {} };
+
+// ---- readers (L5): Gemini Nano on the device by default, Claude with the writer's own key. A reader only proposes.
+const RKEY = 'sandhi:reader', AKEY = 'sandhi:anthropic-key', DEFAULT_MODEL = 'claude-opus-5-5';
+const rcfg = (() => { try { return { reader: null, model: DEFAULT_MODEL, ...JSON.parse(store.get(RKEY) || '{}') }; } catch { return { reader: null, model: DEFAULT_MODEL }; } })();
+let anthropicKey = store.get(AKEY) || '';
+const readerFail = (cls, message, next) => Object.assign(new Error(message), { cls, next });
+const LM_OPTS = { expectedInputs: [{ type: 'text', languages: ['en'] }], expectedOutputs: [{ type: 'text', languages: ['en'] }] };
+const NANO_STATES = { available: 'ready', 'readily-available': 'ready', readily: 'ready', downloadable: 'download', 'after-download': 'download', downloading: 'downloading' };
+const nano = {
+  id: 'nano', model: 'gemini-nano',
+  async state() {
+    const LM = globalThis.LanguageModel;
+    if (!LM || !LM.availability) return 'absent';
+    try { return NANO_STATES[await LM.availability(LM_OPTS)] || 'absent'; } catch { return 'absent'; }
+  },
+  async open(progress) {
+    if ((await nano.state()) === 'absent') throw readerFail('no_reader', 'Gemini Nano is not available in this browser.', 'Use desktop Chrome 138 or later with about 22 GB free, or choose Claude with your key.');
+    let base;
+    try { base = await globalThis.LanguageModel.create({ ...LM_OPTS, monitor(m) { m.addEventListener('downloadprogress', e => progress(`Downloading Gemini Nano… ${Math.round(e.loaded * 100)}%`)); } }); }
+    catch (e) { throw readerFail('no_reader', `Gemini Nano did not start (${e.message}).`, 'Click Read it in the page once: the first download needs a click. Or choose Claude with your key.'); }
+    const window = base.contextWindow || base.inputQuota || 6144, f = base.measureContextUsage || base.measureInputUsage || base.countPromptTokens;
+    if (window - 1600 < 1200) { base.destroy(); throw readerFail('no_reader', `Gemini Nano in this browser holds ${window} tokens, too few for the reading instructions.`, 'Choose Claude with your key.'); }
+    const measure = async (t) => { try { if (f) return await f.call(base, t); } catch { /* a character estimate below */ } return Math.ceil(t.length / 4); };
+    return { model: nano.model, maxInput: window - 1600, charsPerToken: 4, measure, run: nanoRun, close: () => base.destroy() };
+  }
+};
+async function nanoRun({ system, user }, schema) {
+  const s = await globalThis.LanguageModel.create({ ...LM_OPTS, initialPrompts: [{ role: 'system', content: system }] });
+  let text;
+  try { text = await s.prompt(user, { responseConstraint: schema, omitResponseConstraintInput: true }); }
+  catch (e) { throw e.name === 'QuotaExceededError' ? readerFail('too_long', 'That part is too long for Gemini Nano.', 'Choose Claude with your key, or read a shorter part.') : readerFail('reader_error', `Gemini Nano failed: ${e.message}`, 'Try again, or choose Claude with your key.'); }
+  finally { s.destroy(); }
+  return { json: parseJson(text), model: nano.model };
+}
+const parseJson = (text) => { try { return JSON.parse(text); } catch { throw readerFail('reader_error', 'The model returned text that is not JSON.', 'Try again; if it repeats, try the other reader.'); } };
+const anthropic = {
+  id: 'anthropic',
+  async state() { return anthropicKey ? 'ready' : 'nokey'; },
+  async open() {
+    if (!anthropicKey) throw readerFail('no_reader', 'No Anthropic key is set.', 'In Read a story, choose Claude and paste your key.');
+    const model = rcfg.model || DEFAULT_MODEL;
+    return { model, maxInput: 150000, charsPerToken: 3.5, measure: async (t) => Math.ceil(t.length / 3.5), run: (p, schema) => anthropicCall(model, p, schema), close() { /* nothing held open */ } };
+  }
+};
+// Raw fetch, not the SDK: sandhi is one static file that loads nothing from third parties (SPEC §3).
+async function anthropicCall(model, { system, user }, schema) {
+  const body = { model, max_tokens: 16000, system, messages: [{ role: 'user', content: user }], output_config: { format: { type: 'json_schema', schema } } };
+  const headers = { 'content-type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+  if (/^claude-(opus|fable|sonnet-5)/.test(model)) body.output_config.effort = 'medium';
+  if (/^claude-(opus-5|fable-5|sonnet-5-5)/.test(model)) { body.fallbacks = 'default'; headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'; }
+  let res;
+  try { res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers, body: JSON.stringify(body) }); }
+  catch (e) { throw readerFail('reader_error', `Could not reach api.anthropic.com (${e.message}).`, 'Check the connection, then try again.'); }
+  const out = await res.json().catch(() => ({}));
+  apiStatus(res.status, out);
+  if (out.stop_reason === 'refusal') throw readerFail('refused', 'The model declined to read this text.', 'Try the other reader, or a different part of the story.');
+  if (out.stop_reason === 'max_tokens') throw readerFail('too_long', 'The answer was cut off before it finished.', 'Read a shorter part of the story.');
+  return { json: parseJson((out.content || []).filter(b => b.type === 'text').map(b => b.text).join('')), model: out.model || model };
+}
+function apiStatus(status, out) {
+  const msg = (out.error && out.error.message) || `HTTP ${status}`;
+  if (status === 401 || status === 403) throw readerFail('key_rejected', `Anthropic rejected the key: ${msg}`, 'Check the key in Read a story, then try again.');
+  if (status === 429 || status === 529) throw readerFail('rate_limited', `Anthropic is busy or rate-limited: ${msg}`, 'Wait a minute, then try again.');
+  if (status < 200 || status >= 300) throw readerFail('reader_error', `Anthropic returned ${status}: ${msg}`, 'Check the model name in Read a story.');
+}
+const READERS = { nano, anthropic };
+async function readerStatus() {
+  const n = await nano.state(), a = await anthropic.state();
+  const chosen = rcfg.reader || (n === 'absent' && a === 'ready' ? 'anthropic' : 'nano');
+  return { reader: chosen, nano: n, anthropic: { key: a === 'ready', model: rcfg.model }, where: chosen === 'nano' ? 'this device' : 'Anthropic' };
+}
+// whole story in one call when it fits; otherwise scenes per part, then one call over all scene summaries (SPEC §3)
+async function readText(text, reader, progress) {
+  const r = await reader.open(progress);
+  try {
+    const whole = C.READ_PROMPTS.whole(text);
+    if (await r.measure(whole.system + '\n' + whole.user) > r.maxInput) return await readInParts(text, r, progress);
+    progress(`Reading the whole story with ${r.model}…`);
+    const out = await r.run(whole, C.READ_SCHEMAS.whole);
+    return { ...C.storyFromWhole(text, out.json, out.model), mode: 'whole', calls: 1, model: out.model };
+  } finally { r.close(); }
+}
+async function readInParts(text, r, progress) {
+  const empty = C.READ_PROMPTS.scenes('', 1, 1), room = r.maxInput - await r.measure(empty.system + '\n' + empty.user);
+  if (room < 300) throw readerFail('too_long', `${r.model} has no room left for the story after the instructions.`, 'Choose Claude with your key.');
+  const chunks = C.chunkText(text, Math.floor(room * r.charsPerToken * 0.85)), all = [];
+  for (let i = 0; i < chunks.length; i++) {
+    progress(`Reading part ${i + 1} of ${chunks.length} with ${r.model}…`);
+    const out = await r.run(C.READ_PROMPTS.scenes(text.slice(chunks[i].start, chunks[i].end), i + 1, chunks.length), C.READ_SCHEMAS.scenes);
+    all.push(...((out.json && out.json.scenes) || []));
+  }
+  const { scenes, dropped } = C.anchorScenes(text, all);
+  if (!scenes.length) return { story: null, dropped: { beats: dropped, quotes: 0 }, mode: 'two-pass', calls: chunks.length, model: r.model };
+  const lp = C.READ_PROMPTS.labels(scenes);
+  if (await r.measure(lp.system + '\n' + lp.user) > r.maxInput) throw readerFail('too_long', `An outline of ${scenes.length} scenes is too long for ${r.model} to read at once.`, 'Choose Claude with your key, or read the story a part at a time.');
+  progress(`Reading the whole story in outline: ${scenes.length} scenes…`);
+  const out = await r.run(lp, C.READ_SCHEMAS.labels), res = C.storyFromLabels(text, scenes, out.json, out.model);
+  return { ...res, dropped: { ...res.dropped, beats: res.dropped.beats + dropped }, mode: 'two-pass', calls: chunks.length + 1, model: out.model };
+}
+let readProgress = () => { /* the dialog replaces this while it is open */ };
+async function runRead(a) {
+  const text = String(a.text || ''), words = C.wordCount(text), id = a.reader || (await readerStatus()).reader;
+  if (words < 50) return fail('invalid', `${words} words is too short to have a structure.`, 'Pass the story itself, at least 50 words.');
+  if (!READERS[id]) return fail('invalid', `no reader ${id}`, 'Use "nano" or "anthropic".');
+  if (app.reading) return fail('busy', 'A read is already running.', 'Wait for it to finish, then call read.get.');
+  app.reading = true; const t0 = performance.now();
+  try {
+    const r = await readText(text, READERS[id], (m) => readProgress(m));
+    if (!r.story) return fail('nothing_found', 'None of the model\'s beat quotes matched the text.', 'Check the text is the story itself, then try again or try the other reader.', { dropped: r.dropped });
+    const v = C.validate(r.story);
+    if (!v.ok) return fail('internal', 'The proposal failed schema sandhi:1.', 'Report it with the journal; the story is unchanged.', { errors: v.errors.slice(0, 10) });
+    const a2 = C.arcMatch(r.story);
+    app.proposal = { story: r.story, report: { reader: id, model: r.model, mode: r.mode, calls: r.calls, words, beats: r.story.beats.length, threads: r.story.threads.length, dropped: r.dropped, arc: a2.best, ms: Math.round(performance.now() - t0) } };
+    return ok(app.proposal.report);
+  } catch (e) { return e.cls ? fail(e.cls, e.message, e.next) : fail('reader_error', String(e && e.message || e), 'Try again, or try the other reader.'); }
+  finally { app.reading = false; }
+}
 
 // ---- the manifest: every UI command is one of these (SPEC §0). handler(args, door) -> envelope
 const TOOLS = [
@@ -642,6 +924,7 @@ const TOOLS = [
       const n = C.clone(S()), b = n.beats.find(x => x.id === a.id);
       if (!b) return noBeat(a.id);
       Object.assign(b, C.clone(a.patch));
+      if (Object.keys(a.patch).some(k => k !== 'text' && k !== 'drafts')) { b.by = 'writer'; delete b.model; }
       if (Array.isArray(b.marks)) b.marks = C.MARKS.filter(m => b.marks.includes(m)).concat(b.marks.filter(m => !C.MARKS.includes(m)));
       return commit(n, `beat.update:${a.id}:${Object.keys(a.patch).toSorted().join(',')}`) || ok({ id: a.id, position: posOf(a.id) + 1 });
     } },
@@ -712,7 +995,36 @@ const TOOLS = [
       return ok({ undo: app.undo.length, redo: app.redo.length });
     } },
   { name: 'journal', description: 'The last n tool calls (default 20, max 200): tool, class, door, ms, time. The trajectory across sessions.', inputSchema: { type: 'object', properties: { n: { type: 'integer', minimum: 1, maximum: 200 } } },
-    handler: async (a) => ok({ entries: app.journal.slice(-Math.min(200, Math.max(1, a.n || 20))) }) }
+    handler: async (a) => ok({ entries: app.journal.slice(-Math.min(200, Math.max(1, a.n || 20))) }) },
+  { name: 'reader.status', description: 'Who can read a story here: Gemini Nano (ready / download / downloading / absent), whether an Anthropic key is set (never the key itself), the chosen reader and model.', inputSchema: NONE,
+    handler: async () => ok(await readerStatus()) },
+  { name: 'reader.select', description: 'Choose who reads: "nano" (on this device) or "anthropic" (your key; the story goes to Anthropic). Optional model id for anthropic.', mutating: true,
+    inputSchema: { type: 'object', properties: { reader: { enum: ['nano', 'anthropic'] }, model: { type: 'string' } }, required: ['reader'] },
+    handler: async (a) => {
+      if (!READERS[a.reader]) return fail('invalid', `no reader ${a.reader}`, 'Use "nano" or "anthropic".');
+      rcfg.reader = a.reader; if (a.model) rcfg.model = a.model.trim();
+      store.set(RKEY, JSON.stringify(rcfg)); return ok(await readerStatus());
+    } },
+  { name: 'reader.key', description: 'Set or clear the Anthropic API key. Person-only: the writer types the key into the page; agents never handle it.', mutating: true, personOnly: true,
+    inputSchema: { type: 'object', properties: { key: { type: 'string' }, remember: { type: 'boolean' } }, required: ['key'] },
+    handler: async (a) => {
+      anthropicKey = String(a.key || '').trim();
+      if (a.remember && anthropicKey) store.set(AKEY, anthropicKey); else try { localStorage.removeItem(AKEY); } catch { /* nothing stored */ }
+      return ok({ key: !!anthropicKey, remembered: !!(a.remember && anthropicKey) });
+    } },
+  { name: 'read.run', description: "Read a story (prose) with the chosen reader and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline.",
+    inputSchema: { type: 'object', properties: { text: { type: 'string' }, reader: { enum: ['nano', 'anthropic'] } }, required: ['text'] },
+    handler: async (a) => runRead(a) },
+  { name: 'read.get', description: 'The staged proposal: the proposed story (schema sandhi:1) and the read report.', inputSchema: NONE,
+    handler: async () => (app.proposal ? ok(C.clone(app.proposal)) : fail('no_proposal', 'nothing is staged', 'Call read.run first.')) },
+  { name: 'read.accept', description: 'Replace the story with the staged proposal. Person-only: the writer decides what enters the story. Undo brings the old story back.', mutating: true, personOnly: true, inputSchema: NONE,
+    handler: async () => {
+      if (!app.proposal) return fail('no_proposal', 'nothing is staged', 'Call read.run first.');
+      const r = commit(C.clone(app.proposal.story), null); if (r) return r;
+      const report = app.proposal.report; app.proposal = null; return ok(report);
+    } },
+  { name: 'read.discard', description: 'Drop the staged proposal. The story is unchanged.', inputSchema: NONE,
+    handler: async () => { const had = !!app.proposal; app.proposal = null; return ok({ discarded: had }); } }
 ];
 const tools = Object.fromEntries(TOOLS.map(t => [t.name, t]));
 
@@ -722,6 +1034,7 @@ const bus = {
     door = door || 'ui';
     const t = tools[name];
     if (!t) { const env = fail('unknown_tool', `no tool ${name}`, 'Read window.sandhi.manifest for the tool names.'); journalAppend({ at: new Date().toISOString(), tool: name, class: env.class, door, ms: 0 }); return env; }
+    if (t.personOnly && door !== 'ui') { const env = fail('person_only', `${name} is person-only`, 'Ask the writer to do it in the page.'); journalAppend({ at: new Date().toISOString(), tool: name, class: env.class, door, ms: 0 }); return env; }
     const t0 = performance.now(); let env;
     try { env = await t.handler(args || {}, door); }
     catch (e) { env = fail('internal', String(e && e.message || e), 'Report it with the journal; the story is unchanged.'); }
@@ -734,11 +1047,11 @@ const bus = {
 };
 
 // ---- agent face: window.sandhi always, navigator.modelContext where present (Build Doctrine, two doors)
-const manifest = TOOLS.map(({ name, description, inputSchema, mutating }) => ({ name, description, inputSchema, mutating: !!mutating, reversible: !!mutating, personOnly: false }));
+const manifest = TOOLS.map(({ name, description, inputSchema, mutating, personOnly }) => ({ name, description, inputSchema, mutating: !!mutating, reversible: !!mutating && !personOnly && name !== 'reader.select', personOnly: !!personOnly }));
 let bootResolve; const ready = new Promise(r => { bootResolve = r; });
 window.sandhi = { version: VERSION, manifest, tools: Object.fromEntries(TOOLS.map(t => [t.name, (args) => bus.dispatch(t.name, args, 'window')])), status: () => bus.dispatch('status', {}, 'window'), ready };
 if (navigator.modelContext && navigator.modelContext.registerTool) {
-  for (const t of TOOLS) try { navigator.modelContext.registerTool({ name: 'sandhi.' + t.name, description: t.description, inputSchema: t.inputSchema, execute: (args) => bus.dispatch(t.name, args, 'modelContext') }); } catch { /* one bad registration must not block the rest */ }
+  for (const t of TOOLS.filter(x => !x.personOnly)) try { navigator.modelContext.registerTool({ name: 'sandhi.' + t.name, description: t.description, inputSchema: t.inputSchema, execute: (args) => bus.dispatch(t.name, args, 'modelContext') }); } catch { /* one bad registration must not block the rest */ }
 }
 
 // ---- UI
@@ -757,6 +1070,7 @@ function toast(msg, next) {
 function afterDispatch(name, args, door, env, t) {
   if (!env.ok) { if (door === 'ui') toast(env.message, env.next); return; }
   if (name === 'view.focus') { renderAll(); return; }
+  if (name === 'read.discard') { renderProposal(); return; }
   if (!t.mutating && name !== 'story.save') return;
   const keys = args.patch ? Object.keys(args.patch) : [];
   if (door === 'ui' && name === 'beat.update' && keys.length && keys.every(k => k === 'text' || k === 'label')) renderViews();
@@ -872,6 +1186,7 @@ function beatCard(b, i, s) {
   return `${jointHtml(b, i)}<article class="card beat${on ? '' : ' dim'}${hit ? ' hit' : ''}" id="beat-${id}" data-id="${id}">
     <div class="bhead">
       <span class="bnum">${P}</span>
+      ${b.by === 'model' ? `<span class="byline" title="Labels proposed by ${esc(b.model || 'a model')}. Change any label to make them yours.">read by ${esc(b.model || 'a model')}</span>` : ''}
       <input class="blabel" data-beat="${id}" data-field="label" value="${esc(b.label)}" placeholder="${esc(C.spineName(b.spine))}" aria-label="Label for beat ${P}" maxlength="200">
       <select class="sel" data-beat="${id}" data-field="spine" aria-label="Story Spine stage of beat ${P}">${opts(C.SPINE, b.spine)}</select>
       ${markBtn(b, 'turn', 'turn')}${markBtn(b, 'low', 'low point')}
@@ -973,8 +1288,9 @@ document.addEventListener('change', (e) => {
   else if (d.sfield) ui('story.update', { [d.sfield]: el.value });
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
-function onUiControl(u) {
+function onUiControl(u, e) {
   const kind = u.dataset.ui;
+  if (kind.startsWith('read-')) { onReadControl(kind, e); return; }
   if (kind === 'help') { openSplash(false); return; }
   if (kind === 'tour') { startTour(); return; }
   if (kind === 'splash-close') { splash.close(); return; }
@@ -990,7 +1306,7 @@ document.addEventListener('click', (e) => {
   const c = e.target.closest('[data-cmd]');
   if (c) { flushPending(); const m = c.closest('details.menu'); if (m) m.open = false; if (c.closest('#splash')) splash.close(); ui(c.dataset.cmd, c.dataset.args ? JSON.parse(c.dataset.args) : {}); return; }
   const u = e.target.closest('[data-ui]');
-  if (u) { onUiControl(u); return; }
+  if (u) { onUiControl(u, e); return; }
   const g = e.target.closest('[data-goto]');
   if (g && g.dataset.goto) goBeat(g.dataset.goto);
 });
@@ -1056,6 +1372,61 @@ document.addEventListener('keydown', (e) => {
 let lastW = 0;
 new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width); if (w && w !== lastW) { lastW = w; requestAnimationFrame(renderChart); } }).observe($('#chart'));
 
+// ---- the read dialog: paste, choose a reader, read, review, then use or discard (read.accept is person-only)
+const reader = $('#reader');
+function readerPrivacy(st) {
+  $('#read-privacy').textContent = st.reader === 'nano' ? 'Gemini Nano runs inside Chrome on this device. The story does not leave it.'
+    : `The story is sent from this tab to Anthropic (api.anthropic.com) with your key, read by ${st.anthropic.model}, and billed to your account.`;
+}
+const NANO_TEXT = { ready: 'ready', download: 'downloads once, about 22 GB free disk needed', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
+async function renderReader() {
+  const st = await readerStatus();
+  for (const r of reader.querySelectorAll('input[name=reader]')) r.checked = r.value === st.reader;
+  $('#nano-state').textContent = '· ' + NANO_TEXT[st.nano];
+  $('#key-state').textContent = st.anthropic.key ? '· key set' : '· no key yet';
+  $('#anthropic-fields').hidden = st.reader !== 'anthropic';
+  if (document.activeElement !== $('#anthropic-model')) $('#anthropic-model').value = st.anthropic.model;
+  readerPrivacy(st);
+}
+function renderProposal() {
+  const box = $('#read-result'), p = app.proposal, run = $('#read-actions [data-ui="read-run"]');
+  $('#read-actions [data-ui="read-accept"]').hidden = !p; $('#read-actions [data-cmd="read.discard"]').hidden = !p;
+  run.textContent = p ? 'Read again' : 'Read it'; run.classList.toggle('primary', !p);
+  if (!p) { box.innerHTML = ''; return; }
+  const r = p.report, drop = r.dropped.beats + r.dropped.quotes;
+  const arc = C.ARCS.find(x => x.id === r.arc);
+  box.innerHTML = `<p class="sum"><b>${r.beats} beats, ${r.threads} threads</b> from ${r.words} words, read by ${esc(r.model)} (${r.mode === 'whole' ? 'whole story' : `${r.calls - 1} parts, then the outline`}).${arc ? ` Closest shape: ${esc(arc.name)}.` : ''}${drop ? ` ${drop} quote${drop > 1 ? 's' : ''} did not match the text and ${drop > 1 ? 'were' : 'was'} dropped.` : ''}</p>
+    <ol>${p.story.beats.map(b => `<li><b>${esc(b.label || C.spineName(b.spine))}</b>${b.label && b.label !== C.spineName(b.spine) ? ' · ' + esc(C.spineName(b.spine)) : ''} · fortune ${fmtF(b.fortune)}${b.marks.length ? ' · ' + b.marks.map(m => (m === 'low' ? 'low point' : m)).join(', ') : ''} — ${esc(snip(b.text, 80))}</li>`).join('')}</ol>
+`;
+}
+async function openReader() { $('#read-progress').textContent = ''; renderProposal(); await renderReader(); if (!reader.open) reader.showModal(); $('#read-text').focus(); }
+readProgress = (m) => { $('#read-progress').textContent = m; };
+const countWords = () => { $('#read-count').textContent = `${C.wordCount($('#read-text').value)} words`; };
+$('#read-text').addEventListener('input', countWords);
+$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) { $('#read-text').value = await f.text(); countWords(); } });
+reader.addEventListener('change', async (e) => {
+  const el = e.target;
+  if (el.name === 'reader') await ui('reader.select', { reader: el.value });
+  else if (el.id === 'anthropic-model') await ui('reader.select', { reader: 'anthropic', model: el.value || DEFAULT_MODEL });
+  else if (el.id === 'anthropic-key' || el.id === 'key-remember') await ui('reader.key', { key: $('#anthropic-key').value, remember: $('#key-remember').checked });
+  renderReader();
+});
+async function onReadControl(kind, e) {
+  if (kind === 'read-open') return openReader();
+  if (kind === 'read-close') return reader.close();
+  if (kind === 'read-file') return $('#read-file').click();
+  if (kind === 'read-run') {
+    $('#read-result').innerHTML = ''; readProgress('Starting…');
+    const r = await ui('read.run', { text: $('#read-text').value });
+    readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal(); return renderReader();
+  }
+  if (kind === 'read-accept' && e.isTrusted) {   // person-only: a real click, never a scripted one
+    const r = await ui('read.accept', {});
+    if (r.ok) { reader.close(); toast(`Read by ${r.data.model}: ${r.data.beats} beats.`, 'Undo brings your previous story back.'); }
+  }
+  return null;
+}
+
 // ---- splash and tour: first visit only; `?` brings both back (Slate's first-run pattern)
 const SEEN = 'sandhi:intro-seen';
 const TOUR = [
@@ -1065,6 +1436,7 @@ const TOUR = [
   { target: '#checks', title: 'Checks', body: 'sandhi compares your labels: empty beats, slack joints, plants that never fire, luck after the turn. Each check names the next step.' },
   { target: '#threads', title: 'Plants and payoffs', body: "Chekhov's gun, the Nāṭyaśāstra's seed. Name what the story plants, where, and where it pays off." },
   { target: '#coverage', title: 'Thirteen principles', body: 'Tap a dot to tag a beat with a principle. Tap a name to read what the masters said, and note how it works in your story.' },
+  { target: '[data-ui="read-open"]', title: 'Read a story', body: 'Paste a story you have written. Gemini Nano on this device, or Claude with your own key, marks its beats, phases, turn and threads in your own words. You decide whether to use it.' },
   { target: '.actions', title: 'Your story, your file', body: 'It autosaves in this browser. Save writes a .sandhi.json file; Open, or drop one on the page, reads it back. Press ? to see all this again.' }
 ];
 const splash = $('#splash');
