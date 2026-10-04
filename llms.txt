@@ -1,0 +1,19 @@
+# sandhi
+
+> Any AI you choose marks your story's structure, in your own words. It never writes a sentence. One static file, no account.
+
+sandhi is a single-page tool for writers at https://sandhi.naklitechie.com. You write a story on the Story Spine (beats with a fortune, phase, joint word and the principles each serves), or paste prose and let a model you choose mark its beats, turn, low point, joints and threads. The model only labels; every beat is the writer's own text, cut where the model's exact quote lands. Checks compare labels: empty or idle beats, slack joints ("and then"), plants that never pay off, payoffs with no plant, luck after the turn.
+
+## Agent face
+- `window.sandhi` (and `navigator.modelContext` tools named `sandhi.<tool>` where the browser has it): 30 tools over one command bus. Start with `status`. Mutations are undoable. `read.accept` and `reader.key` are person-only.
+- Outcome envelope: `{ok, class, data?, message?, next?}`; classes are a closed list (see SPEC.md §0).
+
+## Readers (the AI ladder)
+- A model server on this machine: Ollama (127.0.0.1:11434) or LM Studio (127.0.0.1:1234).
+- Gemini Nano in Chrome (Prompt API); a preview, below the quality floor in tests.
+- The writer's provider and key: OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral, DeepSeek, Together, or any OpenAI-compatible URL. Keys stay in the browser's IndexedDB.
+
+## Docs
+- [README](https://github.com/NakliTechie/sandhi/blob/main/README.md)
+- [SPEC.md](https://github.com/NakliTechie/sandhi/blob/main/SPEC.md): agent contract, story schema, checks, readers, gates
+- [How stories work](https://assets.chiragpatnaik.com/how-stories-work): the explainer the principles come from

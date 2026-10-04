@@ -1,0 +1,25 @@
+{
+ "title": "The Diamond Necklace",
+ "author": "Guy de Maupassant (1884), anonymous translation",
+ "source": "Project Gutenberg #3080",
+ "turn": [
+  "my necklace was paste",
+  "She no longer had the necklace around her neck"
+ ],
+ "low": [
+  "knew the horrible existence of the needy"
+ ],
+ "threads": [
+  {
+   "label": "the borrowed necklace",
+   "plant": "a superb diamond necklace",
+   "payoff": "my necklace was paste"
+  },
+  {
+   "label": "the rich friend",
+   "plant": "a former schoolmate at the convent",
+   "payoff": "Madame Forestier, deeply moved, took her hands"
+  }
+ ],
+ "note": "Hand labels by Claude (sandhi session, 2026-10-04): one editorial reading, kept small (turn, low point, two threads) so it can be checked by eye."
+}

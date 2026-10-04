@@ -1,0 +1,22 @@
+{
+ "title": "The Cask of Amontillado",
+ "author": "Edgar Allan Poe (1846)",
+ "source": "Project Gutenberg #1063",
+ "turn": [
+  "fettered him to the granite"
+ ],
+ "low": [],
+ "threads": [
+  {
+   "label": "the trowel",
+   "plant": "producing a trowel from beneath the folds of my",
+   "payoff": "I began vigorously to wall up the entrance of the niche"
+  },
+  {
+   "label": "the Amontillado",
+   "plant": "a pipe of what passes for Amontillado",
+   "payoff": "The Amontillado!"
+  }
+ ],
+ "note": "Hand labels by Claude (sandhi session, 2026-10-04): one editorial reading, kept small (turn, low point, two threads) so it can be checked by eye."
+}

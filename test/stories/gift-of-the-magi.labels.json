@@ -1,0 +1,23 @@
+{
+ "title": "The Gift of the Magi",
+ "author": "O. Henry (1905)",
+ "source": "Project Gutenberg #7256",
+ "turn": [
+  "For there lay The Combs",
+  "I sold the watch to get the money to buy your combs"
+ ],
+ "low": [],
+ "threads": [
+  {
+   "label": "Della's hair",
+   "plant": "rippling and shining like a cascade of brown waters",
+   "payoff": "For there lay The Combs"
+  },
+  {
+   "label": "Jim's watch",
+   "plant": "gold watch that had been his father",
+   "payoff": "I sold the watch to get the money to buy your combs"
+  }
+ ],
+ "note": "Hand labels by Claude (sandhi session, 2026-10-04): one editorial reading, kept small (turn, low point, two threads) so it can be checked by eye."
+}

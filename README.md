@@ -1,65 +1,68 @@
-# sandhi
+<h1 align="center">sandhi</h1>
 
-> Write a story on its spine, or paste one in, and see it through thirteen principles the masters keep rediscovering. The model reads the story and asks; the writer decides.
+<p align="center"><b>Any AI you choose marks your story's structure, in your own words. It never writes a sentence.</b></p>
 
-*Sandhi* is the Nāṭyaśāstra's word for the joints that join a play's action, like the joints of a limb. This tool checks the joints.
+<p align="center">One HTML file in your browser. No account, no server of ours, no telemetry.</p>
 
-Live: https://sandhi.naklitechie.com
+<p align="center">
+  <img alt="one file" src="https://img.shields.io/badge/one-file-BA7517?style=flat-square">
+  <img alt="account: none" src="https://img.shields.io/badge/account-none-BA7517?style=flat-square">
+  <img alt="writes prose: never" src="https://img.shields.io/badge/writes%20prose-never-BA7517?style=flat-square">
+</p>
+
+<p align="center"><img src="marketing/hero.png" width="880" alt="sandhi showing the demo story The whistle: a fortune line across ten beats, each beat's phase in three traditions, the closest of six story shapes, and the checks panel"></p>
 
 ## Install
 
-Open https://sandhi.naklitechie.com. Or download [`index.html`](index.html) and open it from disk: one file, no build step, no account, nothing fetched.
+| Where | How |
+|---|---|
+| Any desktop browser | Open [sandhi.naklitechie.com](https://sandhi.naklitechie.com) |
+| From source | `git clone https://github.com/NakliTechie/sandhi && open sandhi/index.html` |
 
-Your story autosaves in the browser. **Save** writes a `.sandhi.json` file; **Open** (or drag the file onto the page) reads it back.
+It opens on *The whistle*, a ten-beat demo story, with a short tour. Move a beat's fortune, name the word that joins two beats, tag a principle, and the chart and the checks follow. **New** starts a blank Story Spine; **Read a story** takes one you have written. An agent drives the same page:
 
-**Status (v0.2):** write mode, and read mode. In write mode you label beats, joints, fortune, phases and threads; sandhi draws the views and runs the checks on those labels. In read mode (**Read a story**) a model on your machine, Gemini Nano in Chrome, or your own provider marks a pasted story's structure; you review it before it replaces anything. Proposals and questions while you write are Batch C in `plan/`.
+```js
+await window.sandhi.status()   // title, counts, checks by class, closest arc, undo depth
+```
 
-Tests: `cd test && npm install && npm test` (core, ladder, parity, face + cold-load timing). Agent face: `window.sandhi` (29 tools, see [`SPEC.md`](SPEC.md) §0).
+Nothing to install, no account. Your story autosaves in this browser, and **Save** writes a `.sandhi.json` file.
 
-## What it does
+## Why
 
-One story model, two ways in:
+You can feel the middle of your story sag, but not where. The advice says every scene should turn, what you plant should pay off, the hero should earn the ending. Your draft is too close to see whether it does.
 
-- **Write.** Start from the Story Spine (*once upon a time… every day… one day… because of that… until finally*). Fill the beats you know and label each joint. The model reads the story so far, proposes options for empty beats, asks the principle questions and suggests plants for your payoffs. You pick or write your own.
-- **Read.** Paste a short story or a chapter. The model reads it and places each beat in its phase, finds the turn, scores fortune, judges each joint and links plants to payoffs. Full manuscripts come later.
+sandhi lays the story on its spine and shows its joints. Each beat has a fortune, a phase in three traditions (Story Spine, the Nāṭyaśāstra's five stages, kishōtenketsu), the word that joins it to the last (*therefore*, *but*, or a slack *and then*), and what it plants or pays off. The thirteen principles come from [How stories work](https://assets.chiragpatnaik.com/how-stories-work), which also shows where the masters disagree. *Sandhi* is the Nāṭyaśāstra's word for those joints.
 
-Where it is going: a story creator for short stories and novels. You keep adding plot elements and *tidbits*, the real-life observations that give a story life (a curious train stop; meat kept too long gets freezer burn). The AI keeps structuring the story around them, suggests where each tidbit fits, tracks open threads (some left open on purpose), and keeps interviewing you to fill blanks and add depth. You still write the prose.
+## Read a story with the AI you choose
 
-Structure is read, not guessed. Where a beat sits, which beat is the turn and whether a joint is *therefore* or *and then* depend on what the story means. No keyword rule or sentiment lexicon decides them. With no model, sandhi shows only what the writer labelled.
+Paste a story or a chapter. A model marks its beats, turn, low point, joints and threads. It returns labels and exact quotes only; sandhi cuts your own text where each quote lands and drops any quote that does not match. You see the result before it replaces anything, and Undo brings your story back.
 
-Both ways land on the same views, taken from the explainer [How stories work](https://assets.chiragpatnaik.com/how-stories-work) (copy in [`reference/`](reference/how-stories-work.html)):
+You choose who reads it, closest to you first: a model server on your machine (Ollama or LM Studio), Gemini Nano in Chrome, or your own provider and key (OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral, DeepSeek, Together, or any OpenAI-compatible URL). Keys stay in this browser and show only as a fingerprint. Large models read structure well; small on-device ones do not yet (see *Verify it yourself*).
 
-- **Fortune line** (Vonnegut), beat by beat, against the six arcs (Reagan et al. 2016).
-- **Phases** in three traditions: Story Spine, the Nāṭyaśāstra's five stages, kishōtenketsu's four parts.
-- **Principle coverage** for this story: which of the 13 principles fire, on which beats.
-- **Joints** (Parker & Stone): *therefore*, *but*, or a slack *and then*.
-- **Plants and payoffs** (Chekhov, the *bīja*): planted items with no payoff, payoffs with no plant.
-- **Earned ending** (Aristotle, Coats): does luck or the hero's choice get them out?
+## Write on the spine
 
-## Where the model runs
+Every beat carries labels you set: its spine stage, fortune, joint, a turn or low-point mark, whether luck or the hero's choice moves it, and the principles it serves. The checks compare those labels and name the next step: an empty or idle beat, a slack joint, a plant that never pays off, a payoff with nothing planted, luck after the turn. They never guess from your prose.
 
-On the house AI ladder, closest to you first. You choose; nothing is probed until you ask.
+## Commands
 
-1. **A model server on your machine:** Ollama or LM Studio on 127.0.0.1. The story stays on your machine. Let the server accept this site (`OLLAMA_ORIGINS=https://sandhi.naklitechie.com`, or LM Studio's CORS switch).
-2. **Gemini Nano, built into Chrome.** The story stays on the device. Fast, but in a test it missed the turn of a 400-word story.
-3. **Your provider, with your key:** OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral, DeepSeek, Together, or any OpenAI-compatible URL. The story goes from the tab to that provider; the key stays in this browser and shows only as a fingerprint.
+```bash
+cd test && npm install                                            # Playwright and axe-core, for the gates
+npm test                                                          # core · ladder · parity · face · a11y
+node cli-read.mjs prompt <dir> --story gift-of-the-magi           # a reader-eval prompt (opt-in)
+node cli-read.mjs score <reply> <name> --story gift-of-the-magi   # score a model's reply
+node live.mjs --base http://127.0.0.1:11434/v1 --model <id>       # a local model reads The whistle
+```
 
-With none of them, write mode works on your own labels; read mode says why it cannot run.
+Agents: `window.sandhi` exposes 30 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading and entering a key stay with the writer. Contract: [SPEC.md §0](SPEC.md).
 
-## Context
+## Verify it yourself
 
-- **Tier: Tool.** Single file, sovereign, no account, no telemetry.
-- **Direction: Calm.** The cream-paper palette of the explainer.
-- Seed: the explainer page, its 13 principles, 9 traditions and the ten-beat story *The whistle*. Its data block (`PRINCIPLES`, `BEATS`, `ARCS`) is the first draft of the story model.
+```bash
+cd test && npm install && npm test
+```
 
-### Prior art (surveyed 2026-10-04)
+The gates refuse a demo story that cannot round-trip the explainer's data, a check with no test that fires it, a control with no tool behind it, a cold load over five seconds, an agent that can accept a reading or set a key, and any serious accessibility violation. Reading quality is measured, not gated: on *The whistle* and three public-domain stories, codex `gpt-6-astra` and a Claude subagent marked the turn in all four with every quote matching the text, while on *The whistle* Gemini Nano missed the turn in all eight runs and a 4B local model found it in one of two (table in [SPEC.md §5](SPEC.md)).
 
-| Tool | What it does | Gap sandhi takes |
-|---|---|---|
-| [Sudowrite](https://sudowrite.com) Story Engine, [NovelCrafter](https://www.novelcrafter.com) | Beat sheet in, AI-drafted chapters out; codex for continuity | Cloud; the AI writes the prose |
-| [Marlowe](https://authors.ai/marlowe/) (Authors A.I.), Fictionary, AutoCrit, StoryWith | Upload a manuscript, get a structure and pacing report | Cloud upload; Western beat templates; a report, not a workbench |
-| [Dramatron](https://arxiv.org/abs/2209.14958) (DeepMind 2022) | Logline → characters → plot → scenes → dialogue | Generates top-down; no principle lens |
-| [TaleBrush](https://dspace.kaist.ac.kr/handle/10203/298871) (CHI 2022) | Sketch the protagonist's fortune line to steer generation | Research prototype; borrow the interaction |
-| [Narrative-Discourse](https://github.com/PlusLabNLP/Narrative-Discourse) (arXiv:2407.13248) | Story arcs, turning points, valence and arousal; finds LLM stories flat and low on tension | Borrow the arc and turning-point benchmarks as read-mode evals |
+## License
 
-The 2407.13248 finding sets the stance: LLM-written stories trend positive and lack tension. sandhi uses the model as reader, editor and questioner, not ghostwriter.
+Not chosen yet. · [SPEC.md](SPEC.md) · [llms.txt](llms.txt) · [How stories work](https://assets.chiragpatnaik.com/how-stories-work)

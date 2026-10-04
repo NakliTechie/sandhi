@@ -109,3 +109,34 @@ Readers follow the house AI ladder (Edge-First doctrine; ported from Draft's `si
 | Reader eval (opt-in) | `node test/live.mjs --base … --model …` · `node test/cli-read.mjs prompt|score` | a real model's reading of *The whistle* scored against the explainer's labels; not a gate (results in `plan/history.md`) |
 
 Roadmap and status: `plan/workplan.md`.
+
+## §5 Measured readers (opt-in evals, not gates)
+
+How well a model reads structure, measured with the page's own prompt, schema and assembly (`test/cli-read.mjs`, `test/live.mjs`; scorer `test/score.mjs`). *The whistle* is scored against the explainer's labels; the other three stories against small hand labels in `test/stories/*.labels.json` (one editorial reading: the turn, a low point where clear, two threads). "Turn" counts if the beat the model marks as the turn contains a labelled turn quote; a thread counts if the model links a beat containing its plant quote to one containing its payoff quote. 2026-10-04.
+
+| reader | *The whistle* (394 words) | *The Gift of the Magi* (2,057) | *The Cask of Amontillado* (2,309) | *The Diamond Necklace* (2,836) |
+|---|---|---|---|---|
+| codex `gpt-6-astra` | turn ✓ low ✓, joints 8/9, threads ✓ | turn ✓, threads 2/2 | turn ✓, threads 2/2 | turn ✓, low ✗, threads 1/2 |
+| Claude subagent (Opus 5.5) | turn ✓ low ✓, joints 7/9, threads ✓ | turn ✓, threads 2/2 | turn ✓, threads 2/2 | turn ✓, low ✓, threads 0/2 |
+| opencode `space-bunny-free` | turn ✓ low ✓, joints 4/9, threads ✓ | turn ✓, threads 2/2 | turn ✓, threads 2/2, 1 beat quote dropped | turn ✓, low ✗, threads 1/2 |
+| codex `gpt-5.6-sol` | turn ✓ low ✓, joints 8/9, threads ✓ | — | — | — |
+| Ollama `qwen3.5:4b` (no thinking) | turn ✓ in 1 of 2 runs, joints ≤2/7 | — | — | — |
+| Gemini Nano (Chrome 153) | turn ✗ in 8 of 8 runs, joints ≤4/9 | — | — | — |
+
+Every quote from the codex and Claude readers matched the text (0 dropped); space-bunny dropped one beat quote, in *Cask*. The Necklace threads the Claude reader missed were real readings anchored elsewhere (it planted "paste" at the jeweller's line and ended the friend thread before the last scene): the labels are strict on purpose. Not measured: any reader on a manuscript longer than one call (the two-pass read), and any provider called from the page with a real key.
+
+## §6 Where it is going, and what came before
+
+a story creator for short stories and novels. You keep adding plot elements and *tidbits*, the real-life observations that give a story life (a curious train stop; meat kept too long gets freezer burn). The AI keeps structuring the story around them, suggests where each tidbit fits, tracks open threads (some left open on purpose), and keeps interviewing you to fill blanks and add depth. You still write the prose.
+
+**Prior art** (surveyed 2026-10-04; README material moved here when the README took the house shape):
+
+| Tool | What it does | Gap sandhi takes |
+|---|---|---|
+| [Sudowrite](https://sudowrite.com) Story Engine, [NovelCrafter](https://www.novelcrafter.com) | Beat sheet in, AI-drafted chapters out; codex for continuity | Cloud; the AI writes the prose |
+| [Marlowe](https://authors.ai/marlowe/) (Authors A.I.), Fictionary, AutoCrit, StoryWith | Upload a manuscript, get a structure and pacing report | Cloud upload; Western beat templates; a report, not a workbench |
+| [Dramatron](https://arxiv.org/abs/2209.14958) (DeepMind 2022) | Logline → characters → plot → scenes → dialogue | Generates top-down; no principle lens |
+| [TaleBrush](https://dspace.kaist.ac.kr/handle/10203/298871) (CHI 2022) | Sketch the protagonist's fortune line to steer generation | Research prototype; borrow the interaction |
+| [Narrative-Discourse](https://github.com/PlusLabNLP/Narrative-Discourse) (arXiv:2407.13248) | Story arcs, turning points, valence and arousal; finds LLM stories flat and low on tension | Borrow the arc and turning-point benchmarks as read-mode evals |
+
+The 2407.13248 finding sets the stance: LLM-written stories trend positive and lack tension. sandhi uses the model as reader, editor and questioner, not ghostwriter.
