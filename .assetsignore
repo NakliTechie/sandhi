@@ -10,3 +10,5 @@ plan
 test
 *.md
 .DS_Store
+reference
+.oxlintrc.json

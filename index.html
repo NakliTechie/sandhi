@@ -1,0 +1,1020 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sandhi — the joints of a story</title>
+<meta name="description" content="Write a story on its spine and see it through thirteen storytelling principles: fortune line, phases, joints, plants and payoffs. Your story stays on your machine.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 25 L16 12 L28 25' fill='none' stroke='%23BA7517' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='12' r='4.5' fill='%232C2A24'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#F7F2E7;--card:#FFFDF7;--ink:#2C2A24;--muted:#6B665A;--faint:#938D7E;
+  --line:rgba(60,45,15,.14);--line-strong:rgba(60,45,15,.35);--hover:rgba(60,45,15,.06);
+  --accent:#BA7517;--accent-bg:#F1E0C2;--accent-ink:#633806;--dot-off:#D9CBB0;
+  --seg-a:#EFE6D2;--seg-b:#E5D8BC;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --r:10px;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1C1A16;--card:#25221D;--ink:#ECE5D5;--muted:#B2AA97;--faint:#857E6E;
+  --line:rgba(236,229,213,.12);--line-strong:rgba(236,229,213,.3);--hover:rgba(236,229,213,.06);
+  --accent:#D99A3B;--accent-bg:#4A3517;--accent-ink:#F3D9AE;--dot-off:#5A5040;
+  --seg-a:#2E2A23;--seg-b:#38322A;color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#1C1A16;--card:#25221D;--ink:#ECE5D5;--muted:#B2AA97;--faint:#857E6E;
+  --line:rgba(236,229,213,.12);--line-strong:rgba(236,229,213,.3);--hover:rgba(236,229,213,.06);
+  --accent:#D99A3B;--accent-bg:#4A3517;--accent-ink:#F3D9AE;--dot-off:#5A5040;
+  --seg-a:#2E2A23;--seg-b:#38322A;color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.6 var(--sans)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--muted)}
+.faint{color:var(--faint)}
+.lab{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);font-weight:400;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+
+/* header */
+.top{max-width:1200px;margin:0 auto;padding:22px 24px 10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+.brand{display:flex;align-items:baseline;gap:8px;margin-right:auto}
+.brand b{font-size:18px;font-weight:500}
+.brand span{font-size:12px;color:var(--faint)}
+.actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.btn{font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;color:var(--muted)}
+.btn:hover{background:var(--hover);color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+#savestate{font-size:12px;color:var(--faint);margin-left:4px}
+main{max-width:1200px;margin:0 auto;padding:0 24px 40px}
+.about{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr);gap:10px 18px;padding:6px 0 18px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.about label{display:flex;flex-direction:column;gap:2px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint)}
+.about input,.about textarea{border:none;border-bottom:1px solid transparent;background:transparent;padding:2px 0;font-size:14px;line-height:1.5;text-transform:none;letter-spacing:0;color:var(--ink);resize:none;field-sizing:content;min-height:1.6em}
+.about input#title{font-size:20px;font-weight:500}
+.about input:hover,.about textarea:hover{border-bottom-color:var(--line)}
+.about input:focus,.about textarea:focus{outline:none;border-bottom-color:var(--accent)}
+
+/* chart */
+#chart svg{display:block;width:100%;height:auto;font-family:var(--sans);touch-action:none}
+#chart .grid{stroke:var(--line)}
+#chart .zero{stroke:var(--line-strong)}
+#chart .axis,#chart .num,#chart .rowl{font-size:11px;fill:var(--faint)}
+#chart .fline{fill:none;stroke:var(--accent);stroke-width:2.2;stroke-linejoin:round}
+#chart .dot{fill:var(--accent);stroke:var(--card);stroke-width:1.5;cursor:ns-resize}
+#chart .dot.off{fill:var(--dot-off)}
+#chart .dot:focus{outline:none;stroke:var(--ink)}
+#chart .markt{font-size:11px;font-style:italic;fill:var(--muted)}
+#chart .seg-a{fill:var(--seg-a)}#chart .seg-b{fill:var(--seg-b)}
+#chart .segt{font-size:10.5px;fill:var(--muted)}
+#arc{margin-top:8px}
+#arc .lead{margin:0 0 8px;font-size:13px}
+.minis{display:flex;flex-wrap:wrap;gap:6px 14px}
+.mini{margin:0;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--faint)}
+.mini svg{width:46px;height:18px}
+.mini path{fill:none;stroke:var(--faint);stroke-width:1.5}
+.mini.best{color:var(--ink)}
+.mini.best path{stroke:var(--accent);stroke-width:2.2}
+
+/* layout */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;margin-top:18px;align-items:start}
+aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
+
+/* beats */
+#beats{display:flex;flex-direction:column}
+.joint{display:flex;justify-content:center;padding:4px 0}
+.joint select{font-size:12px;font-style:italic;padding:2px 10px;border-radius:999px;border:1px solid var(--line-strong);background:var(--bg);color:var(--muted)}
+.joint.opt select{border-style:dashed;color:var(--faint)}
+.joint.slack select,.joint.missing select{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-bg)}
+.beat{display:flex;flex-direction:column;gap:8px;transition:opacity .12s ease;scroll-margin-top:16px}
+.beat.dim{opacity:.35}
+.beat.flash{border-color:var(--accent)}
+.bhead{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.bnum{font-size:18px;font-weight:500;color:var(--faint);min-width:24px}
+.beat.hit .bnum{color:var(--accent)}
+.blabel{flex:1;min-width:120px;border:none;background:transparent;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);padding:2px 0}
+.blabel:focus{outline:none;color:var(--ink)}
+.sel{font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--muted);padding:2px 4px;max-width:100%}
+.mark{font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--faint)}
+.mark[aria-pressed="true"]{background:var(--accent-bg);color:var(--accent-ink);border-color:transparent}
+.menu{position:relative}
+.menu summary{list-style:none;cursor:pointer;color:var(--faint);padding:0 6px;border-radius:6px}
+.menu summary::-webkit-details-marker{display:none}
+.menu[open] summary{background:var(--hover)}
+.menu div{position:absolute;right:0;top:24px;z-index:5;background:var(--card);border:1px solid var(--line-strong);border-radius:8px;padding:4px;display:flex;flex-direction:column;min-width:150px}
+.menu div button{border:none;background:transparent;text-align:left;padding:5px 10px;border-radius:6px;font-size:13px;color:var(--ink)}
+.menu div button:hover{background:var(--hover)}
+.menu div button:disabled{color:var(--faint);cursor:default;background:transparent}
+.btext{width:100%;min-height:4.2em;resize:vertical;border:1px solid transparent;border-radius:6px;background:transparent;padding:4px 6px;margin:0 -6px;font:15.5px/1.7 var(--serif);color:var(--ink);field-sizing:content}
+.btext:hover{border-color:var(--line)}
+.btext:focus{outline:none;border-color:var(--line-strong);background:var(--bg)}
+.brow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:12px;color:var(--faint)}
+.brow label{display:flex;align-items:center;gap:6px}
+.brow input[type=range]{width:120px;accent-color:var(--accent)}
+.brow output{min-width:22px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{font-size:11.5px;padding:2px 9px;border-radius:999px;border:none;background:var(--hover);color:var(--muted)}
+.chip.on{background:var(--accent-bg);color:var(--accent-ink)}
+.chip:hover{filter:brightness(.97)}
+.addtag{font-size:11.5px;border:1px dashed var(--line-strong);border-radius:999px;background:transparent;color:var(--faint);padding:1px 6px;width:auto;max-width:112px}
+.more summary{font-size:12px;color:var(--faint);cursor:pointer}
+.more .inner{display:flex;flex-direction:column;gap:8px;padding:8px 0 2px;font-size:12.5px;color:var(--muted)}
+.more .inner label{display:flex;align-items:center;gap:8px}
+.drafts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.drafts li{border-left:2px solid var(--line);padding-left:10px}
+.drafts s{color:var(--faint)}
+.dnote{width:100%;border:none;border-bottom:1px solid var(--line);background:transparent;font-size:12.5px;padding:2px 0}
+.ghost{align-self:flex-start;font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;color:var(--muted)}
+.ghost:disabled{opacity:.4;cursor:default}
+.addbeat{margin-top:10px;align-self:center}
+
+/* checks + threads */
+#checks ul,#threads ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+#checks li{font-size:13px;line-height:1.5;cursor:pointer}
+#checks li b{font-weight:500}
+#checks li .nx{display:block;color:var(--muted);font-size:12.5px}
+#checks li .at{color:var(--accent-ink);background:var(--accent-bg);border-radius:999px;padding:0 7px;font-size:11px;margin-right:4px}
+#checks .clean{font-size:13px;color:var(--muted);margin:0}
+#threads li{display:flex;flex-direction:column;gap:4px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+#threads li:last-child{border-bottom:none;padding-bottom:0}
+.tline{display:flex;align-items:flex-start;gap:6px}
+.tline textarea{flex:1;min-width:0;border:none;background:transparent;font-size:13px;line-height:1.45;padding:1px 0;border-bottom:1px solid transparent;resize:none;field-sizing:content}
+.tline textarea:focus{outline:none;border-bottom-color:var(--accent)}
+.tline .tstate{margin-top:5px}
+.tstate{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--accent)}
+.tstate.open{background:transparent;border:1.5px solid var(--accent)}
+.tmeta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:12px;color:var(--faint)}
+.x{border:none;background:transparent;color:var(--faint);font-size:12px;padding:0 4px}
+.x:hover{color:var(--ink)}
+#thread-add{display:flex;gap:6px;margin-top:12px}
+#thread-add input{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:4px 8px;font-size:13px}
+
+/* coverage */
+#coverage{margin-top:18px}
+.mwrap{overflow-x:auto}
+table.matrix{border-collapse:collapse}
+.matrix th,.matrix td{padding:0;font-weight:400}
+.matrix thead th{font-size:11px;color:var(--faint);text-align:center;padding-bottom:4px}
+.matrix tbody tr{border-top:1px solid var(--line)}
+.matrix tbody th{text-align:left;white-space:nowrap;padding-right:12px}
+.matrix tbody th button{border:none;background:transparent;font-size:13px;padding:6px 0;color:var(--ink);text-align:left}
+.matrix tbody th button:hover{text-decoration:underline;text-underline-offset:3px}
+.matrix tbody th .pn{color:var(--faint);display:inline-block;width:22px}
+.matrix tr.focus th button{color:var(--accent-ink);font-weight:500}
+.matrix td.c button{width:30px;height:30px;border:none;background:transparent;display:grid;place-items:center;border-radius:6px}
+.matrix td.c button:hover{background:var(--hover)}
+.matrix td.c i{width:11px;height:11px;border-radius:50%;display:block}
+.matrix td.c i.on{background:var(--accent)}
+.matrix td.c i.no{width:4px;height:4px;background:var(--line-strong)}
+.matrix td.n{font-size:11px;color:var(--faint);padding-left:8px}
+#panel{margin-top:14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+#panel h3{font-size:15px;font-weight:500;margin:0 0 4px}
+#panel p{margin:0 0 8px}
+.who{list-style:none;margin:0;padding:0;font-size:12.5px;color:var(--muted)}
+.who li{display:flex;gap:8px;padding:2px 0}
+.who b{font-weight:500;color:var(--ink);min-width:96px;flex-shrink:0}
+.who .dis b{color:var(--muted)}
+#panel textarea{width:100%;min-height:6em;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:6px 8px;font:14px/1.6 var(--serif);field-sizing:content}
+
+footer{max-width:1200px;margin:0 auto;padding:18px 24px 28px;border-top:1px solid var(--line);font-size:12px;color:var(--faint);display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between}
+footer code{font-size:11.5px}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13px;padding:8px 14px;border-radius:8px;max-width:min(560px,calc(100vw - 32px));display:none;z-index:20}
+#toast.show{display:block}
+#toast span{opacity:.75}
+.empty{color:var(--faint);font-size:13px;margin:0}
+@media (max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}aside{position:static}.about{grid-template-columns:minmax(0,1fr)}#panel{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:600px){.top{padding:16px 16px 8px}main{padding:0 16px 32px}footer{padding:16px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>sandhi</b><span>the joints of a story</span></div>
+  <nav class="actions" aria-label="Story">
+    <button class="btn" data-cmd="story.new" title="Start a blank Story Spine. Undo brings this story back.">New</button>
+    <button class="btn" data-ui="open" title="Open a .sandhi.json file">Open</button>
+    <button class="btn" data-cmd="story.save" title="Save this story as a .sandhi.json file">Save</button>
+    <button class="btn" data-cmd="story.demo" title="Load the demo story from the explainer">The whistle</button>
+    <button class="btn" data-cmd="undo" id="undo">Undo</button>
+    <button class="btn" data-cmd="redo" id="redo">Redo</button>
+    <span id="savestate" aria-live="polite"></span>
+    <input type="file" id="file" accept=".json,application/json" hidden>
+  </nav>
+</header>
+
+<main>
+  <div class="about">
+    <label>Title<input id="title" data-sfield="title" autocomplete="off"></label>
+    <label>Logline<textarea id="logline" data-sfield="logline" rows="1" placeholder="The story in one sentence"></textarea></label>
+    <label>Why you are telling it<textarea id="belief" data-sfield="belief" rows="1" placeholder="The belief under the plot"></textarea></label>
+  </div>
+
+  <section class="card" aria-labelledby="fortune-h">
+    <h2 class="lab" id="fortune-h">Fortune, beat by beat · drag a dot to move it</h2>
+    <div id="chart"></div>
+    <div id="arc"></div>
+  </section>
+
+  <div class="cols">
+    <section aria-labelledby="beats-h">
+      <h2 class="lab" id="beats-h">Beats on the Story Spine</h2>
+      <div id="beats"></div>
+      <button class="ghost addbeat" data-cmd="beat.add" data-args="{}">Add a beat</button>
+    </section>
+    <aside>
+      <section class="card" id="checks" aria-labelledby="checks-h"><h2 class="lab" id="checks-h">Checks</h2><div></div></section>
+      <section class="card" id="threads" aria-labelledby="threads-h"><h2 class="lab" id="threads-h">Plants and payoffs</h2><ul></ul>
+        <form id="thread-add"><input placeholder="Something planted: an object, a line, a habit" aria-label="New thread" maxlength="200"><button class="ghost" type="submit">Add</button></form>
+      </section>
+    </aside>
+  </div>
+
+  <section class="card" id="coverage" aria-labelledby="cov-h">
+    <h2 class="lab" id="cov-h">Thirteen principles in this story · tap a dot to tag a beat, a name to focus on it</h2>
+    <div class="mwrap"><table class="matrix" id="matrix"></table></div>
+    <div id="panel"></div>
+  </section>
+</main>
+
+<footer>
+  <span>Your story stays in this browser and in the files you save. No model runs in this version: the checks compare your own labels.</span>
+  <span>Agent face: <code>window.sandhi</code> · <a href="https://assets.chiragpatnaik.com/how-stories-work">How stories work</a> · <a href="https://naklitechie.com">NakliTechie</a></span>
+</footer>
+<div id="toast" role="status"></div>
+
+<script id="sandhi-core">
+// sandhi core: L0 library, L1 schema, L2 derived views. Pure functions, no DOM; test/core.mjs runs this block in Node.
+(function (root) {
+  'use strict';
+  const SCHEMA = 1;
+  /* LIBRARY:BEGIN */
+  // Copied verbatim from the explainer (reference/how-stories-work.html, DATA block). test/core.mjs proves the match.
+  const SOURCES = [
+    {"id":"ari","name":"Aristotle","when":"c. 335 BCE"},
+    {"id":"nat","name":"Nāṭyaśāstra","when":"c. 200 BCE–200 CE"},
+    {"id":"kis","name":"Kishōtenketsu","when":"classical"},
+    {"id":"che","name":"Chekhov","when":"1889"},
+    {"id":"hem","name":"Hemingway","when":"1932"},
+    {"id":"von","name":"Vonnegut","when":"1999"},
+    {"id":"coa","name":"Coats / Pixar","when":"2011"},
+    {"id":"ps","name":"Parker & Stone","when":"2011"},
+    {"id":"sta","name":"Stanton","when":"2012"}
+  ];
+  const PRINCIPLES = [
+    {"id":"care","name":"Make me care","line":"Before anything happens, give the audience someone to root for — usually someone trying hard, not someone already winning.","src":{"ari":"Pity and fear work only for someone like ourselves — neither saint nor villain.","von":"Give readers at least one person they can cheer for.","coa":"We admire characters more for trying than for succeeding.","sta":"His greatest commandment: make me care — emotionally, intellectually, aesthetically."}},
+    {"id":"want","name":"Want something","line":"Every character should be reaching for something. No want, no story — just weather.","src":{"nat":"The hero’s striving moves through five stages, from first effort to reaching the fruit.","von":"Everyone should want something, even if it’s only a glass of water.","sta":"Well-drawn characters have a spine — one inner drive they keep obeying."}},
+    {"id":"stakes","name":"Make it hard","line":"Put the goal out of reach. What happens if they fail? The harder the climb, the more we learn about the climber.","src":{"nat":"The fourth juncture, vimarśa, is a pause of doubt and obstacle before the end.","von":"Be a sadist — do terrible things to sweet characters so we see who they are.","coa":"Find what your character is comfortable with, then throw the opposite at them. Stack the odds.","kis":"The four-part form builds interest through a turn, not a fight. Conflict is optional."},"dissent":["kis"]},
+    {"id":"cause","name":"Therefore, but","line":"Link every event to the last with “therefore” or “but”. If “and then” fits between two beats, the story has gone slack.","src":{"ari":"Events should follow by probability or necessity. Plots that are just one episode after another are the weakest.","nat":"Sandhi means joint: five junctures join the action like the joints of a limb.","coa":"The Story Spine: one day… because of that… because of that… until finally.","ps":"If “and then” belongs between your beats, you’re in trouble. It should be “therefore” or “but”."}},
+    {"id":"plant","name":"Plant, then pay off","line":"Anything that will matter at the end should be quietly planted near the start — and anything planted should matter.","src":{"che":"If there’s a gun on the wall in the first act, it must go off by the last.","nat":"The bīja — the seed — is sown early and grows into the outcome."}},
+    {"id":"two","name":"Let them add 2 + 2","line":"Don’t hand the audience the answer. Give them the pieces and let them get there a moment before the character does.","src":{"sta":"The unifying theory of two plus two: make the audience put things together.","hem":"Leave things out on purpose. Readers feel the part of the iceberg under the water.","von":"Tell readers as much as possible, as soon as possible — so much they could finish the story themselves."},"dissent":["von"]},
+    {"id":"surprise","name":"Surprising, yet inevitable","line":"The best turns are ones you didn’t see coming — and then, looking back, couldn’t have gone any other way.","src":{"ari":"The strongest moments come unexpectedly yet as a consequence of what went before — reversal and recognition.","kis":"The third part, ten, is a turn that changes how you see the first two.","coa":"Discard the first thing that comes to mind. List what wouldn’t happen next.","sta":"Good stories are inevitable, but not predictable."}},
+    {"id":"earn","name":"Earn the ending","line":"Bad luck may get a hero into trouble. Only their own choices should get them out.","src":{"ari":"The knot should be untied by the plot itself, not by a god lowered on a crane.","coa":"Coincidences that get characters into trouble are great. Coincidences that get them out are cheating."}},
+    {"id":"change","name":"Something must change","line":"By the end, someone — usually the hero — is different. A story where nothing changes is a description.","src":{"ari":"Every plot turns on a change of fortune.","nat":"The play closes in phalāgama — the fruit, finally reached.","von":"Draw fortune over time and the line must move.","sta":"Change is fundamental to story."}},
+    {"id":"cut","name":"Cut to the bone","line":"Simplify. Combine characters. Start late. If a piece can go without anything breaking, it should go.","src":{"ari":"Unity of action: if a part can be removed without loss, it was never part of the whole.","che":"If the gun isn’t going to go off, take it off the wall.","von":"Every sentence must reveal character or move the action. Start as close to the end as possible.","coa":"Simplify. Focus. Combine characters. Hop over detours."}},
+    {"id":"ride","name":"Shape the ride","line":"A story is a journey through feelings. Plan the rises and drops so the low point is low enough to make the ending soar.","src":{"ari":"A whole has a beginning, a middle and an end — complication, then unravelling.","nat":"The aim of drama is rasa: the flavour of feeling the audience gets to taste.","kis":"Four movements: introduction, development, twist, conclusion.","von":"Stories have shapes you can draw — fortune going up and down."}},
+    {"id":"why","name":"Know why you’re telling it","line":"Under the plot sits a belief. Find it, and every choice gets easier.","src":{"coa":"Why must you tell this story? What belief is burning in you that it feeds on?","von":"Write to please just one person.","sta":"Draw on what you know and what you value."}},
+    {"id":"finish","name":"Finish, then fix","line":"A story in your head can’t be fixed. Get a whole draft down, then rewrite it until it works.","src":{"coa":"Finish it, let go even if it’s not perfect. On paper, you can start fixing it.","ps":"They go back over finished beats and swap every “and then” for “therefore” or “but”."}}
+  ];
+  // The demo story: the explainer's ten beats, plus joints, threads, phases and drivers labelled for sandhi.
+  const SEED = { sandhi: 1, title: "The whistle",
+    logline: "On a fog-bound island, the smallest child brings the boats home with the whistle everyone told him to hush.",
+    belief: "The thing people tell you to hide may be exactly what someone needs.",
+    beats: [
+      {"id":"b1","label":"Once upon a time","spine":"once","joint":null,"text":"Tavi was the smallest child on an island where the fog came in like a tide. Every evening old Oren climbed the two hundred steps of the tower and rang the great bell, and the fishing boats followed the sound home. Tavi wanted, more than anything, to be useful. So he carried water up to Oren — one step at a time, spilling half of it on the way.","fortune":1,"tags":["care","want","cut"],"marks":[],"driver":null,"avastha":"arambha","kis":"ki","drafts":[],"by":"writer"},
+      {"id":"b2","label":"Every day","spine":"everyday","joint":null,"text":"Tavi also whistled. Not a pretty whistle — a sharp, piercing one that sent the gulls flapping off the roofs. “Hush, Tavi,” said everyone. Only Oren said something different: “A bell isn’t loud, you know. It’s steady. Boats don’t follow loud. They follow steady.” Tavi didn’t see why that mattered.","fortune":0,"tags":["plant","two"],"marks":[],"driver":null,"avastha":"arambha","kis":"ki","drafts":[],"by":"writer"},
+      {"id":"b3","label":"One day","spine":"oneday","joint":null,"text":"The fog came early and thick, and every boat was still out — his sister Ama’s among them. Oren hurried up the tower, slipped on the wet stairs and hurt his ankle. Grabbing the bell rope to stop his fall, he snapped it.","fortune":-3,"tags":["stakes","cause","earn"],"marks":[],"driver":"luck","avastha":"arambha","kis":"sho","drafts":[],"by":"writer"},
+      {"id":"b4","label":"Because of that","spine":"because","joint":"therefore","text":"Someone had to climb. The grown-ups were down at the harbour lighting fires the fog swallowed. So Tavi went — two hundred steps, the way he’d carried the water.","fortune":-1,"tags":["care","want","cause"],"marks":[],"driver":"choice","avastha":"prayatna","kis":"sho","drafts":[],"by":"writer"},
+      {"id":"b5","label":"But","spine":"because","joint":"but","text":"At the top, the broken rope hung far out of reach. He hit the bell with a stone. It made a thin clink, and the fog ate it whole.","fortune":-3,"tags":["stakes","cause"],"marks":[],"driver":null,"avastha":"prayatna","kis":"sho","drafts":[],"by":"writer"},
+      {"id":"b6","label":"Therefore","spine":"because","joint":"therefore","text":"He lit the lantern. The fog turned it into a smudge of orange that showed nothing. Somewhere out on the water, a horn sounded — far off, and heading the wrong way.","fortune":-4,"tags":["stakes","cause","ride"],"marks":[],"driver":null,"avastha":"prayatna","kis":"sho","drafts":[],"by":"writer"},
+      {"id":"b7","label":"The low point","spine":"because","joint":"therefore","text":"Tavi sat down on the cold stones. Too small to ring the bell. Too small to shout over the sea. A gull landed on the rail beside him. Tavi looked at the gull. The gull looked at Tavi.","fortune":-5,"tags":["two","ride","cut"],"marks":["low"],"driver":null,"avastha":"prayatna","kis":"sho","drafts":[],"by":"writer"},
+      {"id":"b8","label":"The turn","spine":"because","joint":"but","text":"He put two fingers in his mouth and whistled. The gull shot off into the dark. Then he remembered what Oren had said, and he whistled again — not louder. Steadier. One, two, three… breath… one, two, three.","fortune":-2,"tags":["plant","surprise","earn","finish"],"marks":["turn"],"driver":"choice","avastha":"praptyasha","kis":"ten","drafts":[{"n":1,"text":"a dolphin appeared and led the boats home.","note":"Cut — luck can’t get the hero out."},{"n":2,"text":"he whistled as loud as he could.","note":"Changed to steady, to pay off beat 2."}],"by":"writer"},
+      {"id":"b9","label":"Because of that","spine":"because","joint":"therefore","text":"He whistled until his lips cracked and his cheeks ached, and he kept going. Out of the fog came one boat, then three, then nine. The last one in was Ama’s.","fortune":3,"tags":["earn","stakes","ride"],"marks":[],"driver":"choice","avastha":"niyatapti","kis":"ketsu","drafts":[],"by":"writer"},
+      {"id":"b10","label":"Until finally","spine":"until","joint":"therefore","text":"Next morning the island mended the rope. But on foggy nights now, two sounds come from the tower: the bell, and a whistle — sharp, steady and unmistakable. Nobody tells Tavi to hush any more.","fortune":4,"tags":["change","why","ride"],"marks":[],"driver":null,"avastha":"phalagama","kis":"ketsu","drafts":[],"by":"writer"}
+    ],
+    threads: [
+      {"id":"water","label":"Carrying water up the two hundred steps","plant":"b1","payoffs":["b4"]},
+      {"id":"whistle","label":"Tavi’s piercing whistle","plant":"b2","payoffs":["b8","b10"]},
+      {"id":"steady","label":"“Boats don’t follow loud. They follow steady.”","plant":"b2","payoffs":["b8"]},
+      {"id":"gull","label":"The gulls his whistle scatters","plant":"b2","payoffs":["b7","b8"]},
+      {"id":"ama","label":"Ama’s boat is still out","plant":"b3","payoffs":["b9"]},
+      {"id":"rope","label":"The snapped bell rope","plant":"b3","payoffs":["b5","b10"]}
+    ],
+    notes: {
+      care: "Tavi is the smallest child on the island and spills half the water he carries up the tower. We like him before the fog arrives, because he keeps climbing.",
+      want: "Tavi wants to be useful. When the fog comes, that small want becomes a big, concrete one: get the boats home.",
+      stakes: "The fog comes early, every boat is out — his sister’s too — the bell-ringer falls and the rope snaps. Each try fails worse than the last.",
+      cause: "Rope snaps, therefore Tavi climbs. He reaches the bell, but can’t ring it. Therefore the lantern — but the fog swallows it. No beat just happens.",
+      plant: "Two seeds in beat 2: Tavi’s piercing whistle that everyone hushes, and Oren saying boats follow steady, not loud. Both bloom in beat 8.",
+      two: "In beat 7 nobody says “whistle”. A gull lands next to Tavi; the gull and the boy look at each other. You remember beat 2 — and you know before he does.",
+      surprise: "The answer isn’t a bigger bell or a rescue boat. It’s the annoying whistle — unexpected, but planted in plain sight from the start.",
+      earn: "Luck causes the trouble (fog, a slip, a snapped rope). But Tavi gets out by his own idea and his own cracked lips. An early draft had a dolphin guide the boats — cut.",
+      change: "Tavi stops trying to be big and quiet. The island changes too: the thing they hushed now has a place in the tower.",
+      cut: "Ten beats, three characters. The sister has almost no lines; she is the reason, not a subplot. No villain, no backstory for Oren, no talking gull.",
+      ride: "Down from beat 3, lower at 6, the floor at 7 — then the turn. Tavi’s line is a classic Man in a hole (see the chart).",
+      why: "The belief here: the thing people tell you to hide may be exactly what someone needs. Every beat was chosen to serve that line.",
+      finish: "Beat 8 was rewritten twice — once to remove the dolphin, once to make the whistle steady instead of loud, so it pays off Oren’s line."
+    } };
+  /* LIBRARY:END */
+
+  // The six arcs (Reagan et al. 2016), idealised; same functions as the explainer.
+  const ARCS = [
+    { id: 'rags', name: 'Rags to riches', d: 'A steady rise.', fn: t => -0.8 + 1.6 * t },
+    { id: 'tragedy', name: 'Riches to rags', d: 'A steady fall — tragedy.', fn: t => 0.8 - 1.6 * t },
+    { id: 'hole', name: 'Man in a hole', d: 'Fall, then rise.', fn: t => 0.55 - 1.35 * Math.sin(Math.PI * t) + 0.2 * t },
+    { id: 'icarus', name: 'Icarus', d: 'Rise, then fall.', fn: t => -0.55 + 1.35 * Math.sin(Math.PI * t) - 0.2 * t },
+    { id: 'cinderella', name: 'Cinderella', d: 'Rise, fall, rise.', fn: t => -0.7 + 1.1 * t + 0.7 * Math.sin(2 * Math.PI * t) },
+    { id: 'oedipus', name: 'Oedipus', d: 'Fall, rise, fall.', fn: t => 0.7 - 1.1 * t - 0.7 * Math.sin(2 * Math.PI * t) }
+  ];
+
+  const SPINE = [
+    { id: 'once', name: 'Once upon a time', short: 'Once' }, { id: 'everyday', name: 'Every day', short: 'Every day' }, { id: 'oneday', name: 'One day', short: 'One day' },
+    { id: 'because', name: 'Because of that', short: 'Because' }, { id: 'until', name: 'Until finally', short: 'Until' }, { id: 'since', name: 'And ever since then', short: 'Since' }
+  ];
+  const SETUP = new Set(['once', 'everyday', 'oneday']);   // no joint needed into these
+  const JOINTS = ['therefore', 'but', 'and-then'];
+  const MARKS = ['turn', 'low'];
+  const DRIVERS = ['luck', 'choice'];
+  const AVASTHA = [
+    { id: 'arambha', name: 'Ārambha', gloss: 'beginning' }, { id: 'prayatna', name: 'Prayatna', gloss: 'effort' },
+    { id: 'praptyasha', name: 'Prāptyāśā', gloss: 'prospect of success' }, { id: 'niyatapti', name: 'Niyatāpti', gloss: 'success made certain' },
+    { id: 'phalagama', name: 'Phalāgama', gloss: 'the fruit reached' }
+  ];
+  const KIS = [{ id: 'ki', name: 'Ki', gloss: 'introduction' }, { id: 'sho', name: 'Shō', gloss: 'development' }, { id: 'ten', name: 'Ten', gloss: 'twist' }, { id: 'ketsu', name: 'Ketsu', gloss: 'conclusion' }];
+
+  const PIDS = new Set(PRINCIPLES.map(p => p.id));
+  const ids = a => new Set(a.map(x => x.id));
+  const SPINE_IDS = ids(SPINE), AV_IDS = ids(AVASTHA), KIS_IDS = ids(KIS);
+  const JOINT_SET = new Set(JOINTS), MARK_SET = new Set(MARKS), DRIVER_SET = new Set(DRIVERS), BY_SET = new Set(['writer', 'model']);
+  const BEAT_KEYS = ['id', 'label', 'spine', 'joint', 'text', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis', 'drafts', 'by', 'model'];
+  const STORY_KEYS = ['sandhi', 'title', 'logline', 'belief', 'beats', 'threads', 'notes'];
+  const ID_RE = /^[a-z0-9-]{1,40}$/;
+
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const wordCount = s => (s.trim().match(/\S+/g) || []).length;
+  const spineName = id => (SPINE.find(s => s.id === id) || {}).name || id;
+
+  // A small error collector; each part of the story has its own validator below.
+  function collector() {
+    const errors = [];
+    const v = {
+      errors,
+      e: (path, message) => { errors.push({ path, message }); },
+      obj(o, path) { if (o && typeof o === 'object' && !Array.isArray(o)) return true; v.e(path, 'must be an object'); return false; },
+      keys(o, allowed, path) { for (const k of Object.keys(o)) if (!allowed.includes(k)) v.e(path ? `${path}.${k}` : k, 'unknown field'); },
+      id(x, seen, path) { if (typeof x !== 'string' || !ID_RE.test(x)) v.e(path, 'must match [a-z0-9-]{1,40}'); else if (seen.has(x)) v.e(path, `duplicate id ${x}`); else seen.add(x); },
+      str(x, path, max) { if (typeof x !== 'string') v.e(path, 'must be a string'); else if (x.length > max) v.e(path, `longer than ${max} characters`); },
+      oneOf(x, set, path, nullable) { if ((nullable && x === null) || set.has(x)) return; v.e(path, `must be one of ${[...set].join(', ')}${nullable ? ', or null' : ''}`); },
+      list(x, set, path) {
+        if (!Array.isArray(x)) { v.e(path, 'must be an array'); return; }
+        if (new Set(x).size !== x.length) v.e(path, 'has duplicates');
+        x.forEach((y, i) => v.oneOf(y, set, `${path}[${i}]`));
+      }
+    };
+    return v;
+  }
+  function validateDraft(v, d, p) {
+    if (!v.obj(d, p)) return;
+    v.keys(d, ['n', 'text', 'note'], p);
+    if (!Number.isInteger(d.n) || d.n < 1) v.e(`${p}.n`, 'must be an integer ≥ 1');
+    v.str(d.text, `${p}.text`, 50000); v.str(d.note, `${p}.note`, 2000);
+  }
+  function validateBeat(v, b, p, beatIds) {
+    if (!v.obj(b, p)) return;
+    v.keys(b, BEAT_KEYS, p); v.id(b.id, beatIds, `${p}.id`);
+    v.str(b.label, `${p}.label`, 200); v.str(b.text, `${p}.text`, 50000);
+    v.oneOf(b.spine, SPINE_IDS, `${p}.spine`); v.oneOf(b.joint, JOINT_SET, `${p}.joint`, true);
+    if (!Number.isInteger(b.fortune) || b.fortune < -5 || b.fortune > 5) v.e(`${p}.fortune`, 'must be an integer from -5 to 5');
+    v.list(b.tags, PIDS, `${p}.tags`); v.list(b.marks, MARK_SET, `${p}.marks`);
+    v.oneOf(b.driver, DRIVER_SET, `${p}.driver`, true); v.oneOf(b.avastha, AV_IDS, `${p}.avastha`, true); v.oneOf(b.kis, KIS_IDS, `${p}.kis`, true);
+    if (Array.isArray(b.drafts)) b.drafts.forEach((d, k) => validateDraft(v, d, `${p}.drafts[${k}]`)); else v.e(`${p}.drafts`, 'must be an array');
+    v.oneOf(b.by, BY_SET, `${p}.by`);
+    if (b.model !== undefined && (b.by !== 'model' || typeof b.model !== 'string')) v.e(`${p}.model`, 'only with by: model, as a string');
+  }
+  function validateThread(v, t, p, beatIds, threadIds) {
+    if (!v.obj(t, p)) return;
+    v.keys(t, ['id', 'label', 'plant', 'payoffs'], p); v.id(t.id, threadIds, `${p}.id`); v.str(t.label, `${p}.label`, 200);
+    if (t.plant !== null && !beatIds.has(t.plant)) v.e(`${p}.plant`, 'must be a beat id or null');
+    if (!Array.isArray(t.payoffs)) { v.e(`${p}.payoffs`, 'must be an array'); return; }
+    if (new Set(t.payoffs).size !== t.payoffs.length) v.e(`${p}.payoffs`, 'has duplicates');
+    t.payoffs.forEach((b, k) => { if (!beatIds.has(b)) v.e(`${p}.payoffs[${k}]`, 'must be a beat id'); });
+  }
+  function validate(s) {
+    const v = collector();
+    if (!v.obj(s, '')) return { ok: false, errors: [{ path: '', message: 'story must be an object' }] };
+    v.keys(s, STORY_KEYS, '');
+    if (s.sandhi !== SCHEMA) v.e('sandhi', `must be ${SCHEMA}`);
+    v.str(s.title, 'title', 200); v.str(s.logline, 'logline', 2000); v.str(s.belief, 'belief', 2000);
+    const beatIds = new Set(), threadIds = new Set();
+    if (Array.isArray(s.beats)) s.beats.forEach((b, i) => validateBeat(v, b, `beats[${i}]`, beatIds)); else v.e('beats', 'must be an array');
+    if (Array.isArray(s.threads)) s.threads.forEach((t, i) => validateThread(v, t, `threads[${i}]`, beatIds, threadIds)); else v.e('threads', 'must be an array');
+    if (v.obj(s.notes, 'notes')) for (const [k, x] of Object.entries(s.notes)) { if (!PIDS.has(k)) v.e(`notes.${k}`, 'not a principle id'); v.str(x, `notes.${k}`, 5000); }
+    return { ok: v.errors.length === 0, errors: v.errors };
+  }
+
+  function nextId(prefix, list) {
+    let max = 0;
+    for (const x of list) { const m = new RegExp(`^${prefix}(\\d+)$`).exec(x.id); if (m) max = Math.max(max, +m[1]); }
+    return prefix + (max + 1);
+  }
+  function newBeat(id, f) {
+    f = f || {};
+    return { id, label: f.label || '', spine: f.spine || 'because', joint: f.joint || null, text: f.text || '', fortune: f.fortune || 0,
+      tags: [], marks: [], driver: null, avastha: null, kis: null, drafts: [], by: 'writer' };
+  }
+  function blankStory() {
+    return { sandhi: SCHEMA, title: 'Untitled', logline: '', belief: '',
+      beats: ['once', 'everyday', 'oneday', 'because', 'until'].map((spine, i) => newBeat('b' + (i + 1), { spine })), threads: [], notes: {} };
+  }
+
+  // Checks compare the writer's labels; they never read the prose (SPEC §2).
+  function beatChecks(b, i, turnAt, add) {
+    const P = i + 1, needs = i > 0 && !SETUP.has(b.spine);
+    if (!b.text.trim()) return add('beat_empty', P, b.id, null, `Beat ${P} has no text.`, 'Write it, or remove the beat.');
+    if (!b.tags.length) add('beat_idle', P, b.id, null, `Beat ${P} serves none of the 13 principles.`, 'Tag what it does, or cut it: if a part can go without loss, it was never part of the whole (Aristotle).');
+    if (needs && b.joint === null) add('joint_unlabelled', P, b.id, null, `Nothing joins beat ${P} to beat ${P - 1}.`, 'Pick therefore or but. If only "and then" fits, the beat is slack.');
+    if (needs && b.joint === 'and-then') add('joint_slack', P, b.id, null, `Beat ${P} follows beat ${P - 1} with "and then".`, 'Find the therefore or the but, or merge the two beats (Parker & Stone).');
+    if (turnAt >= 0 && i >= turnAt && b.driver === 'luck') add('ending_luck', P, b.id, null, `Luck drives beat ${P}, after the turn.`, "Let the hero's own choice get them out (Aristotle, Coats).");
+  }
+  function threadCheck(t, s, pos, add) {
+    const p = t.plant ? pos.get(t.plant) : null, pays = t.payoffs.map(b => pos.get(b)).toSorted((a, b) => a - b), label = t.label || t.id;
+    const first = pays[0], at = pays.length ? s.beats[first - 1].id : null;
+    if (p === null && !pays.length) return add('thread_unused', null, null, t.id, `"${label}" is neither planted nor paid off.`, 'Attach it to beats, or remove it.');
+    if (p === null) return add('payoff_unplanted', first, at, t.id, `"${label}" pays off in beat ${first} with nothing planted.`, 'Plant it in an earlier beat.');
+    if (!pays.length) return add('plant_unpaid', p, t.plant, t.id, `"${label}" is planted in beat ${p} and never pays off.`, 'Pay it off, or take it off the wall (Chekhov).');
+    if (first > p) return;
+    add('payoff_early', first, at, t.id, first === p ? `"${label}" is planted and paid off in the same beat, ${p}.` : `"${label}" pays off in beat ${first}, before its plant in beat ${p}.`, 'Move the plant earlier, or the payoff later.');
+  }
+  function checks(s) {
+    const out = [], pos = new Map(s.beats.map((b, i) => [b.id, i + 1]));
+    const add = (cls, at, beat, thread, message, next) => out.push({ class: cls, at, beat, thread, message, next });
+    const written = s.beats.filter(b => b.text.trim()), turnAt = s.beats.findIndex(b => b.marks.includes('turn'));
+    s.beats.forEach((b, i) => beatChecks(b, i, turnAt, add));
+    for (const t of s.threads) threadCheck(t, s, pos, add);
+    if (written.length >= 4 && turnAt < 0) add('no_turn', null, null, null, 'No beat is marked as the turn.', 'Mark the beat where the story turns.');
+    if (written.length >= 3 && written.every(b => b.fortune === written[0].fortune)) add('flat_fortune', null, null, null, `Fortune stays at ${written[0].fortune} in every written beat.`, 'Something must change: move the line (Vonnegut).');
+    return out.toSorted((a, b) => (a.at === null) - (b.at === null) || (a.at || 0) - (b.at || 0));
+  }
+
+  function pearson(a, b) {
+    const n = a.length, ma = a.reduce((x, y) => x + y, 0) / n, mb = b.reduce((x, y) => x + y, 0) / n;
+    let s = 0, sa = 0, sb = 0;
+    for (let i = 0; i < n; i++) { s += (a[i] - ma) * (b[i] - mb); sa += (a[i] - ma) ** 2; sb += (b[i] - mb) ** 2; }
+    return sa && sb ? s / Math.sqrt(sa * sb) : 0;
+  }
+  // Arithmetic on the writer's fortune numbers, not a reading of the prose.
+  function arcMatch(s) {
+    const f = s.beats.map(b => b.fortune), n = f.length;
+    if (n < 3) return { best: null, reason: 'short' };
+    if (f.every(v => v === f[0])) return { best: null, reason: 'flat' };
+    const scores = ARCS.map(a => ({ id: a.id, r: +pearson(f, f.map((_, i) => a.fn(i / (n - 1)))).toFixed(3) }));
+    const top = scores.reduce((x, y) => (y.r > x.r ? y : x));
+    return { best: top.id, name: ARCS.find(a => a.id === top.id).name, r: top.r, scores };
+  }
+
+  function coverage(s) {
+    return PRINCIPLES.map((p, k) => ({ id: p.id, n: k + 1, name: p.name, beats: s.beats.map((b, i) => (b.tags.includes(p.id) ? i + 1 : 0)).filter(Boolean) }));
+  }
+
+  // The explainer's data shape (reference/how-stories-work.html, DATA block) <-> story.
+  const renderDrafts = d => d.map(x => `<s>Draft ${x.n}: ${x.text}</s> ${x.note}`).join(' ');
+  function parseDrafts(html) {
+    if (!html) return [];
+    const out = [], re = /<s>Draft (\d+): ([\s\S]*?)<\/s>\s*([\s\S]*?)(?=\s*<s>|$)/g;
+    let m; while ((m = re.exec(html))) out.push({ n: +m[1], text: m[2], note: m[3] });
+    return out;
+  }
+  function toExplainer(s) {
+    const a = arcMatch(s), cov = coverage(s);
+    return {
+      BEATS: s.beats.map((b, i) => { const o = { n: i + 1, spine: b.label || spineName(b.spine), f: b.fortune, text: b.text, tags: b.tags.slice() }; if (b.drafts.length) o.draft = renderDrafts(b.drafts); return o; }),
+      STORY: Object.fromEntries(cov.map(c => [c.id, { story: s.notes[c.id] || '', beats: c.beats }])),
+      ARCS: ARCS.map(x => (x.id === a.best ? { id: x.id, name: x.name, d: `${x.d} ${s.title}.`, ours: true } : { id: x.id, name: x.name, d: x.d }))
+    };
+  }
+  const LABEL_SPINE = { 'Once upon a time': 'once', 'Every day': 'everyday', 'One day': 'oneday', 'Until finally': 'until', 'And ever since then': 'since' };
+  function fromExplainer(d, title) {
+    return { sandhi: SCHEMA, title: title || 'Untitled', logline: '', belief: '',
+      beats: d.BEATS.map(b => ({ id: 'b' + b.n, label: b.spine, spine: LABEL_SPINE[b.spine] || 'because',
+        joint: b.spine === 'But' ? 'but' : b.spine === 'Therefore' ? 'therefore' : null, text: b.text, fortune: b.f, tags: b.tags.slice(),
+        marks: b.spine === 'The turn' ? ['turn'] : b.spine === 'The low point' ? ['low'] : [], driver: null, avastha: null, kis: null,
+        drafts: parseDrafts(b.draft), by: 'writer' })),
+      threads: [], notes: Object.fromEntries(d.PRINCIPLES.filter(p => p.story).map(p => [p.id, p.story])) };
+  }
+
+  root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
+    seed: () => clone(SEED), validate, blankStory, newBeat, nextId, checks, arcMatch, coverage, toExplainer, fromExplainer, clone, wordCount, spineName };
+})(globalThis);
+</script>
+
+<script>
+const C = globalThis.SandhiCore, VERSION = '0.1.0';
+const KEY = 'sandhi:story', JKEY = 'sandhi:journal';
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } }
+};
+const app = { story: null, undo: [], redo: [], dirty: false, focus: 'all', last: null, coalesce: null, coalesceAt: 0, journal: [], open: new Set() };
+const ok = (data) => ({ ok: true, class: 'ok', data: data || {} });
+const fail = (cls, message, next, data) => ({ ok: false, class: cls, message, next, ...(data ? { data } : {}) });
+const S = () => app.story;
+const posOf = (id) => S().beats.findIndex(b => b.id === id);
+const PN = Object.fromEntries(C.PRINCIPLES.map((p, i) => [p.id, i + 1]));
+const PNAME = Object.fromEntries(C.PRINCIPLES.map(p => [p.id, p.name]));
+const PLINE = Object.fromEntries(C.PRINCIPLES.map(p => [p.id, p.line]));
+
+function persist() { store.set(KEY, JSON.stringify({ story: app.story, dirty: app.dirty })); }
+function journalAppend(e) { app.journal.push(e); if (app.journal.length > 200) app.journal.splice(0, app.journal.length - 200); store.set(JKEY, JSON.stringify(app.journal)); }
+
+// Every mutation: build a new story, validate it, then swap and autosave in one write (SPEC §0, row 6).
+function commit(next, key) {
+  const v = C.validate(next);
+  if (!v.ok) return fail('invalid', `${v.errors.length} field(s) fail schema sandhi:1`, 'Fix the fields listed in data.errors and call again.', { errors: v.errors.slice(0, 20) });
+  const now = Date.now();
+  if (!(key && key === app.coalesce && now - app.coalesceAt < 2000)) { app.undo.push(C.clone(app.story)); if (app.undo.length > 100) app.undo.shift(); }
+  app.coalesce = key || null; app.coalesceAt = now;
+  app.redo = []; app.story = next; app.dirty = true; persist();
+  return null;
+}
+const noBeat = (id) => fail('not_found', `no beat with id ${id}`, 'Call status or story.get for the current beat ids.');
+const noThread = (id) => fail('not_found', `no thread with id ${id}`, 'Call story.get for the current thread ids.');
+const BEAT_PATCH = new Set(['label', 'spine', 'joint', 'text', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis', 'drafts']);
+const THREAD_PATCH = new Set(['label', 'plant', 'payoffs']);
+const unknownKeys = (patch, allowed) => Object.keys(patch || {}).filter(k => !allowed.has(k));
+
+function statusData() {
+  const s = S(), list = C.checks(s), a = C.arcMatch(s), classes = {};
+  for (const x of list) classes[x.class] = (classes[x.class] || 0) + 1;
+  return { version: VERSION, title: s.title, beats: s.beats.length, words: s.beats.reduce((n, b) => n + C.wordCount(b.text), 0), threads: s.threads.length,
+    checks: { count: list.length, classes }, arc: a.best ? { best: a.best, name: a.name, r: a.r } : { best: null, reason: a.reason },
+    focus: app.focus, dirty: app.dirty, undo: app.undo.length, redo: app.redo.length, last: app.last };
+}
+const BEAT_PATCH_SCHEMA = { type: 'object', properties: {
+  label: { type: 'string' }, spine: { enum: C.SPINE.map(x => x.id) }, joint: { enum: [...C.JOINTS, null] }, text: { type: 'string' },
+  fortune: { type: 'integer', minimum: -5, maximum: 5 }, tags: { type: 'array', items: { enum: C.PRINCIPLES.map(p => p.id) } },
+  marks: { type: 'array', items: { enum: C.MARKS } }, driver: { enum: [...C.DRIVERS, null] }, avastha: { enum: [...C.AVASTHA.map(x => x.id), null] },
+  kis: { enum: [...C.KIS.map(x => x.id), null] }, drafts: { type: 'array', items: { type: 'object', properties: { n: { type: 'integer' }, text: { type: 'string' }, note: { type: 'string' } } } } } };
+const NONE = { type: 'object', properties: {} };
+
+// ---- the manifest: every UI command is one of these (SPEC §0). handler(args, door) -> envelope
+const TOOLS = [
+  { name: 'status', description: 'One read of the whole situation: title, counts, check counts by class, closest arc, unsaved state, undo depth, last call. Start here.', inputSchema: NONE,
+    handler: async () => ok(statusData()) },
+  { name: 'story.get', description: 'The full story as JSON (schema sandhi:1): beats, threads, notes. The only read that grows with the story.', inputSchema: NONE,
+    handler: async () => ok({ story: C.clone(S()) }) },
+  { name: 'story.update', description: 'Set the title, logline, belief, or per-principle notes ("In this story"). An empty note removes it. Undo reverses it.', mutating: true,
+    inputSchema: { type: 'object', properties: { title: { type: 'string' }, logline: { type: 'string' }, belief: { type: 'string' }, notes: { type: 'object', additionalProperties: { type: 'string' } } } },
+    handler: async (a) => {
+      const n = C.clone(S());
+      for (const k of ['title', 'logline', 'belief']) if (a[k] !== undefined) n[k] = a[k];
+      if (a.notes) for (const [k, v] of Object.entries(a.notes)) { if (v === '') delete n.notes[k]; else n.notes[k] = v; }
+      return commit(n, 'story.update:' + Object.keys(a).toSorted().join(',')) || ok({});
+    } },
+  { name: 'story.new', description: 'Replace the story with a blank Story Spine of five beats. Undo brings the old story back.', mutating: true, inputSchema: NONE,
+    handler: async () => commit(C.blankStory(), null) || ok({ beats: 5 }) },
+  { name: 'story.demo', description: 'Replace the story with "The whistle", the ten-beat demo from the explainer. Undo brings the old story back.', mutating: true, inputSchema: NONE,
+    handler: async () => commit(C.seed(), null) || ok({ beats: S().beats.length }) },
+  { name: 'story.load', description: 'Replace the story with the given JSON (schema sandhi:1). It is validated first; on failure the story is unchanged. Undo reverses it.', mutating: true,
+    inputSchema: { type: 'object', properties: { story: { type: 'object' } }, required: ['story'] },
+    handler: async (a) => commit(a.story === undefined ? null : C.clone(a.story), null) || ok({ beats: S().beats.length }) },
+  { name: 'story.save', description: 'Download the story as <title>.sandhi.json. Nothing is uploaded.', inputSchema: NONE,
+    handler: async () => {
+      const s = S(), text = JSON.stringify(s, null, 2) + '\n';
+      const filename = (s.title.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled') + '.sandhi.json';
+      try {
+        const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+        const el = document.createElement('a'); el.href = url; el.download = filename; document.body.appendChild(el); el.click(); el.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      } catch (e) { return fail('io_error', String(e && e.message || e), 'Call story.get and write the JSON yourself.'); }
+      app.dirty = false; persist();
+      return ok({ filename, bytes: new TextEncoder().encode(text).length });
+    } },
+  { name: 'beat.add', description: 'Insert a beat after the beat with id `after` (default: at the end). Returns the new id and position.', mutating: true,
+    inputSchema: { type: 'object', properties: { after: { type: 'string' }, spine: { enum: C.SPINE.map(x => x.id) }, label: { type: 'string' }, text: { type: 'string' }, fortune: { type: 'integer', minimum: -5, maximum: 5 }, joint: { enum: [...C.JOINTS, null] } } },
+    handler: async (a) => {
+      const n = C.clone(S()), at = a.after === undefined ? n.beats.length - 1 : n.beats.findIndex(b => b.id === a.after);
+      if (a.after !== undefined && at < 0) return noBeat(a.after);
+      const id = C.nextId('b', n.beats);
+      n.beats.splice(at + 1, 0, C.newBeat(id, a));
+      return commit(n, null) || ok({ id, position: at + 2 });
+    } },
+  { name: 'beat.update', description: 'Change fields of one beat: label, spine, joint (into this beat), text, fortune, tags, marks, driver, avastha, kis, drafts. Arrays replace whole. Undo reverses it.', mutating: true,
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, patch: BEAT_PATCH_SCHEMA }, required: ['id', 'patch'] },
+    handler: async (a) => {
+      const bad = unknownKeys(a.patch, BEAT_PATCH);
+      if (!a.patch || bad.length) return fail('invalid', bad.length ? `unknown beat field(s): ${bad.join(', ')}` : 'patch is required', `Use only: ${[...BEAT_PATCH].join(', ')}.`);
+      const n = C.clone(S()), b = n.beats.find(x => x.id === a.id);
+      if (!b) return noBeat(a.id);
+      Object.assign(b, C.clone(a.patch));
+      if (Array.isArray(b.marks)) b.marks = C.MARKS.filter(m => b.marks.includes(m)).concat(b.marks.filter(m => !C.MARKS.includes(m)));
+      return commit(n, `beat.update:${a.id}:${Object.keys(a.patch).toSorted().join(',')}`) || ok({ id: a.id, position: posOf(a.id) + 1 });
+    } },
+  { name: 'beat.remove', description: 'Remove a beat. Threads that point at it lose that plant or payoff. Undo restores both.', mutating: true,
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    handler: async (a) => {
+      const n = C.clone(S()), i = n.beats.findIndex(b => b.id === a.id);
+      if (i < 0) return noBeat(a.id);
+      n.beats.splice(i, 1);
+      for (const t of n.threads) { if (t.plant === a.id) t.plant = null; t.payoffs = t.payoffs.filter(x => x !== a.id); }
+      return commit(n, null) || ok({ beats: n.beats.length });
+    } },
+  { name: 'beat.move', description: 'Move a beat to a 1-based position.', mutating: true,
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, position: { type: 'integer', minimum: 1 } }, required: ['id', 'position'] },
+    handler: async (a) => {
+      const n = C.clone(S()), i = n.beats.findIndex(b => b.id === a.id);
+      if (i < 0) return noBeat(a.id);
+      if (!Number.isInteger(a.position) || a.position < 1 || a.position > n.beats.length) return fail('invalid', `position must be 1–${n.beats.length}`, 'Pass a position inside the beat list.');
+      const [b] = n.beats.splice(i, 1); n.beats.splice(a.position - 1, 0, b);
+      return commit(n, null) || ok({ id: a.id, position: a.position });
+    } },
+  { name: 'thread.add', description: 'Add a plant-and-payoff thread (Chekhov\'s gun, the bīja): a label, the beat that plants it, the beats that pay it off.', mutating: true,
+    inputSchema: { type: 'object', properties: { label: { type: 'string' }, plant: { type: ['string', 'null'] }, payoffs: { type: 'array', items: { type: 'string' } } }, required: ['label'] },
+    handler: async (a) => {
+      const n = C.clone(S()), id = C.nextId('t', n.threads);
+      n.threads.push({ id, label: a.label, plant: a.plant || null, payoffs: a.payoffs || [] });
+      return commit(n, null) || ok({ id });
+    } },
+  { name: 'thread.update', description: 'Change a thread\'s label, plant beat, or payoff beats (payoffs replace whole).', mutating: true,
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, patch: { type: 'object', properties: { label: { type: 'string' }, plant: { type: ['string', 'null'] }, payoffs: { type: 'array', items: { type: 'string' } } } } }, required: ['id', 'patch'] },
+    handler: async (a) => {
+      const bad = unknownKeys(a.patch, THREAD_PATCH);
+      if (!a.patch || bad.length) return fail('invalid', bad.length ? `unknown thread field(s): ${bad.join(', ')}` : 'patch is required', 'Use only: label, plant, payoffs.');
+      const n = C.clone(S()), t = n.threads.find(x => x.id === a.id);
+      if (!t) return noThread(a.id);
+      Object.assign(t, C.clone(a.patch));
+      return commit(n, `thread.update:${a.id}:${Object.keys(a.patch).toSorted().join(',')}`) || ok({ id: a.id });
+    } },
+  { name: 'thread.remove', description: 'Remove a thread. Undo restores it.', mutating: true,
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    handler: async (a) => {
+      const n = C.clone(S()), i = n.threads.findIndex(t => t.id === a.id);
+      if (i < 0) return noThread(a.id);
+      n.threads.splice(i, 1);
+      return commit(n, null) || ok({ threads: n.threads.length });
+    } },
+  { name: 'checks', description: 'The checks on the current labels (SPEC §2): each with class, beat position, message and the next step. A clean story returns count 0.', inputSchema: NONE,
+    handler: async () => { const list = C.checks(S()); return ok({ count: list.length, items: list.slice(0, 50) }); } },
+  { name: 'arc', description: 'Pearson fit of the fortune line against the six arcs (Reagan et al. 2016); best shape and every score.', inputSchema: NONE,
+    handler: async () => ok(C.arcMatch(S())) },
+  { name: 'coverage', description: 'For each of the 13 principles, the beat positions tagged with it.', inputSchema: NONE,
+    handler: async () => ok({ principles: C.coverage(S()) }) },
+  { name: 'view.focus', description: 'Focus the page on one principle (dims other beats, opens its panel), or "all" to clear.', inputSchema: { type: 'object', properties: { principle: { enum: ['all', ...C.PRINCIPLES.map(p => p.id)] } }, required: ['principle'] },
+    handler: async (a) => {
+      if (a.principle !== 'all' && !PN[a.principle]) return fail('invalid', `no principle ${a.principle}`, `Use "all" or one of: ${Object.keys(PN).join(', ')}.`);
+      app.focus = a.principle; return ok({ focus: app.focus });
+    } },
+  { name: 'undo', description: 'Undo the last story change (100 steps).', mutating: true, inputSchema: NONE,
+    handler: async () => {
+      if (!app.undo.length) return fail('stack_empty', 'nothing to undo', 'Nothing to do; call status.');
+      app.redo.push(C.clone(S())); app.story = app.undo.pop(); app.coalesce = null; app.dirty = true; persist();
+      return ok({ undo: app.undo.length, redo: app.redo.length });
+    } },
+  { name: 'redo', description: 'Redo the last undone change.', mutating: true, inputSchema: NONE,
+    handler: async () => {
+      if (!app.redo.length) return fail('stack_empty', 'nothing to redo', 'Nothing to do; call status.');
+      app.undo.push(C.clone(S())); app.story = app.redo.pop(); app.coalesce = null; app.dirty = true; persist();
+      return ok({ undo: app.undo.length, redo: app.redo.length });
+    } },
+  { name: 'journal', description: 'The last n tool calls (default 20, max 200): tool, class, door, ms, time. The trajectory across sessions.', inputSchema: { type: 'object', properties: { n: { type: 'integer', minimum: 1, maximum: 200 } } },
+    handler: async (a) => ok({ entries: app.journal.slice(-Math.min(200, Math.max(1, a.n || 20))) }) }
+];
+const tools = Object.fromEntries(TOOLS.map(t => [t.name, t]));
+
+// ---- command bus: every door goes through here; every call is journaled with its door
+const bus = {
+  async dispatch(name, args, door) {
+    door = door || 'ui';
+    const t = tools[name];
+    if (!t) { const env = fail('unknown_tool', `no tool ${name}`, 'Read window.sandhi.manifest for the tool names.'); journalAppend({ at: new Date().toISOString(), tool: name, class: env.class, door, ms: 0 }); return env; }
+    const t0 = performance.now(); let env;
+    try { env = await t.handler(args || {}, door); }
+    catch (e) { env = fail('internal', String(e && e.message || e), 'Report it with the journal; the story is unchanged.'); }
+    env.ms = Math.round(performance.now() - t0);
+    app.last = { tool: name, class: env.class, door, at: new Date().toISOString() };
+    journalAppend({ at: app.last.at, tool: name, class: env.class, door, ms: env.ms });
+    afterDispatch(name, args || {}, door, env, t);
+    return env;
+  }
+};
+
+// ---- agent face: window.sandhi always, navigator.modelContext where present (Build Doctrine, two doors)
+const manifest = TOOLS.map(({ name, description, inputSchema, mutating }) => ({ name, description, inputSchema, mutating: !!mutating, reversible: !!mutating, personOnly: false }));
+let bootResolve; const ready = new Promise(r => { bootResolve = r; });
+window.sandhi = { version: VERSION, manifest, tools: Object.fromEntries(TOOLS.map(t => [t.name, (args) => bus.dispatch(t.name, args, 'window')])), status: () => bus.dispatch('status', {}, 'window'), ready };
+if (navigator.modelContext && navigator.modelContext.registerTool) {
+  for (const t of TOOLS) try { navigator.modelContext.registerTool({ name: 'sandhi.' + t.name, description: t.description, inputSchema: t.inputSchema, execute: (args) => bus.dispatch(t.name, args, 'modelContext') }); } catch { /* one bad registration must not block the rest */ }
+}
+
+// ---- UI
+const $ = (sel, el) => (el || document).querySelector(sel);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const attr = (o) => esc(JSON.stringify(o));
+const fmtF = (v) => (v > 0 ? '+' + v : v < 0 ? '−' + -v : '0');
+const snip = (t, n) => (t.length > n ? t.slice(0, n).trimEnd() + '…' : t);
+const opts = (list, cur, none) => (none !== undefined ? `<option value=""${cur ? '' : ' selected'}>${esc(none)}</option>` : '') + list.map(o => `<option value="${o.id}"${o.id === cur ? ' selected' : ''}>${esc(o.name)}${o.gloss ? ' · ' + esc(o.gloss) : ''}</option>`).join('');
+let toastTimer = null;
+function toast(msg, next) {
+  const el = $('#toast'); el.innerHTML = esc(msg) + (next ? ` <span>${esc(next)}</span>` : '');
+  el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 5000);
+}
+
+function afterDispatch(name, args, door, env, t) {
+  if (!env.ok) { if (door === 'ui') toast(env.message, env.next); return; }
+  if (name === 'view.focus') { renderAll(); return; }
+  if (!t.mutating && name !== 'story.save') return;
+  const keys = args.patch ? Object.keys(args.patch) : [];
+  if (door === 'ui' && name === 'beat.update' && keys.length && keys.every(k => k === 'text' || k === 'label')) renderViews();
+  else renderAll();
+}
+
+function renderAll() {
+  const a = document.activeElement, key = a && a.dataset ? focusKey(a) : null;
+  const sel = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
+  renderHeader(); renderBeats(); renderViews();
+  if (key) {
+    const el = [...document.querySelectorAll('[data-beat],[data-thread],[data-note],[data-sfield]')].find(x => focusKey(x) === key);
+    if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel && typeof el.setSelectionRange === 'function') try { el.setSelectionRange(sel[0], sel[1]); } catch { /* selects and ranges have no caret */ } }
+  }
+}
+const focusKey = (x) => [x.dataset.beat, x.dataset.thread, x.dataset.note, x.dataset.sfield, x.dataset.field, x.dataset.tfield, x.dataset.k].join('|');
+function renderViews() { renderChart(); renderArc(); renderChecks(); renderThreads(); renderCoverage(); renderSaveState(); }
+
+function renderHeader() {
+  for (const k of ['title', 'logline', 'belief']) { const el = $('#' + k); if (el !== document.activeElement) el.value = S()[k]; }
+  document.title = (S().title ? S().title + ' · ' : '') + 'sandhi';
+}
+function renderSaveState() {
+  $('#savestate').textContent = app.dirty ? 'Kept in this browser · not saved to a file' : 'Saved';
+  $('#undo').disabled = !app.undo.length; $('#redo').disabled = !app.redo.length;
+}
+
+function renderChart() {
+  const s = S(), n = s.beats.length, box = $('#chart');
+  if (!n) { box.innerHTML = '<p class="empty">No beats yet. Add one below.</p>'; return; }
+  // drawn at the container's own pixel width, so 11 px labels stay 11 px on a phone and on a wide screen
+  const W = Math.max(300, Math.round(box.clientWidth || 760)), narrow = W < 560;
+  const rows = [['spine', narrow ? 'Spine' : 'Story Spine', C.SPINE], ['avastha', narrow ? 'Nāṭya' : 'Nāṭyaśāstra', C.AVASTHA], ['kis', narrow ? 'Kishō' : 'Kishōtenketsu', C.KIS]].filter(([k]) => k === 'spine' || s.beats.some(b => b[k]));
+  const L = narrow ? 52 : 104, R = W - 12, T = 24, B = 196, RH = 20, NUM = B + 38, P0 = B + 52, H = P0 + rows.length * (RH + 4);
+  const w = (R - L) / n, x = i => L + w * (i + 0.5), y = v => T + (5 - v) * (B - T) / 10;
+  let g = '';
+  for (const v of [-5, 5]) g += `<line class="grid" x1="${L}" x2="${R}" y1="${y(v)}" y2="${y(v)}"/>`;
+  g += `<line class="zero" x1="${L}" x2="${R}" y1="${y(0)}" y2="${y(0)}"/>`;
+  g += `<text class="axis" x="${L - 12}" y="${y(5) + 4}" text-anchor="end">good</text><text class="axis" x="${L - 12}" y="${y(0) + 4}" text-anchor="end">0</text><text class="axis" x="${L - 12}" y="${y(-5) + 4}" text-anchor="end">ill</text>`;
+  g += `<polyline class="fline" points="${s.beats.map((b, i) => `${x(i)},${y(b.fortune)}`).join(' ')}"/>`;
+  s.beats.forEach((b, i) => {
+    const on = app.focus === 'all' || b.tags.includes(app.focus), hit = app.focus !== 'all' && on;
+    g += `<text class="num" x="${x(i)}" y="${NUM}" text-anchor="middle">${i + 1}</text>`;
+    for (const m of b.marks) g += `<text class="markt" x="${x(i)}" y="${y(b.fortune) + (m === 'low' ? 22 : -12)}" text-anchor="middle">${m === 'turn' ? 'turn' : 'low point'}</text>`;
+    g += `<circle class="dot${on ? '' : ' off'}" data-i="${i}" cx="${x(i)}" cy="${y(b.fortune)}" r="${hit ? 7 : 5.5}" tabindex="0" role="slider" aria-label="Beat ${i + 1} fortune" aria-valuemin="-5" aria-valuemax="5" aria-valuenow="${b.fortune}"><title>Beat ${i + 1} · ${esc(b.label || C.spineName(b.spine))} · fortune ${fmtF(b.fortune)}${b.text ? ' — ' + esc(snip(b.text, 90)) : ''}</title></circle>`;
+  });
+  rows.forEach((row, ri) => { g += phaseRow(s, row, P0 + ri * (RH + 4), { n, L, w, RH }); });
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Fortune line and phases of ${esc(s.title)}">${g}</svg>`;
+  box.dataset.geom = JSON.stringify({ T, B });
+}
+// one row of the phase strip: consecutive beats with the same label merge into one segment
+function phaseRow(s, [k, label, vocab], yy, geo) {
+  let g = `<text class="rowl" x="${geo.L - 12}" y="${yy + geo.RH / 2 + 4}" text-anchor="end">${label}</text>`, i = 0, alt = 0;
+  while (i < geo.n) {
+    const v = s.beats[i][k]; let j = i;
+    while (j + 1 < geo.n && s.beats[j + 1][k] === v) j++;
+    if (v) g += phaseSeg(vocab.find(o => o.id === v) || { name: v }, i, j, yy, alt++, geo);
+    i = j + 1;
+  }
+  return g;
+}
+function phaseSeg(item, i, j, yy, alt, { L, w, RH }) {
+  const x0 = L + w * i + 1, x1 = L + w * (j + 1) - 1, fits = (t) => !!t && x1 - x0 > t.length * 6 + 8;
+  const shown = fits(item.name) ? item.name : fits(item.short) ? item.short : '';
+  const g = `<rect class="${alt % 2 ? 'seg-b' : 'seg-a'}" x="${x0}" y="${yy}" width="${Math.max(2, x1 - x0)}" height="${RH}" rx="4"><title>${esc(item.name)}${item.gloss ? ' · ' + esc(item.gloss) : ''}, beats ${i + 1}${j > i ? '–' + (j + 1) : ''}</title></rect>`;
+  return shown ? g + `<text class="segt" x="${(x0 + x1) / 2}" y="${yy + RH / 2 + 4}" text-anchor="middle" pointer-events="none">${esc(shown)}</text>` : g;
+}
+function renderArc() {
+  const a = C.arcMatch(S());
+  const minis = C.ARCS.map(arc => {
+    let d = '';
+    for (let i = 0; i <= 32; i++) { const t = i / 32, v = Math.max(-1, Math.min(1, arc.fn(t))); d += (i ? 'L' : 'M') + (3 + t * 54).toFixed(1) + ' ' + (2 + (1 - v) / 2 * 20).toFixed(1); }
+    const best = a.best === arc.id;
+    return `<figure class="mini${best ? ' best' : ''}" title="${esc(arc.d)}"><svg viewBox="0 0 60 24" aria-hidden="true"><path d="${d}"/></svg><figcaption>${esc(arc.name)}${best ? ` · r ${a.r.toFixed(2)}` : ''}</figcaption></figure>`;
+  }).join('');
+  const lead = a.best ? `Closest of the six shapes: <b>${esc(a.name)}</b>` : a.reason === 'flat' ? 'The fortune line is flat, so no shape fits yet.' : 'Three beats or more give the line a shape.';
+  $('#arc').innerHTML = `<p class="lead">${lead} <span class="faint">· Reagan et al. 2016, fitted to your fortune numbers</span></p><div class="minis">${minis}</div>`;
+}
+
+function jointHtml(b, i) {
+  if (i === 0) return '';
+  const needs = !C.SETUP.has(b.spine), cls = !needs ? ' opt' : b.joint === 'and-then' ? ' slack' : b.joint ? '' : ' missing';
+  const choices = [['', needs ? 'what joins these?' : 'no joint needed'], ['therefore', 'therefore'], ['but', 'but'], ['and-then', 'and then']];
+  return `<div class="joint${cls}"><select data-beat="${b.id}" data-field="joint" aria-label="What joins beat ${i + 1} to beat ${i}">${choices.map(([v, l]) => `<option value="${v}"${(b.joint || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`;
+}
+function markBtn(b, m, l) {
+  const has = b.marks.includes(m), next = has ? b.marks.filter(x => x !== m) : [...b.marks, m];
+  return `<button class="mark" aria-pressed="${has}" data-cmd="beat.update" data-args="${attr({ id: b.id, patch: { marks: next } })}">${l}</button>`;
+}
+function tagsHtml(b, P) {
+  const chips = b.tags.map(t => `<button class="chip on" data-cmd="beat.update" data-args="${attr({ id: b.id, patch: { tags: b.tags.filter(x => x !== t) } })}" title="${esc(PLINE[t])} (click to remove)">${esc(PNAME[t])} <span aria-hidden="true">×</span></button>`).join('');
+  const addable = C.PRINCIPLES.filter(p => !b.tags.includes(p.id));
+  const add = addable.length ? `<select class="addtag" data-beat="${b.id}" data-field="tag-add" aria-label="Add a principle to beat ${P}"><option value="">+ principle</option>${addable.map(p => `<option value="${p.id}">${PN[p.id]}. ${esc(p.name)}</option>`).join('')}</select>` : '';
+  return chips + add;
+}
+function moreHtml(b, s) {
+  const id = b.id, none = '<span class="faint">none</span>';
+  const planted = s.threads.filter(t => t.plant === id).map(t => esc(t.label)), paid = s.threads.filter(t => t.payoffs.includes(id)).map(t => esc(t.label));
+  const nextN = b.drafts.reduce((m, d) => Math.max(m, d.n), 0) + 1;
+  const drafts = b.drafts.map((d, k) => `<li><s>${esc(d.text)}</s><input class="dnote" data-beat="${id}" data-field="draft-note" data-k="${k}" value="${esc(d.note)}" placeholder="Why it changed" aria-label="Note on draft ${d.n}"></li>`).join('');
+  return `<details class="more" data-more="${id}"${app.open.has(id) ? ' open' : ''}><summary>Phases, threads, drafts</summary><div class="inner">
+      <label>Nāṭyaśāstra stage <select class="sel" data-beat="${id}" data-field="avastha">${opts(C.AVASTHA, b.avastha, '—')}</select></label>
+      <label>Kishōtenketsu part <select class="sel" data-beat="${id}" data-field="kis">${opts(C.KIS, b.kis, '—')}</select></label>
+      <div>Plants here: ${planted.join(' · ') || none}</div>
+      <div>Pays off here: ${paid.join(' · ') || none}</div>
+      ${drafts && `<ul class="drafts">${drafts}</ul>`}
+      <button class="ghost" data-ui="keep-draft" data-id="${id}"${b.text.trim() ? '' : ' disabled'}>Keep this text as draft ${nextN}</button>
+    </div></details>`;
+}
+function beatCard(b, i, s) {
+  const id = b.id, P = i + 1, on = app.focus === 'all' || b.tags.includes(app.focus), hit = app.focus !== 'all' && on, last = s.beats.length;
+  const drivers = C.DRIVERS.map(d => `<option value="${d}"${b.driver === d ? ' selected' : ''}>${d === 'luck' ? 'luck' : "the hero's choice"}</option>`).join('');
+  return `${jointHtml(b, i)}<article class="card beat${on ? '' : ' dim'}${hit ? ' hit' : ''}" id="beat-${id}" data-id="${id}">
+    <div class="bhead">
+      <span class="bnum">${P}</span>
+      <input class="blabel" data-beat="${id}" data-field="label" value="${esc(b.label)}" placeholder="${esc(C.spineName(b.spine))}" aria-label="Label for beat ${P}" maxlength="200">
+      <select class="sel" data-beat="${id}" data-field="spine" aria-label="Story Spine stage of beat ${P}">${opts(C.SPINE, b.spine)}</select>
+      ${markBtn(b, 'turn', 'turn')}${markBtn(b, 'low', 'low point')}
+      <details class="menu"><summary aria-label="More actions for beat ${P}">⋯</summary><div>
+        <button data-cmd="beat.move" data-args="${attr({ id, position: P - 1 })}"${P === 1 ? ' disabled' : ''}>Move up</button>
+        <button data-cmd="beat.move" data-args="${attr({ id, position: P + 1 })}"${P === last ? ' disabled' : ''}>Move down</button>
+        <button data-cmd="beat.add" data-args="${attr({ after: id })}">Add a beat after</button>
+        <button data-cmd="beat.remove" data-args="${attr({ id })}">Remove beat</button>
+      </div></details>
+    </div>
+    <textarea class="btext" data-beat="${id}" data-field="text" rows="3" aria-label="Text of beat ${P}" placeholder="What happens">${esc(b.text)}</textarea>
+    <div class="brow">
+      <label>fortune <input type="range" min="-5" max="5" step="1" value="${b.fortune}" data-beat="${id}" data-field="fortune" aria-label="Fortune of beat ${P}"><output>${fmtF(b.fortune)}</output></label>
+      <label>moved by <select class="sel" data-beat="${id}" data-field="driver" aria-label="What moves beat ${P}"><option value="">—</option>${drivers}</select></label>
+      <span class="words">${C.wordCount(b.text)} words</span>
+    </div>
+    <div class="tags">${tagsHtml(b, P)}</div>
+    ${moreHtml(b, s)}
+  </article>`;
+}
+function renderBeats() {
+  const s = S();
+  $('#beats').innerHTML = s.beats.length ? s.beats.map((b, i) => beatCard(b, i, s)).join('') : '<p class="empty">No beats. Add one, or load The whistle.</p>';
+}
+
+const CHECK_NAMES = { beat_empty: 'Empty beat', beat_idle: 'Idle beat', joint_unlabelled: 'Unlabelled joint', joint_slack: 'Slack joint', plant_unpaid: 'Plant never fires', payoff_unplanted: 'Payoff without a plant', payoff_early: 'Payoff before its plant', thread_unused: 'Unused thread', ending_luck: 'Luck after the turn', no_turn: 'No turn marked', flat_fortune: 'Flat fortune' };
+function renderChecks() {
+  const list = C.checks(S()), box = $('#checks div');
+  $('#checks-h').textContent = list.length ? `Checks · ${list.length}` : 'Checks';
+  box.innerHTML = list.length ? `<ul>${list.map(c => `<li data-goto="${c.beat || ''}" title="${esc(c.class)}">${c.at ? `<span class="at">beat ${c.at}</span>` : ''}<b>${esc(CHECK_NAMES[c.class])}.</b> ${esc(c.message)}<span class="nx">${esc(c.next)}</span></li>`).join('')}</ul>`
+    : `<p class="clean">Nothing to flag in ${S().beats.length} beats and ${S().threads.length} threads.</p>`;
+}
+function renderThreads() {
+  const s = S(), beatOpts = (cur, none) => `<option value="">${none}</option>` + s.beats.map((b, i) => `<option value="${b.id}"${b.id === cur ? ' selected' : ''}>beat ${i + 1}</option>`).join('');
+  $('#threads ul').innerHTML = s.threads.map(t => {
+    const complete = t.plant && t.payoffs.length;
+    const pays = t.payoffs.map(p => ({ p, i: posOf(p) })).toSorted((a, b) => a.i - b.i).map(({ p, i }) => `<button class="chip" data-cmd="thread.update" data-args="${attr({ id: t.id, patch: { payoffs: t.payoffs.filter(x => x !== p) } })}" title="Remove this payoff">beat ${i + 1} ×</button>`).join('');
+    const addable = s.beats.filter(b => !t.payoffs.includes(b.id));
+    return `<li><div class="tline"><span class="tstate${complete ? '' : ' open'}" title="${complete ? 'planted and paid off' : 'open'}"></span><textarea data-thread="${t.id}" data-tfield="label" rows="1" aria-label="Thread label" maxlength="200">${esc(t.label)}</textarea><button class="x" data-cmd="thread.remove" data-args="${attr({ id: t.id })}" aria-label="Remove thread ${esc(t.label)}">remove</button></div>
+      <div class="tmeta">planted in <select class="sel" data-thread="${t.id}" data-tfield="plant" aria-label="Plant beat">${beatOpts(t.plant, 'nowhere')}</select> pays off in ${pays}${addable.length ? `<select class="addtag" data-thread="${t.id}" data-tfield="payoff-add" aria-label="Add a payoff beat"><option value="">+ beat</option>${addable.map(b => `<option value="${b.id}">beat ${posOf(b.id) + 1}</option>`).join('')}</select>` : ''}</div></li>`;
+  }).join('') || '<li class="faint">No threads yet. Name something the story plants: an object, a line, a habit.</li>';
+}
+function renderCoverage() {
+  const s = S(), cov = C.coverage(s), n = s.beats.length;
+  let h = `<thead><tr><th></th>${s.beats.map((b, i) => `<th scope="col">${i + 1}</th>`).join('')}<th></th></tr></thead><tbody>`;
+  for (const c of cov) {
+    h += `<tr class="${app.focus === c.id ? 'focus' : ''}"><th scope="row"><button data-cmd="view.focus" data-args="${attr({ principle: app.focus === c.id ? 'all' : c.id })}" title="${esc(PLINE[c.id])}"><span class="pn">${c.n}</span>${esc(c.name)}</button></th>`;
+    s.beats.forEach((b, i) => {
+      const on = b.tags.includes(c.id), next = on ? b.tags.filter(x => x !== c.id) : [...b.tags, c.id];
+      h += `<td class="c"><button data-cmd="beat.update" data-args="${attr({ id: b.id, patch: { tags: next } })}" aria-label="${on ? 'Untag' : 'Tag'} beat ${i + 1} with ${esc(c.name)}" aria-pressed="${on}"><i class="${on ? 'on' : 'no'}"></i></button></td>`;
+    });
+    h += `<td class="n">${c.beats.length}/${n}</td></tr>`;
+  }
+  $('#matrix').innerHTML = h + '</tbody>';
+  const p = C.PRINCIPLES.find(x => x.id === app.focus), panel = $('#panel');
+  if (!p) { panel.innerHTML = ''; return; }
+  const dis = p.dissent || [], src = C.SOURCES.filter(x => p.src[x.id]);
+  panel.innerHTML = `<div><h3>${PN[p.id]}. ${esc(p.name)}</h3><p>${esc(p.line)}</p><ul class="who">${src.map(x => `<li class="${dis.includes(x.id) ? 'dis' : ''}"><b>${esc(x.name)}</b><span>${dis.includes(x.id) ? 'Pushes back: ' : ''}${esc(p.src[x.id])}</span></li>`).join('')}</ul></div>
+    <div><h2 class="lab">In this story</h2><textarea data-note="${p.id}" aria-label="How ${esc(p.name)} works in this story" placeholder="Where does this principle work in your story?">${esc(s.notes[p.id] || '')}</textarea>
+    <p class="faint" style="margin-top:6px">Beats: ${cov.find(c => c.id === p.id).beats.join(', ') || 'none tagged'} · <button class="ghost" data-cmd="view.focus" data-args="${attr({ principle: 'all' })}">Clear focus</button></p></div>`;
+}
+
+// ---- UI events: every edit becomes a bus.dispatch
+const pending = new Map();
+function flushPending() { for (const [k, fn] of pending) { clearTimeout(fn.timer); pending.delete(k); fn(); } }
+function later(key, fn, ms) { const old = pending.get(key); if (old) clearTimeout(old.timer); fn.timer = setTimeout(() => { pending.delete(key); fn(); }, ms); pending.set(key, fn); }
+const ui = (name, args) => bus.dispatch(name, args, 'ui');
+
+function beatField(el) {
+  const id = el.dataset.beat, f = el.dataset.field, b = S().beats.find(x => x.id === id);
+  if (!b) return null;
+  if (f === 'tag-add') return el.value ? { id, patch: { tags: [...b.tags, el.value] } } : null;
+  if (f === 'draft-note') { const d = C.clone(b.drafts); if (!d[+el.dataset.k]) return null; d[+el.dataset.k].note = el.value; return { id, patch: { drafts: d } }; }
+  if (f === 'fortune') return { id, patch: { fortune: +el.value } };
+  if (['joint', 'driver', 'avastha', 'kis'].includes(f)) return { id, patch: { [f]: el.value || null } };
+  return { id, patch: { [f]: el.value } };
+}
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.dataset.beat && (el.dataset.field === 'text' || el.dataset.field === 'label')) {
+    if (el.dataset.field === 'text') { const w = el.closest('.beat').querySelector('.words'); if (w) w.textContent = C.wordCount(el.value) + ' words'; }
+    later(el.dataset.beat + el.dataset.field, () => ui('beat.update', beatField(el)), 350);
+  } else if (el.type === 'range' && el.dataset.beat) el.nextElementSibling.textContent = fmtF(+el.value);
+});
+function onThreadChange(el) {
+  const t = S().threads.find(x => x.id === el.dataset.thread); if (!t) return;
+  const f = el.dataset.tfield;
+  if (f === 'label') ui('thread.update', { id: t.id, patch: { label: el.value } });
+  else if (f === 'plant') ui('thread.update', { id: t.id, patch: { plant: el.value || null } });
+  else if (f === 'payoff-add' && el.value) ui('thread.update', { id: t.id, patch: { payoffs: [...t.payoffs, el.value] } });
+}
+document.addEventListener('change', (e) => {
+  const el = e.target, d = el.dataset;
+  if (el.id === 'file') return;
+  flushPending();
+  if (d.beat) { if (d.field !== 'text' && d.field !== 'label') { const a = beatField(el); if (a) ui('beat.update', a); } }
+  else if (d.thread) onThreadChange(el);
+  else if (d.note) ui('story.update', { notes: { [d.note]: el.value } });
+  else if (d.sfield) ui('story.update', { [d.sfield]: el.value });
+});
+document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
+function onUiControl(u) {
+  if (u.dataset.ui === 'open') { $('#file').click(); return; }
+  if (u.dataset.ui !== 'keep-draft') return;
+  flushPending();
+  const b = S().beats.find(x => x.id === u.dataset.id); if (!b) return;
+  const n = b.drafts.reduce((m, d) => Math.max(m, d.n), 0) + 1;
+  ui('beat.update', { id: b.id, patch: { drafts: [...b.drafts, { n, text: b.text, note: '' }] } });
+}
+document.addEventListener('click', (e) => {
+  for (const m of document.querySelectorAll('details.menu[open]')) if (!m.contains(e.target)) m.open = false;
+  const c = e.target.closest('[data-cmd]');
+  if (c) { flushPending(); const m = c.closest('details.menu'); if (m) m.open = false; ui(c.dataset.cmd, c.dataset.args ? JSON.parse(c.dataset.args) : {}); return; }
+  const u = e.target.closest('[data-ui]');
+  if (u) { onUiControl(u); return; }
+  const g = e.target.closest('[data-goto]');
+  if (g && g.dataset.goto) goBeat(g.dataset.goto);
+});
+document.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.more) { if (d.open) app.open.add(d.dataset.more); else app.open.delete(d.dataset.more); } }, true);
+$('#thread-add').addEventListener('submit', (e) => { e.preventDefault(); const i = e.target.querySelector('input'), v = i.value.trim(); if (!v) return; ui('thread.add', { label: v }).then(r => { if (r.ok) i.value = ''; }); });
+function goBeat(id) { const el = document.getElementById('beat-' + id); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); }
+
+async function openText(text) {
+  let story;
+  try { story = JSON.parse(text); } catch { toast('That file is not JSON.', 'Open a .sandhi.json file saved from sandhi.'); return; }
+  const r = await ui('story.load', { story });
+  if (r.ok) { app.dirty = false; persist(); renderSaveState(); toast(`Opened "${S().title}".`, 'Undo brings the previous story back.'); }
+}
+$('#file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) openText(await f.text()); });
+document.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+document.addEventListener('drop', async (e) => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (!f) return; e.preventDefault(); openText(await f.text()); });
+document.addEventListener('keydown', (e) => {
+  const mod = e.metaKey || e.ctrlKey, typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'range';
+  if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea[rows="1"]')) { e.preventDefault(); e.target.blur(); }
+  else if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); flushPending(); ui('story.save', {}); }
+  else if (mod && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); ui(e.shiftKey ? 'redo' : 'undo', {}); }
+});
+
+// fortune chart: drag a dot, or focus it and press arrow keys
+(function chartInput() {
+  const box = $('#chart'); let drag = null;
+  const valueAt = (ev) => {
+    const svg = box.querySelector('svg'), { T, B } = JSON.parse(box.dataset.geom), pt = svg.createSVGPoint();
+    pt.x = ev.clientX; pt.y = ev.clientY; const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+    return Math.max(-5, Math.min(5, Math.round(5 - (p.y - T) / (B - T) * 10)));
+  };
+  box.addEventListener('pointerdown', (e) => {
+    const d = e.target.closest('.dot'); if (!d) return;
+    e.preventDefault(); d.setPointerCapture(e.pointerId);
+    drag = { el: d, i: +d.dataset.i, start: S().beats[+d.dataset.i].fortune, v: null };
+  });
+  box.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const { T, B } = JSON.parse(box.dataset.geom), v = valueAt(e);
+    drag.v = v; drag.el.setAttribute('cy', T + (5 - v) * (B - T) / 10);
+  });
+  box.addEventListener('pointerup', () => {
+    if (!drag) return;
+    const { i, start, v } = drag, b = S().beats[i]; drag = null;
+    if (v !== null && v !== start) ui('beat.update', { id: b.id, patch: { fortune: v } }); else goBeat(b.id);
+  });
+  box.addEventListener('keydown', (e) => {
+    const d = e.target.closest('.dot'); if (!d || !/^Arrow(Up|Down)$/.test(e.key)) return;
+    e.preventDefault(); const b = S().beats[+d.dataset.i], v = Math.max(-5, Math.min(5, b.fortune + (e.key === 'ArrowUp' ? 1 : -1)));
+    if (v !== b.fortune) ui('beat.update', { id: b.id, patch: { fortune: v } }).then(() => { const n = $(`#chart .dot[data-i="${d.dataset.i}"]`); if (n) n.focus(); });
+  });
+})();
+
+// redraw the chart when its width changes (rotation, window resize, side panel)
+let lastW = 0;
+new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width); if (w && w !== lastW) { lastW = w; requestAnimationFrame(renderChart); } }).observe($('#chart'));
+
+// ---- boot: the story renders before anything else is touched (first value)
+(function boot() {
+  try { const j = JSON.parse(store.get(JKEY) || '[]'); if (Array.isArray(j)) app.journal = j.slice(-200); } catch { /* a corrupt journal starts empty */ }
+  let story = null;
+  try { const o = JSON.parse(store.get(KEY) || 'null'); if (o && C.validate(o.story).ok) { story = o.story; app.dirty = !!o.dirty; } } catch { /* a corrupt autosave falls back to the demo */ }
+  app.story = story || C.seed();
+  renderAll();
+  performance.mark('sandhi:first-value');
+  bootResolve(statusData());
+})();
+</script>
+</body>
+</html>

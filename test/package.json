@@ -1,0 +1,11 @@
+{
+  "name": "sandhi-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node core.mjs && node parity.mjs && node face.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}
