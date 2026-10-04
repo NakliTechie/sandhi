@@ -1118,6 +1118,13 @@ function keyError(id, key, base) {
   if (key && id === 'custom' && !ok2) return fail('invalid', 'A custom provider needs its address, starting with https:// (or http://127.0.0.1).', 'Enter the OpenAI-compatible base URL, such as https://host/v1, then the key.');
   return null;
 }
+// Where the story goes and what it costs is the writer's choice (history: "The external reader is whatever the writer chooses"):
+// an agent may pick an on-device rung and its model, never the provider rung, the provider, or the provider's model.
+function agentSelectError(a, door) {
+  if (door === 'ui') return null;
+  const toProvider = a.rung === 'provider' || a.provider !== undefined || (typeof a.model === 'string' && (a.rung || rcfg.rung) === 'provider');
+  return toProvider ? fail('person_only', 'Sending the story to a provider, and which provider and model it pays for, is the writer\'s choice.', 'Ask the writer to choose the provider in Read a story.') : null;
+}
 function selectError(a) {
   if (a.rung && !LD.ORDER.includes(a.rung)) return fail('invalid', `no rung ${a.rung}`, `Use one of: ${LD.ORDER.join(', ')}.`);
   if (a.provider && !LD.PROVIDERS[a.provider]) return fail('invalid', `no provider ${a.provider}`, `Use one of: ${Object.keys(LD.PROVIDERS).join(', ')}.`);
@@ -1125,8 +1132,8 @@ function selectError(a) {
   if (a.base !== undefined) return fail('invalid', "The custom address is set with its key, in the page, so a key only ever goes where the writer sent it.", 'Ask the writer to enter the address and key together in Read a story.');
   return null;
 }
-async function selectReader(a) {
-  const bad = selectError(a); if (bad) return bad;
+async function selectReader(a, door) {
+  const bad = selectError(a) || agentSelectError(a, door); if (bad) return bad;
   if (a.rung) rcfg.rung = a.rung;
   if (a.provider) rcfg.provider = a.provider;
   if (a.server) rcfg.server = a.server;
@@ -1178,7 +1185,8 @@ async function readInParts(text, r, progress) {
 const READ_DEFAULT = { machine: 'whole', device: 'whole', provider: 'whole' };
 const strategyFor = (a, id) => a.strategy || READ_DEFAULT[id] || 'whole';
 let readProgress = () => { /* the dialog replaces this while it is open */ };
-function readError(words, id, strategy) {
+function readError(words, id, strategy, door) {
+  if (door !== 'ui' && id === 'provider' && rcfg.rung !== 'provider') return fail('person_only', 'Sending the story to a provider is the writer\'s choice; the writer has not chosen it.', 'Read with an on-device rung (machine or device), or ask the writer to choose the provider in Read a story.');
   if (!id) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Read a story (reader.select with a rung), or pass rung.');
   if (strategy !== undefined && !['whole', 'split'].includes(strategy)) return fail('invalid', `no strategy ${strategy}`, 'Use "whole" or "split".');
   if (words < 50) return fail('invalid', `${words} words is too short to have a structure.`, 'Pass the story itself, at least 50 words.');
@@ -1186,17 +1194,19 @@ function readError(words, id, strategy) {
   if (app.reading) return fail('busy', 'A read is already running.', 'Wait for it to finish, then call read.get.');
   return null;
 }
-async function runRead(a) {
+let proposalSeq = 0;   // each staged proposal has an id, so the writer accepts the one the dialog shows
+async function runRead(a, door) {
   const text = String(a.text || ''), words = C.wordCount(text), id = a.rung || rcfg.rung;
-  const bad = readError(words, id, a.strategy); if (bad) return bad;
-  app.reading = true; readAbort = new AbortController(); const t0 = performance.now();
+  const bad = readError(words, id, a.strategy, door); if (bad) return bad;
+  app.reading = true; app.proposal = null; readAbort = new AbortController(); const t0 = performance.now();
   try {
     const r = await readText(text, READERS[id], (m) => readProgress(m), strategyFor(a, id));
+    stopped();   // a reader that ignored the abort still stages nothing
     if (!r.story) return fail('nothing_found', 'None of the model\'s beat quotes matched the text.', 'Check the text is the story itself, then try again or try the other reader.', { dropped: r.dropped });
     const v = C.validate(r.story);
     if (!v.ok) return fail('internal', 'The proposal failed schema sandhi:1.', 'Report it with the journal; the story is unchanged.', { errors: v.errors.slice(0, 10) });
     const a2 = C.arcMatch(r.story);
-    app.proposal = { story: r.story, report: { reader: id, where: LD.rungLabel(id, { server: machine.found && machine.found.id, provider: rcfg.provider }), model: r.model, mode: r.mode, calls: r.calls, words, beats: r.story.beats.length, threads: r.story.threads.length, dropped: r.dropped, arc: a2.best, ms: Math.round(performance.now() - t0) } };
+    app.proposal = { id: ++proposalSeq, story: r.story, report: { proposal: proposalSeq, reader: id, where: LD.rungLabel(id, { server: machine.found && machine.found.id, provider: rcfg.provider }), model: r.model, mode: r.mode, calls: r.calls, words, beats: r.story.beats.length, threads: r.story.threads.length, dropped: r.dropped, arc: a2.best, ms: Math.round(performance.now() - t0) } };
     return ok(app.proposal.report);
   } catch (e) {
     if (readAbort.signal.aborted) return fail('cancelled', 'The read was stopped.', 'Read it again when you are ready.');
@@ -1340,7 +1350,7 @@ const TOOLS = [
     handler: async (a) => ok(await readerStatus(!!a.probe)) },
   { name: 'reader.select', description: 'Choose the rung ("machine", "device", "provider"), the provider (openrouter, openai, anthropic, gemini, groq, mistral, deepseek, together, custom), the local server, and the model id for the chosen rung. A custom address is set with its key, by the writer (reader.key).', mutating: true,
     inputSchema: { type: 'object', properties: { rung: { enum: ['machine', 'device', 'provider'] }, provider: { enum: Object.keys(LD.PROVIDERS) }, server: { enum: Object.keys(LD.SERVERS) }, model: { type: 'string' } } },
-    handler: async (a) => selectReader(a) },
+    handler: async (a, door) => selectReader(a, door) },
   { name: 'reader.models', description: "The model ids the chosen rung offers: a local server's list, or your provider's list fetched with your key.", inputSchema: NONE,
     handler: async () => {
       try { const m = await listModels(); return m ? ok({ source: m.source, count: m.models.length, models: m.models.slice(0, 1000) }) : fail('no_reader', 'No model server answered on this machine.', 'Start Ollama or LM Studio and allow this site.'); }
@@ -1350,25 +1360,28 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { provider: { enum: Object.keys(LD.PROVIDERS) }, key: { type: 'string' }, base: { type: 'string' } }, required: ['key'] },
     handler: async (a) => {
       const id = a.provider || rcfg.provider, key = String(a.key || '').trim(), base = String(a.base || '').trim();
+      if (key && location.protocol === 'file:') return fail('invalid', 'A key is not stored on a page opened as a file: every local file shares its storage.', 'Use https://sandhi.naklitechie.com, or serve the folder: python3 -m http.server -b 127.0.0.1 8000.');
       const bad = keyError(id, key, base); if (bad) return bad;
       try { if (key) await vault.set(id, key, id === 'custom' ? base : ''); else await vault.del(id); } catch (e) { return fail('io_error', `The key store failed: ${e.message}`, 'Allow site storage for this page, then try again.'); }
       if (key) { rcfg.provider = id; rcfg.rung = 'provider'; saveCfg(); }
       return ok({ provider: id, key: key ? await LD.fingerprint(key) : null });
     } },
-  { name: 'read.run', description: "Read a story (prose) with the chosen rung and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline. strategy: \"whole\" (one call reads and labels) or \"split\" (one call finds the beats, a second labels them); each rung has a default.",
+  { name: 'read.run', description: "Read a story (prose) with the chosen rung and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline. strategy: \"whole\" (one call reads and labels) or \"split\" (one call finds the beats, a second labels them). Spends: on the provider rung the story goes to the writer's provider, billed to the writer, so an agent may use that rung only when the writer chose it.", spends: true,
     inputSchema: { type: 'object', properties: { text: { type: 'string' }, rung: { enum: ['machine', 'device', 'provider'] }, strategy: { enum: ['whole', 'split'] } }, required: ['text'] },
-    handler: async (a) => runRead(a) },
+    handler: async (a, door) => runRead(a, door) },
   { name: 'read.get', description: 'The staged proposal: the proposed story (schema sandhi:1) and the read report.', inputSchema: NONE,
     handler: async () => (app.proposal ? ok(C.clone(app.proposal)) : fail('no_proposal', 'nothing is staged', 'Call read.run first.')) },
-  { name: 'read.accept', description: 'Replace the story with the staged proposal. Person-only: the writer decides what enters the story. Undo brings the old story back.', mutating: true, personOnly: true, inputSchema: NONE,
-    handler: async () => {
+  { name: 'read.accept', description: 'Replace the story with the staged proposal (id: the proposal the writer was shown). Person-only: the writer decides what enters the story. Undo brings the old story back.', mutating: true, personOnly: true,
+    inputSchema: { type: 'object', properties: { id: { type: 'integer' } } },
+    handler: async (a) => {
       if (!app.proposal) return fail('no_proposal', 'nothing is staged', 'Call read.run first.');
+      if (a.id !== undefined && a.id !== app.proposal.id) return fail('no_proposal', 'The staged reading changed after it was shown.', 'Look at the new reading, then use it if you want it.');
       const r = commit(C.clone(app.proposal.story), null); if (r) return r;
       const report = app.proposal.report; app.proposal = null; return ok(report);
     } },
   { name: 'read.cancel', description: 'Stop the read that is running. Its model call is aborted; nothing is staged.', inputSchema: NONE,
     handler: async () => { if (!readAbort) return ok({ stopped: false }); readAbort.abort(); return ok({ stopped: true }); } },
-  { name: 'read.discard', description: 'Drop the staged proposal. The story is unchanged.', inputSchema: NONE,
+  { name: 'read.discard', description: 'Drop the staged proposal. The story is unchanged; the proposal cannot be brought back.', mutating: true, inputSchema: NONE,
     handler: async () => { const had = !!app.proposal; app.proposal = null; return ok({ discarded: had }); } }
 ];
 const tools = Object.fromEntries(TOOLS.map(t => [t.name, t]));
@@ -1398,7 +1411,8 @@ const bus = {
 };
 
 // ---- agent face: window.sandhi always, navigator.modelContext where present (Build Doctrine, two doors)
-const manifest = TOOLS.map(({ name, description, inputSchema, mutating, personOnly }) => ({ name, description, inputSchema, mutating: !!mutating, reversible: !!mutating && !personOnly && name !== 'reader.select', personOnly: !!personOnly }));
+const IRREVERSIBLE = new Set(['reader.select', 'read.discard']);
+const manifest = TOOLS.map(({ name, description, inputSchema, mutating, personOnly, spends }) => ({ name, description, inputSchema, mutating: !!mutating, reversible: !!mutating && !personOnly && !IRREVERSIBLE.has(name), personOnly: !!personOnly, spends: !!spends }));
 let bootResolve; const ready = new Promise(r => { bootResolve = r; });
 window.sandhi = { version: VERSION, manifest, tools: Object.fromEntries(TOOLS.map(t => [t.name, (args) => bus.dispatch(t.name, args, 'window')])), status: () => bus.dispatch('status', {}, 'window'), ready };
 if (navigator.modelContext && navigator.modelContext.registerTool) {
@@ -1429,6 +1443,7 @@ const AFTER = {
   'beat.update': (args, door) => (door === 'ui' && patchKeys(args).length && patchKeys(args).every(k => k === 'text' || k === 'label') ? renderViews() : renderAll())
 };
 function afterDispatch(name, args, door, env, t) {
+  if (door !== 'ui' && /^read(er)?\./.test(name)) { renderProposal(); if (reader.open) renderReader(false); }   // the dialog shows what an agent changed
   if (!env.ok) { if (door === 'ui') toast(env.message, env.next); return; }
   if (AFTER[name]) { AFTER[name](args, door); return; }
   if (!t.mutating && name !== 'story.save') return;
@@ -1768,8 +1783,10 @@ function machineText(m) {
   if (m.access === 'denied') return 'Chrome blocks local network access for this site (Site settings → Local network access)';
   return m.server ? `${LD.SERVERS[m.server].label} found, ${m.models} model${m.models === 1 ? '' : 's'}` : 'none answered on 127.0.0.1';
 }
+let readerDraws = 0;   // draws overlap (the writer's change and an agent's call); only the newest one writes the dialog
 async function renderReader(probe) {
-  const st = await readerStatus(probe);
+  const mine = ++readerDraws, st = await readerStatus(probe);
+  if (mine !== readerDraws) return;
   for (const r of reader.querySelectorAll('input[name=rung]')) r.checked = r.value === st.rung;
   $('#machine-state').textContent = '· ' + machineText(st.machine);
   $('#nano-state').textContent = '· ' + NANO_TEXT[st.device];
@@ -1784,7 +1801,8 @@ async function renderReader(probe) {
 function fillModels(listId, models) { $(listId).innerHTML = models.map(m => `<option value="${esc(m)}">`).join(''); }
 function renderProposal() {
   const box = $('#read-result'), p = app.proposal, run = $('#read-actions [data-ui="read-run"]');
-  $('#read-actions [data-ui="read-accept"]').hidden = !p; $('#read-actions [data-cmd="read.discard"]').hidden = !p;
+  const acc = $('#read-actions [data-ui="read-accept"]');
+  acc.hidden = !p; acc.dataset.proposal = p ? p.id : ''; $('#read-actions [data-cmd="read.discard"]').hidden = !p;
   run.textContent = p ? 'Read again' : 'Read it'; run.classList.toggle('primary', !p);
   if (!p) { box.innerHTML = ''; return; }
   const r = p.report, drop = r.dropped.beats + r.dropped.quotes;
@@ -1792,7 +1810,7 @@ function renderProposal() {
   box.innerHTML = `<p class="sum"><b>${r.beats} beats, ${r.threads} plants</b> from ${r.words} words, read by ${esc(r.model)} (${r.mode === 'split' ? 'beats first, then labels' : r.mode === 'whole' ? 'whole story' : `${r.calls - 1} parts, then the outline`}).${arc ? ` Closest shape: ${esc(arc.name)}.` : ''}${drop ? ` ${drop} quote${drop > 1 ? 's' : ''} did not match the text and ${drop > 1 ? 'were' : 'was'} dropped.` : ''}</p>
     <ol>${p.story.beats.map(b => `<li><b>${esc(b.label || C.spineName(b.spine))}</b>${b.label && b.label !== C.spineName(b.spine) ? ' · ' + esc(C.spineName(b.spine)) : ''} · fortune ${fmtF(b.fortune)}${b.marks.length ? ' · ' + b.marks.map(m => (m === 'low' ? 'low point' : m)).join(', ') : ''} — ${esc(snip(b.text, 80))}</li>`).join('')}</ol>`;
 }
-async function openReader() { $('#read-progress').textContent = ''; renderProposal(); await renderReader(false); if (!reader.open) reader.showModal(); $('#read-text').focus(); }
+async function openReader() { $('#read-progress').textContent = ''; await renderReader(false); renderProposal(); if (!reader.open) reader.showModal(); $('#read-text').focus(); }   // the proposal is drawn last, so a read that ended meanwhile shows
 readProgress = (m) => { $('#read-progress').textContent = m; };
 const countWords = () => { $('#read-count').textContent = `${C.wordCount($('#read-text').value)} words`; };
 $('#read-text').addEventListener('input', countWords);
@@ -1826,6 +1844,16 @@ async function onReaderTool(kind) {
   if (r.ok) fillModels((rcfg.rung || 'device') === 'machine' ? '#machine-models' : '#provider-models', r.data.models);
   return renderReader(false);
 }
+async function readRunClick() {
+  readProgress('Starting…');
+  const run = $('#read-actions [data-ui="read-run"]'); run.hidden = true; $('#read-stop').hidden = false;
+  const rung = reader.querySelector('input[name=rung]:checked');   // read with the rung the writer sees chosen
+  const going = ui('read.run', { text: $('#read-text').value, ...(rung ? { rung: rung.value } : {}) });
+  renderProposal();   // the previous proposal is gone while this read runs
+  const r = await going;
+  run.hidden = false; $('#read-stop').hidden = true;
+  readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal(); return renderReader(false);
+}
 async function onReadControl(kind, e) {
   if (kind === 'read-open') return openReader();
   if (kind === 'read-close') return reader.close();
@@ -1835,15 +1863,9 @@ async function onReadControl(kind, e) {
     if (r.ok) { reader.close(); toast(`${r.data.beats} beats, one per paragraph. Label them yourself.`, 'Undo brings your previous story back.'); }
     return null;
   }
-  if (kind === 'read-run') {
-    $('#read-result').innerHTML = ''; readProgress('Starting…');
-    const run = $('#read-actions [data-ui="read-run"]'); run.hidden = true; $('#read-stop').hidden = false;
-    const r = await ui('read.run', { text: $('#read-text').value });
-    run.hidden = false; $('#read-stop').hidden = true;
-    readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal(); return renderReader(false);
-  }
-  if (kind === 'read-accept' && e.isTrusted) {   // person-only: a real click, never a scripted one
-    const r = await ui('read.accept', {});
+  if (kind === 'read-run') return readRunClick();
+  if (kind === 'read-accept' && e.isTrusted) {   // person-only: a real click, never a scripted one, on the proposal shown
+    const r = await ui('read.accept', { id: +$('#read-actions [data-ui="read-accept"]').dataset.proposal });
     if (r.ok) { reader.close(); toast(`Read by ${r.data.model}: ${r.data.beats} beats.`, 'Undo brings your previous story back.'); }
     return null;
   }

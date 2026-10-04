@@ -18,7 +18,7 @@
 | Where | How |
 |---|---|
 | Any desktop browser | Open [sandhi.naklitechie.com](https://sandhi.naklitechie.com) |
-| From source | `git clone https://github.com/NakliTechie/sandhi && open sandhi/index.html` |
+| From source | `git clone https://github.com/NakliTechie/sandhi && cd sandhi && python3 -m http.server -b 127.0.0.1 8000`, then open `127.0.0.1:8000` |
 
 It opens on *The whistle*, a ten-beat demo story, with a short tour. Move a beat's fortune, name the word that joins two beats, tag a principle, and the chart and the checks follow. **New** starts a blank Story Spine; **Read a story** takes one you have written. An agent drives the same page:
 
@@ -54,7 +54,7 @@ node cli-read.mjs score <reply> <name> --story gift-of-the-magi   # score a mode
 node live.mjs --base http://127.0.0.1:11434/v1 --model <id>       # a local model reads The whistle
 ```
 
-Agents: `window.sandhi` exposes 31 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading and entering a key stay with the writer. Contract: [SPEC.md §0](SPEC.md).
+Agents: `window.sandhi` exposes 31 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
 
 ## Verify it yourself
 
@@ -62,7 +62,7 @@ Agents: `window.sandhi` exposes 31 tools over one command bus, and `navigator.mo
 cd test && npm install && npm test
 ```
 
-The gates refuse a demo story that cannot round-trip the explainer's data, a check with no test that fires it, a control with no tool behind it, a cold load over five seconds, an agent that can accept a reading or set a key, and any serious accessibility violation. Reading quality is measured, not gated: on *The whistle* and three public-domain stories, codex `gpt-6-astra` and a Claude subagent marked the turn in all four with every quote matching the text, while on *The whistle* Gemini Nano missed the turn in all eight runs and a 4B local model found it in one of two (table in [SPEC.md §5](SPEC.md)).
+The gates refuse a demo story that does not match the explainer's data, a check with no test that fires it, a control with no tool behind it, a cold load over five seconds, an agent door that offers the accept or key tools or sends the story off the device on its own, and any serious accessibility violation. Reading quality is measured, not gated: on *The whistle* and three public-domain stories, codex `gpt-6-astra` and a Claude subagent marked the turn in all four with every quote matching the text, while on *The whistle* Gemini Nano missed the turn in all eight runs and a 4B local model found it in one of two (table in [SPEC.md §5](SPEC.md)).
 
 ## License
 

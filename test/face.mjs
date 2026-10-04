@@ -168,7 +168,7 @@ const labelsP = P.labels(FIX.beats.map(b => ({ summary: b.summary, fortune: b.fo
 const twoPassInput = Math.max(tok(labelsP.system + '\n' + labelsP.user), tok(emptyScenes.system + '\n' + emptyScenes.user) + 420) + 40;
 check('read.fixture_forces_two_pass', twoPassInput < tok(whole.system + '\n' + whole.user), { twoPassInput, whole: tok(whole.system + '\n' + whole.user) });
 // the stand-in: Chrome's LanguageModel surface, answering whole / scenes / labels prompts from the fixture
-const fakeNano = ({ FIX, windowTokens, hang }) => {
+const fakeNano = ({ FIX, windowTokens, hang, late }) => {
   window.__nanoCalls = [];
   const answer = (user) => {
     if (user.startsWith('Mark the structure')) return FIX.whole;
@@ -182,13 +182,14 @@ const fakeNano = ({ FIX, windowTokens, hang }) => {
     prompt: async (user, opts) => {
       window.__nanoCalls.push({ kind: user.slice(0, 12), system: !!(init && init.initialPrompts), schema: !!(opts && opts.responseConstraint), signal: !!(opts && opts.signal) });
       if (hang) return new Promise((_, no) => { opts.signal.addEventListener('abort', () => no(new DOMException('stopped', 'AbortError'))); });   // answers only to Stop
+      if (late) return new Promise(ok => { setTimeout(() => ok(JSON.stringify(answer(user))), 300); });   // ignores Stop and answers anyway
       return JSON.stringify(answer(user));
     }, destroy() {} });
   window.LanguageModel = { availability: async () => 'available', create: async (init) => session(init) };
 };
 async function readPage(opts) {
   const ctx2 = await browser.newContext(opts && opts.ctx);
-  if (opts && opts.nano) await ctx2.addInitScript(fakeNano, { FIX, windowTokens: opts.nano, hang: !!opts.hang });
+  if (opts && opts.nano) await ctx2.addInitScript(fakeNano, { FIX, windowTokens: opts.nano, hang: !!opts.hang, late: !!opts.late });
   else await ctx2.addInitScript(() => { delete window.LanguageModel; });   // a browser without Gemini Nano
   await ctx2.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } });
   const p = await ctx2.newPage(); const errs = [];
@@ -214,8 +215,30 @@ async function readPage(opts) {
   check('read.accept_person_only', refused.class === 'person_only' && JSON.stringify((await call('story.get', {})).data.story) === JSON.stringify(before), refused);
   const keyRefused = await call('reader.key', { key: 'x' });
   check('read.key_person_only', keyRefused.class === 'person_only', keyRefused);
-  await p.click('[data-ui="read-open"]');
+  // an agent reads on the device; sending the story to a provider, or choosing one, is the writer's
+  const offRun = await call('read.run', { text: prose, rung: 'provider' }), offRung = await call('reader.select', { rung: 'provider' }), offProv = await call('reader.select', { provider: 'openai' });
+  check('read.agent_cannot_send_off_device', [offRun, offRung, offProv].every(x => x.class === 'person_only') && (await call('reader.status', {})).data.rung === 'device', [offRun.class, offRung.class, offProv.class]);
+  await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);
   const shown = await p.evaluate(() => document.querySelectorAll('#read-result li').length);
+  const unchanged = JSON.stringify((await call('story.get', {})).data.story);
+  await p.evaluate(() => document.querySelector('[data-ui="read-accept"]').click());   // a scripted click is not the writer's
+  check('read.accept_scripted_click_refused', JSON.stringify((await call('story.get', {})).data.story) === unchanged, 'a scripted click accepted');
+  // the open dialog follows an agent: a new reading and a new rung show at once; Accept takes only the reading shown
+  const id1 = await p.getAttribute('[data-ui="read-accept"]', 'data-proposal');
+  const agentRead = await call('read.run', { text: prose, strategy: 'split' });
+  const follows = await p.waitForFunction((id) => document.querySelector('[data-ui="read-accept"]').dataset.proposal !== id, id1, { timeout: 2000 }).then(() => true, () => false);
+  const shownId = await p.getAttribute('[data-ui="read-accept"]', 'data-proposal');
+  await call('reader.select', { rung: 'machine' });
+  const radioFollows = await p.waitForFunction(() => document.querySelector('#reader input[value="machine"]').checked, null, { timeout: 2000 }).then(() => true, () => false);
+  await call('reader.select', { rung: 'device' });
+  await p.waitForFunction(() => document.querySelector('#reader input[value="device"]').checked);
+  check('read.dialog_follows_agent', follows && radioFollows, { follows, radioFollows, id1, shownId, agentRead: agentRead.class, proposal: agentRead.data && agentRead.data.proposal });
+  await p.evaluate((id) => { document.querySelector('[data-ui="read-accept"]').dataset.proposal = id; }, id1);   // the writer clicks a reading that was replaced
+  await p.click('[data-ui="read-accept"]');
+  await p.waitForFunction(() => /changed after it was shown/.test(document.querySelector('#toast').textContent));
+  check('read.accept_bound_to_shown_proposal', JSON.stringify((await call('story.get', {})).data.story) === unchanged, 'a replaced reading was accepted');
+  await call('read.run', { text: prose });   // a whole-story reading, shown in the open dialog
+  await p.waitForFunction(() => document.querySelectorAll('#read-result li').length === 10);
   await p.click('[data-ui="read-accept"]');
   const after = (await call('story.get', {})).data.story;
   const sameProse = after.beats.length === 10 && after.beats.every((b, i) => b.text === SEED.beats[i].text);
@@ -254,6 +277,41 @@ async function readPage(opts) {
   check('read.stop_button', buttons.stop && !buttons.run, buttons);
   check('read.stop_no_errors', errs.length === 0, errs);
   await ctx2.close();
+}
+{ // a reader that ignores Stop: its late answer is not staged, and the read before it leaves no proposal behind
+  const { ctx2, p, errs, call } = await readPage({ nano: 6144, late: true });
+  const firstRead = await call('read.run', { text: prose });
+  await p.evaluate((text) => { window.__pending = window.sandhi.tools['read.run']({ text }); }, prose);
+  await p.waitForFunction(() => window.__nanoCalls.length === 2);
+  const staged = (await call('status', {})).data.read.proposal;
+  const c = await call('read.cancel', {}); const r = await p.evaluate(() => window.__pending);
+  await p.waitForTimeout(500);
+  const after = (await call('status', {})).data.read;
+  check('read.cancel_stages_nothing', firstRead.ok && staged === null && c.data.stopped && r.class === 'cancelled' && after.proposal === null && !after.reading, { first: firstRead.class, staged, r: r.class, after });
+  check('read.late_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // the modelContext door: every tool but the person-only ones, each call journaled with its door
+  const ctx5 = await browser.newContext();
+  await ctx5.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } delete window.LanguageModel;
+    window.__mc = []; Object.defineProperty(navigator, 'modelContext', { value: { registerTool: (t) => { window.__mc.push(t); } }, configurable: true }); });
+  const p5 = await ctx5.newPage(); await p5.goto(base); await p5.evaluate(() => window.sandhi.ready);
+  const names = await p5.evaluate(() => window.__mc.map(t => t.name));
+  const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
+  const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
+  check('door.model_context', names.length === 29 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  await ctx5.close();
+}
+{ // a page opened as a file stores no key: every local file shares its storage
+  const ctx6 = await browser.newContext();
+  await ctx6.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } delete window.LanguageModel; });
+  const p6 = await ctx6.newPage(); await p6.goto(new URL('../index.html', import.meta.url).href); await p6.evaluate(() => window.sandhi.ready);
+  await p6.click('[data-ui="read-open"]'); await p6.check('#reader input[value="provider"]');
+  await p6.fill('#provider-key', 'sk-test-0000-not-a-real-key'); await p6.locator('#provider-key').blur();
+  const told = await p6.waitForFunction(() => /opened as a file/.test(document.querySelector('#toast').textContent), null, { timeout: 2000 }).then(() => true, () => false);
+  const keys6 = (await p6.evaluate(() => window.sandhi.tools['reader.status']({}))).data.keys;
+  check('ladder.no_key_on_file_pages', told && keys6.length === 0, { told, keys6 });
+  await ctx6.close();
 }
 { // a window too small for the whole story: parts, then the outline
   const { ctx2, p, errs, call } = await readPage({ nano: twoPassInput + 1600 });
