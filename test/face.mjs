@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 28 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
+check('face.manifest', man.length === 29 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -185,7 +185,7 @@ async function readPage(opts) {
 { // whole story on Nano, then the writer accepts it in the page
   const { ctx2, p, errs, call } = await readPage({ nano: 6144 });
   const st = await call('reader.status', {});
-  check('read.nano_ready', st.data.nano === 'ready' && st.data.reader === 'nano' && st.data.where === 'this device', st.data);
+  check('read.nano_ready', st.data.device === 'ready' && st.data.rung === 'device' && /stays on this device/.test(st.data.where), st.data);
   const r = await call('read.run', { text: prose });
   check('read.nano_whole', r.ok && r.data.mode === 'whole' && r.data.calls === 1 && r.data.beats === 10 && r.data.threads === 6 && r.data.model === 'gemini-nano' && r.data.arc === 'hole' && r.data.dropped.beats === 0, r);
   const before = (await call('story.get', {})).data.story;
@@ -213,7 +213,7 @@ async function readPage(opts) {
 { // a Nano whose window cannot hold the instructions says so, and points at the other reader
   const { ctx2, call } = await readPage({ nano: 1000 });
   const r = await call('read.run', { text: prose });
-  check('read.nano_window_too_small', r.class === 'no_reader' && /1000 tokens/.test(r.message) && /Claude/.test(r.next), r);
+  check('read.nano_window_too_small', r.class === 'no_reader' && /1000 tokens/.test(r.message) && /provider/.test(r.next), r);
   await ctx2.close();
 }
 { // a window too small for the whole story: parts, then the outline
@@ -225,40 +225,91 @@ async function readPage(opts) {
   check('read.two_pass_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
-{ // Claude with a key: request shape, then refusal and a rejected key
+{ // the AI ladder, rung 3: your provider and key. Every call is intercepted; the key is a dummy test value and nothing leaves.
   const { ctx2, p, errs, call } = await readPage({});
   const sent = []; let mode = 'ok';
+  const TEST_KEY = 'sk-test-0000-not-a-real-key';
+  const reply = (body) => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
   await p.route('https://api.anthropic.com/v1/messages', async (route) => {
-    const q = route.request(); sent.push({ headers: q.headers(), body: JSON.parse(q.postData()) });
-    if (mode === '401') return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }) });
-    const msg = { id: 'msg_test', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: mode === 'refusal' ? 'refusal' : 'end_turn', content: mode === 'refusal' ? [] : [{ type: 'text', text: JSON.stringify(FIX.whole) }], usage: { input_tokens: 1, output_tokens: 1 } };
-    return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(msg) });
+    const q = route.request(); sent.push({ host: 'anthropic', headers: q.headers(), body: JSON.parse(q.postData()) });
+    if (mode === '401') return route.fulfill({ status: 401, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }) });
+    return route.fulfill(reply({ id: 'msg_test', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: mode === 'refusal' ? 'refusal' : 'end_turn', content: mode === 'refusal' ? [] : [{ type: 'text', text: JSON.stringify(FIX.whole) }] }));
+  });
+  await p.route('https://openrouter.ai/api/v1/**', async (route) => {
+    const q = route.request();
+    if (q.method() === 'GET') return route.fulfill(reply({ data: [{ id: 'zeta/model' }, { id: 'alpha/model' }] }));
+    const body = JSON.parse(q.postData()); sent.push({ host: 'openrouter', headers: q.headers(), body });
+    if (body.response_format && body.response_format.type === 'json_schema') return route.fulfill({ status: 400, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: { message: 'response_format json_schema is not supported for this model' } }) });
+    return route.fulfill(reply({ model: 'alpha/model', choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'Here it is:\n```json\n' + JSON.stringify(FIX.whole) + '\n```' } }] }));
   });
   const none = await call('read.run', { text: prose });
-  check('read.no_reader_without_nano_or_key', none.class === 'no_reader' && !!none.next, none);
+  check('ladder.no_reader_without_any_rung', none.class === 'no_reader' && !!none.next, none);
+  // Anthropic: choose the rung and provider in the page, paste the key (person-only), read
   await p.click('[data-ui="read-open"]');
-  await p.check('#reader input[value="anthropic"]');
-  const TEST_KEY = 'sk-ant-test-0000-not-a-real-key';
-  await p.fill('#anthropic-key', TEST_KEY); await p.locator('#anthropic-key').blur();
-  await p.waitForFunction(() => document.querySelector('#key-state').textContent.includes('key set'));
-  const privacy = await p.textContent('#read-privacy');
-  const r = await call('read.run', { text: prose });
-  const q = sent[0] || { headers: {}, body: {} };
+  await p.check('#reader input[value="provider"]');
+  await p.selectOption('#provider', 'anthropic');
+  await p.fill('#provider-key', TEST_KEY); await p.locator('#provider-key').blur();
+  await p.waitForFunction(() => /key·[0-9a-f]{8}/.test(document.querySelector('#key-state').textContent));
+  const keyField = await p.inputValue('#provider-key'), privacy = await p.textContent('#read-privacy');
+  let r = await call('read.run', { text: prose });
+  const q = sent.find(x => x.host === 'anthropic') || { headers: {}, body: {} };
   const shapeOk = q.headers['x-api-key'] === TEST_KEY && q.headers['anthropic-version'] === '2023-06-01' && q.headers['anthropic-dangerous-direct-browser-access'] === 'true'
     && q.headers['anthropic-beta'] === 'server-side-fallback-2026-07-01' && q.body.model === 'claude-opus-5-5' && q.body.max_tokens === 16000 && q.body.fallbacks === 'default'
-    && q.body.output_config.effort === 'medium' && q.body.output_config.format.type === 'json_schema' && typeof q.body.system === 'string' && q.body.messages[0].role === 'user';
-  check('read.anthropic_request_shape', shapeOk && /Anthropic/.test(privacy), { headers: Object.keys(q.headers), body: Object.keys(q.body), privacy });
-  check('read.anthropic_whole', r.ok && r.data.model === 'claude-opus-5-5' && r.data.beats === 10 && r.data.reader === 'anthropic', r);
-  const stored = await p.evaluate(() => localStorage.getItem('sandhi:anthropic-key'));
+    && q.body.output_config.effort === 'medium' && q.body.output_config.format.type === 'json_schema' && typeof q.body.system === 'string';
+  check('ladder.anthropic_request', shapeOk && r.ok && r.data.model === 'claude-opus-5-5' && r.data.reader === 'provider' && /Anthropic, with your key: the story leaves this device/.test(privacy), { r, privacy });
+  check('ladder.key_field_cleared', keyField === '', 'key left in the field');
+  mode = 'refusal'; r = await call('read.run', { text: prose });
+  check('ladder.anthropic_refusal', r.class === 'refused' && !!r.next, r);
+  mode = '401'; r = await call('read.run', { text: prose });
+  check('ladder.anthropic_key_rejected', r.class === 'key_rejected' && /invalid x-api-key/.test(r.message), r);
+  mode = 'ok';
+  // OpenRouter: any OpenAI-compatible provider; load its models, pick one, and step down when it rejects json_schema
+  await p.selectOption('#provider', 'openrouter');
+  await p.fill('#provider-key', TEST_KEY); await p.locator('#provider-key').blur();
+  await p.waitForFunction(() => /OpenRouter, key·/.test(document.querySelector('#key-state').textContent));
+  const models = await call('reader.models', {});
+  check('ladder.provider_models', models.ok && JSON.stringify(models.data.models) === JSON.stringify(['alpha/model', 'zeta/model']), models);
+  await p.fill('#provider-model', 'alpha/model'); await p.locator('#provider-model').blur();
+  await p.waitForFunction(() => document.querySelector('#provider-model').value === 'alpha/model');
+  const before = sent.length;
+  r = await call('read.run', { text: prose });
+  const tries = sent.slice(before);
+  check('ladder.openai_step_down', r.ok && r.data.model === 'alpha/model' && r.data.beats === 10 && tries.length === 2 && tries[0].body.response_format.type === 'json_schema' && tries[1].body.response_format.type === 'json_object'
+    && tries[1].body.messages[0].content.includes('JSON Schema') && tries[1].headers.authorization === `Bearer ${TEST_KEY}`, { r, tries: tries.map(x => x.body.response_format) });
+  const again = sent.length; r = await call('read.run', { text: prose });
+  check('ladder.openai_remembers_mode', r.ok && sent.length - again === 1 && sent[again].body.response_format.type === 'json_object', sent.slice(again).map(x => x.body.response_format));
+  // the keys: in IndexedDB, shown as fingerprints, never in localStorage, the journal or the agent face
+  const st = (await call('reader.status', {})).data;
+  const ls = await p.evaluate(() => JSON.stringify(localStorage));
   const journal = JSON.stringify((await call('journal', { n: 200 })).data.entries);
-  check('read.key_not_kept_or_logged', stored === null && !journal.includes(TEST_KEY), { stored: !!stored, inJournal: journal.includes(TEST_KEY) });
-  mode = 'refusal';
-  const ref = await call('read.run', { text: prose });
-  check('read.anthropic_refusal', ref.class === 'refused' && !!ref.next, ref);
-  mode = '401';
-  const bad = await call('read.run', { text: prose });
-  check('read.anthropic_key_rejected', bad.class === 'key_rejected' && /invalid x-api-key/.test(bad.message), bad);
-  check('read.anthropic_no_errors', errs.length === 0, errs);
+  check('ladder.keys_fingerprints_only', st.keys.length === 2 && st.keys.every(k => /^key·[0-9a-f]{8}$/.test(k.fingerprint)) && !JSON.stringify(st).includes(TEST_KEY) && !ls.includes(TEST_KEY) && !journal.includes(TEST_KEY), { keys: st.keys });
+  await p.click('#key-forget');
+  await p.waitForFunction(() => /no key yet/.test(document.querySelector('#key-state').textContent));
+  const after = (await call('reader.status', {})).data;
+  check('ladder.forget_key', after.provider.key === null && after.keys.length === 1 && after.keys[0].provider === 'anthropic', after.keys);
+  check('ladder.provider_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // the AI ladder, rung 1: a model server on this machine (Ollama), found only when the writer asks
+  const { ctx2, p, errs, call } = await readPage({});
+  const sent = [];
+  const reply = (body) => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
+  await p.route('http://127.0.0.1:11434/v1/**', async (route) => {
+    const q = route.request();
+    if (q.method() === 'GET') return route.fulfill(reply({ object: 'list', data: [{ id: 'llama3.2' }] }));
+    sent.push({ headers: q.headers(), body: JSON.parse(q.postData()) });
+    return route.fulfill(reply({ model: 'llama3.2', choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(FIX.whole) } }] }));
+  });
+  const unprobed = (await call('reader.status', {})).data;
+  await p.click('[data-ui="read-open"]');
+  await p.check('#reader input[value="machine"]');
+  await p.click('[data-ui="read-probe"]');
+  await p.waitForFunction(() => /Ollama found, 1 model/.test(document.querySelector('#machine-state').textContent));
+  const privacy = await p.textContent('#read-privacy');
+  const r = await call('read.run', { text: prose });
+  check('ladder.machine_not_probed_at_load', unprobed.machine.checked === false && unprobed.machine.server === null, unprobed.machine);
+  check('ladder.machine_read', r.ok && r.data.reader === 'machine' && r.data.model === 'llama3.2' && r.data.beats === 10 && sent.length >= 1 && !sent[0].headers.authorization && /Ollama on this machine: the story stays on your machine/.test(privacy), { r, privacy });
+  check('ladder.machine_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
 

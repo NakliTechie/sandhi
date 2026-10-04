@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https: http://127.0.0.1:* http://localhost:*; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>sandhi — the joints of a story</title>
 <meta name="description" content="Write a story on its spine and see it through thirteen storytelling principles: fortune line, phases, joints, plants and payoffs. Your story stays on your machine.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 25 L16 12 L28 25' fill='none' stroke='%23BA7517' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='12' r='4.5' fill='%232C2A24'/%3E%3C/svg%3E">
@@ -207,11 +208,13 @@ table.matrix{border-collapse:collapse}
 .readers{border:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
 .readers label{display:flex;align-items:baseline;gap:8px}
 .readers input[type=radio]{accent-color:var(--accent)}
-#anthropic-fields{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:2px 0 0 24px;font-size:12.5px;color:var(--muted)}
-#anthropic-fields input[type=password],#anthropic-fields input[type=text]{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:4px 8px;font-size:13px;min-width:0}
-#anthropic-fields[hidden]{display:none}
-#anthropic-key{flex:1 1 220px}
-#anthropic-model{width:170px}
+.rung{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px}
+.rfields{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 6px 24px;font-size:12.5px;color:var(--muted)}
+.rfields[hidden]{display:none}
+.rfields input[type=password],.rfields input[type=text],.rfields input[type=url]{border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:4px 8px;font-size:13px;min-width:0}
+#provider-key{flex:1 1 200px}
+#provider-base{flex:1 1 260px}
+#provider-model,#machine-model{width:220px}
 #read-privacy{font-size:12px;color:var(--faint);margin:0 0 12px}
 #read-progress{font-size:13px;color:var(--accent-ink);min-height:1.4em;margin:0 0 8px}
 #read-result .sum{font-size:13.5px;margin:0 0 8px}
@@ -281,7 +284,7 @@ footer code{font-size:11.5px}
 </main>
 
 <footer>
-  <span>Your story stays in this browser and in the files you save. A model runs only when you ask it to read: Gemini Nano on this device, or Claude with your own key. The checks compare labels.</span>
+  <span>Your story stays in this browser and in the files you save. A model runs only when you ask it to read: a model server on your machine, Gemini Nano in Chrome, or your own provider and key. The checks compare labels.</span>
   <span>Agent face: <code>window.sandhi</code> · <a href="https://assets.chiragpatnaik.com/how-stories-work">How stories work</a> · <a href="https://naklitechie.com">NakliTechie</a></span>
 </footer>
 <dialog id="splash" aria-labelledby="splash-h">
@@ -293,7 +296,7 @@ footer code{font-size:11.5px}
     <li><b>Joints and threads</b>Every beat joins the last with <i>therefore</i> or <i>but</i>. Whatever the story plants should pay off.</li>
     <li><b>Thirteen principles</b>What Aristotle, the Nāṭyaśāstra, Chekhov, Vonnegut and Pixar agree on, from <a href="https://assets.chiragpatnaik.com/how-stories-work" target="_blank" rel="noopener">How stories work</a>. The demo story, <i>The whistle</i>, uses all of them.</li>
   </ul>
-  <p class="sp-priv">Your story stays in this browser and in the files you save. No account. Nothing leaves the page unless you choose Claude, with your own key, to read a story.</p>
+  <p class="sp-priv">Your story stays in this browser and in the files you save. No account. Nothing leaves the page unless you ask your own provider, with your own key, to read a story.</p>
   <div class="sp-actions">
     <button class="btn primary" data-ui="tour" autofocus>Take the tour</button>
     <button class="btn" data-ui="splash-close" id="splash-close">Explore The whistle</button>
@@ -305,14 +308,19 @@ footer code{font-size:11.5px}
   <p class="intro">Paste a short story or a chapter. A model marks its beats, phases, turn, joints and threads. It never rewrites your prose: each beat is your own text, cut where the model's exact quote lands. You see the result before anything changes.</p>
   <textarea id="read-text" placeholder="Paste the story here, or open a .txt or .md file" aria-label="Story text"></textarea>
   <div class="rrow"><button class="btn" data-ui="read-file" type="button">Open a text file</button><span id="read-count">0 words</span><input type="file" id="read-file" accept=".txt,.md,text/plain,text/markdown" hidden></div>
-  <fieldset class="readers"><legend class="lab">Who reads it</legend>
-    <label><input type="radio" name="reader" value="nano"> Gemini Nano, on this device <span id="nano-state" class="faint"></span></label>
-    <label><input type="radio" name="reader" value="anthropic"> Claude, with your Anthropic key <span id="key-state" class="faint"></span></label>
-    <div id="anthropic-fields">
-      <input type="password" id="anthropic-key" placeholder="Anthropic API key" autocomplete="off" aria-label="Anthropic API key">
-      <label><input type="checkbox" id="key-remember"> remember on this device</label>
-      <label>model <input type="text" id="anthropic-model" aria-label="Claude model id" spellcheck="false"></label>
-    </div>
+  <fieldset class="readers"><legend class="lab">Who reads it · closest to you first</legend>
+    <div class="rung"><label><input type="radio" name="rung" value="machine"> A model server on this machine</label><span id="machine-state" class="faint"></span>
+      <div class="rfields" id="machine-fields" hidden><button class="btn" data-ui="read-probe" type="button">Look for Ollama or LM Studio</button><label>model <input type="text" id="machine-model" list="machine-models" spellcheck="false" aria-label="Local model id"></label><datalist id="machine-models"></datalist><button class="btn" data-ui="read-models" type="button">Load models</button></div></div>
+    <div class="rung"><label><input type="radio" name="rung" value="device"> Gemini Nano, built into Chrome</label><span id="nano-state" class="faint"></span></div>
+    <div class="rung"><label><input type="radio" name="rung" value="provider"> Your provider, with your key</label><span id="key-state" class="faint"></span>
+      <div class="rfields" id="provider-fields" hidden>
+        <select id="provider" class="sel" aria-label="Provider"></select>
+        <input type="url" id="provider-base" placeholder="https://host/v1" aria-label="OpenAI-compatible base URL" spellcheck="false" hidden>
+        <input type="password" id="provider-key" placeholder="paste the API key" autocomplete="off" aria-label="API key for this provider">
+        <button class="x" data-ui="read-forget-key" id="key-forget" type="button" hidden>forget key</button>
+        <label>model <input type="text" id="provider-model" list="provider-models" spellcheck="false" aria-label="Model id"></label><datalist id="provider-models"></datalist>
+        <button class="btn" data-ui="read-models" type="button">Load models</button>
+      </div></div>
   </fieldset>
   <p id="read-privacy"></p>
   <div id="read-progress" role="status"></div>
@@ -707,6 +715,101 @@ footer code{font-size:11.5px}
 })(globalThis);
 </script>
 
+<script id="sandhi-ladder">
+// sandhi's AI ladder (Edge-First doctrine; ported from Draft's sidecar/ladder.mjs and byok.mjs).
+// Readers in a fixed order, closest to the writer first: a model server on this machine, the model built
+// into Chrome, then the writer's own provider and key. Pure: probes are injected, so detection is tested
+// with no network, and the probes run only on an explicit action, never at page load. Request builders and
+// response parsers are pure too; the fetch lives in the page. test/ladder.mjs runs this block in Node.
+(function (root) {
+  'use strict';
+  const RUNGS = { MACHINE: 'machine', DEVICE: 'device', PROVIDER: 'provider' };
+  const ORDER = [RUNGS.MACHINE, RUNGS.DEVICE, RUNGS.PROVIDER];
+  // Local servers that speak the OpenAI-compatible surface on 127.0.0.1. No key; the words stay on the machine.
+  const SERVERS = {
+    ollama: { label: 'Ollama', base: 'http://127.0.0.1:11434/v1', cors: 'start Ollama with OLLAMA_ORIGINS=https://sandhi.naklitechie.com' },
+    lmstudio: { label: 'LM Studio', base: 'http://127.0.0.1:1234/v1', cors: 'turn on CORS in LM Studio’s server settings' }
+  };
+  // The writer's provider: any OpenAI-compatible API, or Anthropic's own. Browser CORS checked 2026-10-04 for every
+  // listed host. No model is preset except Anthropic's: the writer picks one, or loads the provider's own list.
+  const PROVIDERS = {
+    openrouter: { label: 'OpenRouter', kind: 'openai', base: 'https://openrouter.ai/api/v1' },
+    openai: { label: 'OpenAI', kind: 'openai', base: 'https://api.openai.com/v1' },
+    anthropic: { label: 'Anthropic', kind: 'anthropic', base: 'https://api.anthropic.com/v1', model: 'claude-opus-5-5' },
+    gemini: { label: 'Google Gemini', kind: 'openai', base: 'https://generativelanguage.googleapis.com/v1beta/openai' },
+    groq: { label: 'Groq', kind: 'openai', base: 'https://api.groq.com/openai/v1' },
+    mistral: { label: 'Mistral', kind: 'openai', base: 'https://api.mistral.ai/v1' },
+    deepseek: { label: 'DeepSeek', kind: 'openai', base: 'https://api.deepseek.com/v1' },
+    together: { label: 'Together', kind: 'openai', base: 'https://api.together.xyz/v1' },
+    custom: { label: 'Another OpenAI-compatible API', kind: 'openai', base: '' }
+  };
+
+  // Which rungs can read now. probeMachine: async () -> server id or null; nanoState: async () -> ready|download|downloading|absent;
+  // hasKey: async () -> bool. A throwing or missing probe reads as "not available": the ground floor has no AI, so absence is not an error.
+  async function detectLadder({ probeMachine, nanoState, hasKey } = {}) {
+    const safe = async (fn, fallback) => { try { return fn ? await fn() : fallback; } catch { return fallback; } };
+    const server = await safe(probeMachine, null), device = await safe(nanoState, 'absent'), key = !!(await safe(hasKey, false));
+    const available = { machine: !!server, device: device !== 'absent', provider: key };
+    const rungs = ORDER.filter(r => available[r]);
+    // ready = can read without a fresh model download first
+    const ready = rungs.filter(r => r !== RUNGS.DEVICE || device === 'ready');
+    return { rungs, ready: ready[0] || null, best: ready[0] || rungs[0] || null, server, device, key };
+  }
+  // Where the words go, in one line, for the dialog and the report.
+  function rungLabel(rung, opts) {
+    const o = opts || {};
+    if (rung === RUNGS.MACHINE) return `${o.server ? SERVERS[o.server].label : 'a model server'} on this machine: the story stays on your machine`;
+    if (rung === RUNGS.DEVICE) return 'Gemini Nano inside Chrome: the story stays on this device';
+    if (rung === RUNGS.PROVIDER) return `${o.provider && PROVIDERS[o.provider] ? PROVIDERS[o.provider].label : 'your provider'}, with your key: the story leaves this device for that provider`;
+    return 'no model';
+  }
+  const rungIsLocal = (rung) => rung === RUNGS.MACHINE || rung === RUNGS.DEVICE;
+
+  // OpenAI-compatible chat body. JSON is asked for in three ways, strictest first; the page steps down on HTTP 400:
+  // 'schema' (response_format json_schema), 'object' (json_object, schema in the prompt), 'prompt' (schema in the prompt only).
+  const JSON_MODES = ['schema', 'object', 'prompt'];
+  function openaiBody(model, prompt, schema, mode) {
+    const system = mode === 'schema' ? prompt.system : `${prompt.system}\nAnswer with one JSON object and nothing else. It follows this JSON Schema:\n${JSON.stringify(schema)}`;
+    const body = { model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt.user }] };
+    if (mode === 'schema') body.response_format = { type: 'json_schema', json_schema: { name: 'sandhi_read', strict: true, schema } };
+    if (mode === 'object') body.response_format = { type: 'json_object' };
+    return body;
+  }
+  // The first JSON object in a reply, with or without code fences around it.
+  function extractJson(text) {
+    const t = String(text || '').trim();
+    try { return JSON.parse(t); } catch { /* look inside */ }
+    const a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    try { return JSON.parse(t.slice(a, b + 1)); } catch { return null; }
+  }
+  // -> { json } or { error: refused | too_long | not_json }
+  function parseOpenAI(out) {
+    const c = (out && out.choices && out.choices[0]) || {}, m = c.message || {};
+    if (m.refusal) return { error: 'refused', detail: String(m.refusal) };
+    if (c.finish_reason === 'length') return { error: 'too_long' };
+    const json = extractJson(m.content);
+    return json ? { json, model: out.model } : { error: 'not_json' };
+  }
+  function parseAnthropic(out) {
+    if (!out) return { error: 'not_json' };
+    if (out.stop_reason === 'refusal') return { error: 'refused' };
+    if (out.stop_reason === 'max_tokens') return { error: 'too_long' };
+    const json = extractJson((out.content || []).filter(b => b.type === 'text').map(b => b.text).join(''));
+    return json ? { json, model: out.model } : { error: 'not_json' };
+  }
+  // Short, non-reversible fingerprint of a key: enough to recognise it, never enough to rebuild it.
+  async function fingerprint(key) {
+    const digest = await root.crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(key || '')));
+    return 'key·' + [...new Uint8Array(digest)].map(x => x.toString(16).padStart(2, '0')).join('').slice(0, 8);
+  }
+  // A /models reply -> model ids (OpenAI-compatible and Anthropic both answer { data: [{ id }] }).
+  const modelIds = (out) => ((out && out.data) || []).map(m => m && m.id).filter(Boolean).toSorted();
+
+  root.SandhiLadder = { RUNGS, ORDER, SERVERS, PROVIDERS, JSON_MODES, detectLadder, rungLabel, rungIsLocal, openaiBody, extractJson, parseOpenAI, parseAnthropic, fingerprint, modelIds };
+})(globalThis);
+</script>
+
 <script>
 const C = globalThis.SandhiCore, VERSION = '0.1.0';
 const KEY = 'sandhi:story', JKEY = 'sandhi:journal';
@@ -757,75 +860,194 @@ const BEAT_PATCH_SCHEMA = { type: 'object', properties: {
   kis: { enum: [...C.KIS.map(x => x.id), null] }, drafts: { type: 'array', items: { type: 'object', properties: { n: { type: 'integer' }, text: { type: 'string' }, note: { type: 'string' } } } } } };
 const NONE = { type: 'object', properties: {} };
 
-// ---- readers (L5): Gemini Nano on the device by default, Claude with the writer's own key. A reader only proposes.
-const RKEY = 'sandhi:reader', AKEY = 'sandhi:anthropic-key', DEFAULT_MODEL = 'claude-opus-5-5';
-const rcfg = (() => { try { return { reader: null, model: DEFAULT_MODEL, ...JSON.parse(store.get(RKEY) || '{}') }; } catch { return { reader: null, model: DEFAULT_MODEL }; } })();
-let anthropicKey = store.get(AKEY) || '';
+// ---- readers (L5) on the AI ladder (SandhiLadder): a model server on this machine, Gemini Nano in Chrome, or the
+// writer's own provider and key. Probes run only on an explicit action. A reader only proposes.
+const LD = globalThis.SandhiLadder, RKEY = 'sandhi:reader';
+const rcfg = (() => { const d = { rung: null, provider: 'openrouter', server: null, models: {}, base: '' }; try { return { ...d, ...JSON.parse(store.get(RKEY) || '{}') }; } catch { return d; } })();
+const saveCfg = () => store.set(RKEY, JSON.stringify(rcfg));
 const readerFail = (cls, message, next) => Object.assign(new Error(message), { cls, next });
+const hostOf = (u) => { try { return new URL(u).host; } catch { return String(u); } };
+// key vault: IndexedDB on this machine, one key per provider; the page and the agent face see fingerprints only (Draft's byok.mjs)
+const vault = {
+  db: () => new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') { reject(new Error('IndexedDB unavailable')); return; }
+    const q = indexedDB.open('sandhi-byok', 1);
+    q.onupgradeneeded = () => q.result.createObjectStore('keys', { keyPath: 'provider' });
+    q.onsuccess = () => resolve(q.result); q.onerror = () => reject(q.error);
+  }),
+  async tx(mode, fn) {
+    const db = await vault.db();
+    try { return await new Promise((resolve, reject) => { const t = db.transaction('keys', mode), r = fn(t.objectStore('keys')); t.oncomplete = () => resolve(r.result); t.onerror = () => reject(t.error); }); }
+    finally { db.close(); }
+  },
+  get: (p) => vault.tx('readonly', s => s.get(p)).then(r => (r ? r.key : null)).catch(() => null),
+  set: (p, key) => vault.tx('readwrite', s => s.put({ provider: p, key })),
+  del: (p) => vault.tx('readwrite', s => s.delete(p))
+};
 const LM_OPTS = { expectedInputs: [{ type: 'text', languages: ['en'] }], expectedOutputs: [{ type: 'text', languages: ['en'] }] };
 const NANO_STATES = { available: 'ready', 'readily-available': 'ready', readily: 'ready', downloadable: 'download', 'after-download': 'download', downloading: 'downloading' };
 const nano = {
-  id: 'nano', model: 'gemini-nano',
   async state() {
     const LM = globalThis.LanguageModel;
     if (!LM || !LM.availability) return 'absent';
     try { return NANO_STATES[await LM.availability(LM_OPTS)] || 'absent'; } catch { return 'absent'; }
   },
   async open(progress) {
-    if ((await nano.state()) === 'absent') throw readerFail('no_reader', 'Gemini Nano is not available in this browser.', 'Use desktop Chrome 138 or later with about 22 GB free, or choose Claude with your key.');
+    if ((await nano.state()) === 'absent') throw readerFail('no_reader', 'Gemini Nano is not available in this browser.', 'Use desktop Chrome 138 or later, or another rung: a local model server or your provider.');
     let base;
     try { base = await globalThis.LanguageModel.create({ ...LM_OPTS, monitor(m) { m.addEventListener('downloadprogress', e => progress(`Downloading Gemini Nano… ${Math.round(e.loaded * 100)}%`)); } }); }
-    catch (e) { throw readerFail('no_reader', `Gemini Nano did not start (${e.message}).`, 'Click Read it in the page once: the first download needs a click. Or choose Claude with your key.'); }
+    catch (e) { throw readerFail('no_reader', `Gemini Nano did not start (${e.message}).`, 'Click Read it in the page once: the first download needs a click. Or use another rung.'); }
     const window = base.contextWindow || base.inputQuota || 6144, f = base.measureContextUsage || base.measureInputUsage || base.countPromptTokens;
-    if (window - 1600 < 1200) { base.destroy(); throw readerFail('no_reader', `Gemini Nano in this browser holds ${window} tokens, too few for the reading instructions.`, 'Choose Claude with your key.'); }
+    if (window - 1600 < 1200) { base.destroy(); throw readerFail('no_reader', `Gemini Nano in this browser holds ${window} tokens, too few for the reading instructions.`, 'Use a local model server or your provider.'); }
     const measure = async (t) => { try { if (f) return await f.call(base, t); } catch { /* a character estimate below */ } return Math.ceil(t.length / 4); };
-    return { model: nano.model, maxInput: window - 1600, charsPerToken: 4, measure, run: nanoRun, close: () => base.destroy() };
+    return { model: 'gemini-nano', maxInput: window - 1600, charsPerToken: 4, measure, run: nanoRun, close: () => base.destroy() };
   }
 };
 async function nanoRun({ system, user }, schema) {
   const s = await globalThis.LanguageModel.create({ ...LM_OPTS, initialPrompts: [{ role: 'system', content: system }] });
   let text;
   try { text = await s.prompt(user, { responseConstraint: schema, omitResponseConstraintInput: true }); }
-  catch (e) { throw e.name === 'QuotaExceededError' ? readerFail('too_long', 'That part is too long for Gemini Nano.', 'Choose Claude with your key, or read a shorter part.') : readerFail('reader_error', `Gemini Nano failed: ${e.message}`, 'Try again, or choose Claude with your key.'); }
+  catch (e) { throw e.name === 'QuotaExceededError' ? readerFail('too_long', 'That part is too long for Gemini Nano.', 'Use another rung, or read a shorter part.') : readerFail('reader_error', `Gemini Nano failed: ${e.message}`, 'Try again, or use another rung.'); }
   finally { s.destroy(); }
-  return { json: parseJson(text), model: nano.model };
+  const json = LD.extractJson(text);
+  return parsed(json ? { json } : { error: 'not_json' }, 'gemini-nano');
 }
-const parseJson = (text) => { try { return JSON.parse(text); } catch { throw readerFail('reader_error', 'The model returned text that is not JSON.', 'Try again; if it repeats, try the other reader.'); } };
-const anthropic = {
-  id: 'anthropic',
-  async state() { return anthropicKey ? 'ready' : 'nokey'; },
+// machine rung: an OpenAI-compatible server on 127.0.0.1; found only by an explicit probe (Chrome may ask to allow local network access)
+let machine = { checked: false, found: null };
+async function probeServer(id) {
+  try { const r = await fetch(`${LD.SERVERS[id].base}/models`, { signal: AbortSignal.timeout(1500) }); return r.ok ? LD.modelIds(await r.json()) : null; }
+  catch { return null; }
+}
+async function probeMachine() {
+  const ids = Object.keys(LD.SERVERS).toSorted((a, b) => (b === rcfg.server) - (a === rcfg.server));
+  machine = { checked: true, found: null };
+  for (const id of ids) { const models = await probeServer(id); if (models) { machine.found = { id, models }; break; } }
+  return machine.found ? machine.found.id : null;
+}
+const machineReader = {
   async open() {
-    if (!anthropicKey) throw readerFail('no_reader', 'No Anthropic key is set.', 'In Read a story, choose Claude and paste your key.');
-    const model = rcfg.model || DEFAULT_MODEL;
-    return { model, maxInput: 150000, charsPerToken: 3.5, measure: async (t) => Math.ceil(t.length / 3.5), run: (p, schema) => anthropicCall(model, p, schema), close() { /* nothing held open */ } };
+    if (!machine.found) await probeMachine();
+    const f = machine.found;
+    if (!f) throw readerFail('no_reader', 'No model server answered on this machine.', `Start Ollama (${LD.SERVERS.ollama.cors}) or LM Studio (${LD.SERVERS.lmstudio.cors}), then look again.`);
+    const model = rcfg.models[f.id] || f.models[0];
+    if (!model) throw readerFail('no_reader', `${LD.SERVERS[f.id].label} has no model loaded.`, 'Pull or load a model, then try again.');
+    return { model, maxInput: 3000, charsPerToken: 4, measure: async (t) => Math.ceil(t.length / 4), run: (p, schema) => openaiCall(LD.SERVERS[f.id].base, null, model, p, schema), close() { /* nothing held open */ } };
   }
 };
-// Raw fetch, not the SDK: sandhi is one static file that loads nothing from third parties (SPEC §3).
-async function anthropicCall(model, { system, user }, schema) {
+// provider rung: the writer's own provider and key; any OpenAI-compatible API, or Anthropic's own
+function providerTarget() {
+  const id = rcfg.provider, p = LD.PROVIDERS[id] || LD.PROVIDERS.openrouter;
+  return { id, p, base: (p.base || rcfg.base || '').replace(/\/+$/, ''), model: rcfg.models[id] || p.model || '' };
+}
+const providerReader = {
+  async open() {
+    const { id, p, base, model } = providerTarget(), key = await vault.get(id);
+    if (!key) throw readerFail('no_reader', `No key is set for ${p.label}.`, 'In Read a story, paste your key for this provider.');
+    if (!base) throw readerFail('no_reader', 'No API address is set.', 'Enter the OpenAI-compatible base URL, such as https://host/v1.');
+    if (!model) throw readerFail('no_reader', `No model is chosen for ${p.label}.`, "Load the provider's models and pick one, or type a model id.");
+    const anth = p.kind === 'anthropic';
+    return { model, maxInput: anth ? 150000 : 24000, charsPerToken: 3.5, measure: async (t) => Math.ceil(t.length / 3.5), close() { /* nothing held open */ },
+      run: (pr, schema) => (anth ? anthropicCall(key, model, pr, schema) : openaiCall(base, key, model, pr, schema)) };
+  }
+};
+async function post(url, headers, body) {
+  let res;
+  try { res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) }); }
+  catch (e) { throw readerFail('reader_error', `Could not reach ${hostOf(url)} (${e.message}).`, 'Check the connection and the address. A local server must allow this site.'); }
+  return { status: res.status, out: await res.json().catch(() => ({})) };
+}
+// providers word their errors differently: { error: { message } }, { error: "..." }, { message }, { detail }
+function errorText(out, status) {
+  const e = out && out.error;
+  if (e) return String(e.message || e);
+  return String((out && (out.message || out.detail)) || `HTTP ${status}`);
+}
+function apiStatus(status, out, who) {
+  const msg = errorText(out, status).slice(0, 300);
+  if (status === 401 || status === 403) throw readerFail('key_rejected', `${who} rejected the key: ${msg}`, 'Check the key in Read a story, then try again.');
+  if (status === 429 || status === 529) throw readerFail('rate_limited', `${who} is busy or rate-limited: ${msg}`, 'Wait a minute, then try again.');
+  if (status < 200 || status >= 300) throw readerFail('reader_error', `${who} returned ${status}: ${msg}`, 'Check the model id and the address in Read a story.');
+}
+function parsed(r, model) {
+  if (r.error === 'refused') throw readerFail('refused', 'The model declined to read this text.', 'Try another rung or model, or a different part of the story.');
+  if (r.error === 'too_long') throw readerFail('too_long', 'The answer was cut off before it finished.', 'Read a shorter part, or use a model with a longer reply.');
+  if (r.error) throw readerFail('reader_error', 'The model returned text that is not JSON.', 'Try again; if it repeats, try another model.');
+  return { json: r.json, model: r.model || model };
+}
+// OpenAI-compatible: ask for JSON strictly first; on HTTP 400 ask more plainly (json_object, then the prompt alone). Remember what worked.
+const jsonMode = new Map();
+async function openaiCall(base, key, model, prompt, schema) {
+  const memo = `${base}|${model}`, modes = LD.JSON_MODES.slice(LD.JSON_MODES.indexOf(jsonMode.get(memo) || 'schema'));
+  const headers = { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) };
+  let res;
+  for (const mode of modes) {
+    res = await post(`${base}/chat/completions`, headers, LD.openaiBody(model, prompt, schema, mode));
+    if (res.status === 400 && mode !== 'prompt') continue;
+    apiStatus(res.status, res.out, hostOf(base));
+    jsonMode.set(memo, mode);
+    return parsed(LD.parseOpenAI(res.out), model);
+  }
+  apiStatus(res.status, res.out, hostOf(base));
+  return parsed({ error: 'not_json' }, model);
+}
+// Anthropic's own Messages API, raw fetch (one static file, nothing loaded from third parties): JSON-schema output, effort medium, fallbacks "default".
+async function anthropicCall(key, model, { system, user }, schema) {
   const body = { model, max_tokens: 16000, system, messages: [{ role: 'user', content: user }], output_config: { format: { type: 'json_schema', schema } } };
-  const headers = { 'content-type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+  const headers = { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
   if (/^claude-(opus|fable|sonnet-5)/.test(model)) body.output_config.effort = 'medium';
   if (/^claude-(opus-5|fable-5|sonnet-5-5)/.test(model)) { body.fallbacks = 'default'; headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'; }
+  const res = await post('https://api.anthropic.com/v1/messages', headers, body);
+  apiStatus(res.status, res.out, 'Anthropic');
+  return parsed(LD.parseAnthropic(res.out), model);
+}
+// the model ids the chosen rung offers: a local server's /models, or the provider's /models with the writer's key
+async function listModels() {
+  if ((rcfg.rung || 'device') === 'machine') { await probeMachine(); return machine.found ? { source: LD.SERVERS[machine.found.id].label, models: machine.found.models } : null; }
+  const { id, p, base } = providerTarget(), key = await vault.get(id);
+  if (!key) throw readerFail('no_reader', `No key is set for ${p.label}.`, 'Paste your key first.');
+  const headers = p.kind === 'anthropic' ? { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } : { authorization: `Bearer ${key}` };
   let res;
-  try { res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers, body: JSON.stringify(body) }); }
-  catch (e) { throw readerFail('reader_error', `Could not reach api.anthropic.com (${e.message}).`, 'Check the connection, then try again.'); }
+  try { res = await fetch(`${base}/models`, { headers }); } catch (e) { throw readerFail('reader_error', `Could not reach ${hostOf(base)} (${e.message}).`, 'Check the address.'); }
   const out = await res.json().catch(() => ({}));
-  apiStatus(res.status, out);
-  if (out.stop_reason === 'refusal') throw readerFail('refused', 'The model declined to read this text.', 'Try the other reader, or a different part of the story.');
-  if (out.stop_reason === 'max_tokens') throw readerFail('too_long', 'The answer was cut off before it finished.', 'Read a shorter part of the story.');
-  return { json: parseJson((out.content || []).filter(b => b.type === 'text').map(b => b.text).join('')), model: out.model || model };
+  apiStatus(res.status, out, p.label);
+  return { source: p.label, models: LD.modelIds(out) };
 }
-function apiStatus(status, out) {
-  const msg = (out.error && out.error.message) || `HTTP ${status}`;
-  if (status === 401 || status === 403) throw readerFail('key_rejected', `Anthropic rejected the key: ${msg}`, 'Check the key in Read a story, then try again.');
-  if (status === 429 || status === 529) throw readerFail('rate_limited', `Anthropic is busy or rate-limited: ${msg}`, 'Wait a minute, then try again.');
-  if (status < 200 || status >= 300) throw readerFail('reader_error', `Anthropic returned ${status}: ${msg}`, 'Check the model name in Read a story.');
+const READERS = { machine: machineReader, device: nano, provider: providerReader };
+async function keyPrints() {
+  const out = {};
+  for (const id of Object.keys(LD.PROVIDERS)) { const k = await vault.get(id); if (k) out[id] = await LD.fingerprint(k); }
+  return out;
 }
-const READERS = { nano, anthropic };
-async function readerStatus() {
-  const n = await nano.state(), a = await anthropic.state();
-  const chosen = rcfg.reader || (n === 'absent' && a === 'ready' ? 'anthropic' : 'nano');
-  return { reader: chosen, nano: n, anthropic: { key: a === 'ready', model: rcfg.model }, where: chosen === 'nano' ? 'this device' : 'Anthropic' };
+function machineInfo() {
+  const f = machine.found;
+  if (!f) return { checked: machine.checked, server: null, models: 0, model: null };
+  return { checked: machine.checked, server: f.id, models: f.models.length, model: rcfg.models[f.id] || f.models[0] || null };
+}
+async function readerStatus(probe) {
+  const prints = await keyPrints(), t = providerTarget();
+  const lad = await LD.detectLadder({ probeMachine: probe ? probeMachine : async () => (machine.found ? machine.found.id : null), nanoState: () => nano.state(), hasKey: async () => !!prints[t.id] });
+  const rung = rcfg.rung || lad.ready || lad.best || 'device';
+  return { rung, ladder: lad.rungs, ready: lad.ready, local: LD.rungIsLocal(rung), where: LD.rungLabel(rung, { server: machine.found && machine.found.id, provider: t.id }),
+    machine: machineInfo(),
+    device: lad.device, provider: { id: t.id, label: t.p.label, kind: t.p.kind, base: t.base, model: t.model || null, key: prints[t.id] || null },
+    keys: Object.entries(prints).map(([provider, fp]) => ({ provider, fingerprint: fp })) };
+}
+function selectError(a) {
+  if (a.rung && !LD.ORDER.includes(a.rung)) return fail('invalid', `no rung ${a.rung}`, `Use one of: ${LD.ORDER.join(', ')}.`);
+  if (a.provider && !LD.PROVIDERS[a.provider]) return fail('invalid', `no provider ${a.provider}`, `Use one of: ${Object.keys(LD.PROVIDERS).join(', ')}.`);
+  if (a.server && !LD.SERVERS[a.server]) return fail('invalid', `no server ${a.server}`, `Use one of: ${Object.keys(LD.SERVERS).join(', ')}.`);
+  if (a.base && !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/)/.test(a.base.trim())) return fail('invalid', 'The address must start with https:// (or http://127.0.0.1 for a local server).', "Use the provider's OpenAI-compatible base URL, such as https://host/v1.");
+  return null;
+}
+async function selectReader(a) {
+  const bad = selectError(a); if (bad) return bad;
+  if (a.rung) rcfg.rung = a.rung;
+  if (a.provider) rcfg.provider = a.provider;
+  if (a.server) rcfg.server = a.server;
+  if (typeof a.base === 'string') rcfg.base = a.base.trim();
+  const target = rcfg.rung === 'machine' ? a.server || (machine.found && machine.found.id) || rcfg.server || 'ollama' : rcfg.provider;
+  if (typeof a.model === 'string') rcfg.models[target] = a.model.trim().slice(0, 200);
+  saveCfg(); return ok(await readerStatus(false));
 }
 // whole story in one call when it fits; otherwise scenes per part, then one call over all scene summaries (SPEC §3)
 async function readText(text, reader, progress) {
@@ -856,11 +1078,15 @@ async function readInParts(text, r, progress) {
   return { ...res, dropped: { ...res.dropped, beats: res.dropped.beats + dropped }, mode: 'two-pass', calls: chunks.length + 1, model: out.model };
 }
 let readProgress = () => { /* the dialog replaces this while it is open */ };
-async function runRead(a) {
-  const text = String(a.text || ''), words = C.wordCount(text), id = a.reader || (await readerStatus()).reader;
+function readError(words, id) {
   if (words < 50) return fail('invalid', `${words} words is too short to have a structure.`, 'Pass the story itself, at least 50 words.');
-  if (!READERS[id]) return fail('invalid', `no reader ${id}`, 'Use "nano" or "anthropic".');
+  if (!READERS[id]) return fail('invalid', `no rung ${id}`, `Use one of: ${LD.ORDER.join(', ')}.`);
   if (app.reading) return fail('busy', 'A read is already running.', 'Wait for it to finish, then call read.get.');
+  return null;
+}
+async function runRead(a) {
+  const text = String(a.text || ''), words = C.wordCount(text), id = a.rung || (await readerStatus(false)).rung;
+  const bad = readError(words, id); if (bad) return bad;
   app.reading = true; const t0 = performance.now();
   try {
     const r = await readText(text, READERS[id], (m) => readProgress(m));
@@ -868,7 +1094,7 @@ async function runRead(a) {
     const v = C.validate(r.story);
     if (!v.ok) return fail('internal', 'The proposal failed schema sandhi:1.', 'Report it with the journal; the story is unchanged.', { errors: v.errors.slice(0, 10) });
     const a2 = C.arcMatch(r.story);
-    app.proposal = { story: r.story, report: { reader: id, model: r.model, mode: r.mode, calls: r.calls, words, beats: r.story.beats.length, threads: r.story.threads.length, dropped: r.dropped, arc: a2.best, ms: Math.round(performance.now() - t0) } };
+    app.proposal = { story: r.story, report: { reader: id, where: LD.rungLabel(id, { server: machine.found && machine.found.id, provider: rcfg.provider }), model: r.model, mode: r.mode, calls: r.calls, words, beats: r.story.beats.length, threads: r.story.threads.length, dropped: r.dropped, arc: a2.best, ms: Math.round(performance.now() - t0) } };
     return ok(app.proposal.report);
   } catch (e) { return e.cls ? fail(e.cls, e.message, e.next) : fail('reader_error', String(e && e.message || e), 'Try again, or try the other reader.'); }
   finally { app.reading = false; }
@@ -996,24 +1222,28 @@ const TOOLS = [
     } },
   { name: 'journal', description: 'The last n tool calls (default 20, max 200): tool, class, door, ms, time. The trajectory across sessions.', inputSchema: { type: 'object', properties: { n: { type: 'integer', minimum: 1, maximum: 200 } } },
     handler: async (a) => ok({ entries: app.journal.slice(-Math.min(200, Math.max(1, a.n || 20))) }) },
-  { name: 'reader.status', description: 'Who can read a story here: Gemini Nano (ready / download / downloading / absent), whether an Anthropic key is set (never the key itself), the chosen reader and model.', inputSchema: NONE,
-    handler: async () => ok(await readerStatus()) },
-  { name: 'reader.select', description: 'Choose who reads: "nano" (on this device) or "anthropic" (your key; the story goes to Anthropic). Optional model id for anthropic.', mutating: true,
-    inputSchema: { type: 'object', properties: { reader: { enum: ['nano', 'anthropic'] }, model: { type: 'string' } }, required: ['reader'] },
-    handler: async (a) => {
-      if (!READERS[a.reader]) return fail('invalid', `no reader ${a.reader}`, 'Use "nano" or "anthropic".');
-      rcfg.reader = a.reader; if (a.model) rcfg.model = a.model.trim();
-      store.set(RKEY, JSON.stringify(rcfg)); return ok(await readerStatus());
+  { name: 'reader.status', description: 'The AI ladder, closest first: a model server on this machine, Gemini Nano in Chrome, your provider with your key. Which rungs can read, the chosen rung and where its words go, the provider and model, key fingerprints (never keys). probe: true also looks for a local server (Chrome may ask to allow local network access).',
+    inputSchema: { type: 'object', properties: { probe: { type: 'boolean' } } },
+    handler: async (a) => ok(await readerStatus(!!a.probe)) },
+  { name: 'reader.select', description: 'Choose the rung ("machine", "device", "provider"), the provider (openrouter, openai, anthropic, gemini, groq, mistral, deepseek, together, custom), the base URL for custom, the local server, and the model id for the chosen rung.', mutating: true,
+    inputSchema: { type: 'object', properties: { rung: { enum: ['machine', 'device', 'provider'] }, provider: { enum: Object.keys(LD.PROVIDERS) }, base: { type: 'string' }, server: { enum: Object.keys(LD.SERVERS) }, model: { type: 'string' } } },
+    handler: async (a) => selectReader(a) },
+  { name: 'reader.models', description: "The model ids the chosen rung offers: a local server's list, or your provider's list fetched with your key.", inputSchema: NONE,
+    handler: async () => {
+      try { const m = await listModels(); return m ? ok({ source: m.source, count: m.models.length, models: m.models.slice(0, 1000) }) : fail('no_reader', 'No model server answered on this machine.', 'Start Ollama or LM Studio and allow this site.'); }
+      catch (e) { return fail(e.cls || 'reader_error', e.message, e.next || 'Try again.'); }
     } },
-  { name: 'reader.key', description: 'Set or clear the Anthropic API key. Person-only: the writer types the key into the page; agents never handle it.', mutating: true, personOnly: true,
-    inputSchema: { type: 'object', properties: { key: { type: 'string' }, remember: { type: 'boolean' } }, required: ['key'] },
+  { name: 'reader.key', description: "Set or forget the key for a provider (an empty key forgets it). Person-only: the writer types the key into the page; agents never handle keys. Stored in this browser's IndexedDB and shown only as a fingerprint.", mutating: true, personOnly: true,
+    inputSchema: { type: 'object', properties: { provider: { enum: Object.keys(LD.PROVIDERS) }, key: { type: 'string' } }, required: ['key'] },
     handler: async (a) => {
-      anthropicKey = String(a.key || '').trim();
-      if (a.remember && anthropicKey) store.set(AKEY, anthropicKey); else try { localStorage.removeItem(AKEY); } catch { /* nothing stored */ }
-      return ok({ key: !!anthropicKey, remembered: !!(a.remember && anthropicKey) });
+      const id = a.provider || rcfg.provider, key = String(a.key || '').trim();
+      if (!LD.PROVIDERS[id]) return fail('invalid', `no provider ${id}`, `Use one of: ${Object.keys(LD.PROVIDERS).join(', ')}.`);
+      try { if (key) await vault.set(id, key); else await vault.del(id); } catch (e) { return fail('io_error', `The key store failed: ${e.message}`, 'Allow site storage for this page, then try again.'); }
+      if (key) { rcfg.provider = id; rcfg.rung = 'provider'; saveCfg(); }
+      return ok({ provider: id, key: key ? await LD.fingerprint(key) : null });
     } },
-  { name: 'read.run', description: "Read a story (prose) with the chosen reader and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline.",
-    inputSchema: { type: 'object', properties: { text: { type: 'string' }, reader: { enum: ['nano', 'anthropic'] } }, required: ['text'] },
+  { name: 'read.run', description: "Read a story (prose) with the chosen rung and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline.",
+    inputSchema: { type: 'object', properties: { text: { type: 'string' }, rung: { enum: ['machine', 'device', 'provider'] } }, required: ['text'] },
     handler: async (a) => runRead(a) },
   { name: 'read.get', description: 'The staged proposal: the proposed story (schema sandhi:1) and the read report.', inputSchema: NONE,
     handler: async () => (app.proposal ? ok(C.clone(app.proposal)) : fail('no_proposal', 'nothing is staged', 'Call read.run first.')) },
@@ -1372,22 +1602,27 @@ document.addEventListener('keydown', (e) => {
 let lastW = 0;
 new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width); if (w && w !== lastW) { lastW = w; requestAnimationFrame(renderChart); } }).observe($('#chart'));
 
-// ---- the read dialog: paste, choose a reader, read, review, then use or discard (read.accept is person-only)
+// ---- the read dialog: paste, choose a rung on the ladder, read, review, then use or discard (read.accept is person-only)
 const reader = $('#reader');
-function readerPrivacy(st) {
-  $('#read-privacy').textContent = st.reader === 'nano' ? 'Gemini Nano runs inside Chrome on this device. The story does not leave it.'
-    : `The story is sent from this tab to Anthropic (api.anthropic.com) with your key, read by ${st.anthropic.model}, and billed to your account.`;
+$('#provider').innerHTML = Object.entries(LD.PROVIDERS).map(([id, x]) => `<option value="${id}">${esc(x.label)}</option>`).join('');
+const NANO_TEXT = { ready: 'ready · fast, but missed the turn in our test', download: 'downloads once, about 22 GB free disk', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
+function machineText(m) {
+  if (!m.checked) return 'not looked for yet';
+  return m.server ? `${LD.SERVERS[m.server].label} found, ${m.models} model${m.models === 1 ? '' : 's'}` : 'none answered on 127.0.0.1';
 }
-const NANO_TEXT = { ready: 'ready', download: 'downloads once, about 22 GB free disk needed', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
-async function renderReader() {
-  const st = await readerStatus();
-  for (const r of reader.querySelectorAll('input[name=reader]')) r.checked = r.value === st.reader;
-  $('#nano-state').textContent = '· ' + NANO_TEXT[st.nano];
-  $('#key-state').textContent = st.anthropic.key ? '· key set' : '· no key yet';
-  $('#anthropic-fields').hidden = st.reader !== 'anthropic';
-  if (document.activeElement !== $('#anthropic-model')) $('#anthropic-model').value = st.anthropic.model;
-  readerPrivacy(st);
+async function renderReader(probe) {
+  const st = await readerStatus(probe);
+  for (const r of reader.querySelectorAll('input[name=rung]')) r.checked = r.value === st.rung;
+  $('#machine-state').textContent = '· ' + machineText(st.machine);
+  $('#nano-state').textContent = '· ' + NANO_TEXT[st.device];
+  $('#key-state').textContent = st.provider.key ? `· ${st.provider.label}, ${st.provider.key}` : '· no key yet';
+  $('#machine-fields').hidden = st.rung !== 'machine'; $('#provider-fields').hidden = st.rung !== 'provider';
+  $('#provider').value = st.provider.id; $('#provider-base').hidden = st.provider.id !== 'custom';
+  $('#key-forget').hidden = !st.provider.key;
+  for (const [id, v] of [['#provider-base', st.provider.base], ['#provider-model', st.provider.model || ''], ['#machine-model', st.machine.model || '']]) if (document.activeElement !== $(id)) $(id).value = v;
+  $('#read-privacy').textContent = st.local ? `Read by ${st.where}.` : `Read by ${st.where}, billed to your account.`;
 }
+function fillModels(listId, models) { $(listId).innerHTML = models.map(m => `<option value="${esc(m)}">`).join(''); }
 function renderProposal() {
   const box = $('#read-result'), p = app.proposal, run = $('#read-actions [data-ui="read-run"]');
   $('#read-actions [data-ui="read-accept"]').hidden = !p; $('#read-actions [data-cmd="read.discard"]').hidden = !p;
@@ -1396,21 +1631,35 @@ function renderProposal() {
   const r = p.report, drop = r.dropped.beats + r.dropped.quotes;
   const arc = C.ARCS.find(x => x.id === r.arc);
   box.innerHTML = `<p class="sum"><b>${r.beats} beats, ${r.threads} threads</b> from ${r.words} words, read by ${esc(r.model)} (${r.mode === 'whole' ? 'whole story' : `${r.calls - 1} parts, then the outline`}).${arc ? ` Closest shape: ${esc(arc.name)}.` : ''}${drop ? ` ${drop} quote${drop > 1 ? 's' : ''} did not match the text and ${drop > 1 ? 'were' : 'was'} dropped.` : ''}</p>
-    <ol>${p.story.beats.map(b => `<li><b>${esc(b.label || C.spineName(b.spine))}</b>${b.label && b.label !== C.spineName(b.spine) ? ' · ' + esc(C.spineName(b.spine)) : ''} · fortune ${fmtF(b.fortune)}${b.marks.length ? ' · ' + b.marks.map(m => (m === 'low' ? 'low point' : m)).join(', ') : ''} — ${esc(snip(b.text, 80))}</li>`).join('')}</ol>
-`;
+    <ol>${p.story.beats.map(b => `<li><b>${esc(b.label || C.spineName(b.spine))}</b>${b.label && b.label !== C.spineName(b.spine) ? ' · ' + esc(C.spineName(b.spine)) : ''} · fortune ${fmtF(b.fortune)}${b.marks.length ? ' · ' + b.marks.map(m => (m === 'low' ? 'low point' : m)).join(', ') : ''} — ${esc(snip(b.text, 80))}</li>`).join('')}</ol>`;
 }
-async function openReader() { $('#read-progress').textContent = ''; renderProposal(); await renderReader(); if (!reader.open) reader.showModal(); $('#read-text').focus(); }
+async function openReader() { $('#read-progress').textContent = ''; renderProposal(); await renderReader(false); if (!reader.open) reader.showModal(); $('#read-text').focus(); }
 readProgress = (m) => { $('#read-progress').textContent = m; };
 const countWords = () => { $('#read-count').textContent = `${C.wordCount($('#read-text').value)} words`; };
 $('#read-text').addEventListener('input', countWords);
 $('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) { $('#read-text').value = await f.text(); countWords(); } });
+const READER_CHANGES = {
+  rung: (el) => ui('reader.select', { rung: el.value }),
+  provider: (el) => ui('reader.select', { provider: el.value }),
+  'provider-base': (el) => ui('reader.select', { base: el.value }),
+  'provider-model': (el) => ui('reader.select', { rung: 'provider', model: el.value }),
+  'machine-model': (el) => ui('reader.select', { rung: 'machine', model: el.value }),
+  'provider-key': async (el) => { const r = await ui('reader.key', { provider: $('#provider').value, key: el.value }); el.value = ''; return r; }   // the key never stays in the page
+};
 reader.addEventListener('change', async (e) => {
-  const el = e.target;
-  if (el.name === 'reader') await ui('reader.select', { reader: el.value });
-  else if (el.id === 'anthropic-model') await ui('reader.select', { reader: 'anthropic', model: el.value || DEFAULT_MODEL });
-  else if (el.id === 'anthropic-key' || el.id === 'key-remember') await ui('reader.key', { key: $('#anthropic-key').value, remember: $('#key-remember').checked });
-  renderReader();
+  const fn = READER_CHANGES[e.target.name === 'rung' ? 'rung' : e.target.id];
+  if (fn) { await fn(e.target); renderReader(false); }
 });
+async function onReaderTool(kind) {
+  if (kind === 'read-probe') { readProgress('Looking for Ollama or LM Studio on 127.0.0.1…'); await ui('reader.status', { probe: true }); readProgress(''); return renderReader(false); }
+  if (kind === 'read-forget-key') { await ui('reader.key', { provider: $('#provider').value, key: '' }); return renderReader(false); }
+  if (kind !== 'read-models') return null;
+  readProgress('Loading models…');
+  const r = await ui('reader.models', {});
+  readProgress(r.ok ? `${r.data.count} models from ${r.data.source}. Pick one in the model field.` : `${r.message} ${r.next || ''}`);
+  if (r.ok) fillModels((rcfg.rung || 'device') === 'machine' ? '#machine-models' : '#provider-models', r.data.models);
+  return renderReader(false);
+}
 async function onReadControl(kind, e) {
   if (kind === 'read-open') return openReader();
   if (kind === 'read-close') return reader.close();
@@ -1418,15 +1667,15 @@ async function onReadControl(kind, e) {
   if (kind === 'read-run') {
     $('#read-result').innerHTML = ''; readProgress('Starting…');
     const r = await ui('read.run', { text: $('#read-text').value });
-    readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal(); return renderReader();
+    readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal(); return renderReader(false);
   }
   if (kind === 'read-accept' && e.isTrusted) {   // person-only: a real click, never a scripted one
     const r = await ui('read.accept', {});
     if (r.ok) { reader.close(); toast(`Read by ${r.data.model}: ${r.data.beats} beats.`, 'Undo brings your previous story back.'); }
+    return null;
   }
-  return null;
+  return onReaderTool(kind);
 }
-
 // ---- splash and tour: first visit only; `?` brings both back (Slate's first-run pattern)
 const SEEN = 'sandhi:intro-seen';
 const TOUR = [
@@ -1436,7 +1685,7 @@ const TOUR = [
   { target: '#checks', title: 'Checks', body: 'sandhi compares your labels: empty beats, slack joints, plants that never fire, luck after the turn. Each check names the next step.' },
   { target: '#threads', title: 'Plants and payoffs', body: "Chekhov's gun, the Nāṭyaśāstra's seed. Name what the story plants, where, and where it pays off." },
   { target: '#coverage', title: 'Thirteen principles', body: 'Tap a dot to tag a beat with a principle. Tap a name to read what the masters said, and note how it works in your story.' },
-  { target: '[data-ui="read-open"]', title: 'Read a story', body: 'Paste a story you have written. Gemini Nano on this device, or Claude with your own key, marks its beats, phases, turn and threads in your own words. You decide whether to use it.' },
+  { target: '[data-ui="read-open"]', title: 'Read a story', body: 'Paste a story you have written. A model server on your machine, Gemini Nano in Chrome, or your own provider marks its beats, phases, turn and threads in your own words. You decide whether to use it.' },
   { target: '.actions', title: 'Your story, your file', body: 'It autosaves in this browser. Save writes a .sandhi.json file; Open, or drop one on the page, reads it back. Press ? to see all this again.' }
 ];
 const splash = $('#splash');

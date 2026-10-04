@@ -74,14 +74,23 @@ Structure is read, not guessed (decision 2026-10-04). In v0.1 the writer supplie
 
 **Arc fit** is arithmetic on the writer's fortune numbers: Pearson r against each of the six idealised arcs sampled at the beat positions. *The whistle* fits Man in a hole at r = 0.874.
 
-## §3 Readers (Batch B)
+## §3 Readers on the AI ladder (Batch B)
 
-A reader is an interface (`open() → {model, maxInput, measure, run(prompt, schema), close}`), so the engine can change. Gemini Nano is the default and a placeholder (decision 2026-10-04).
+Readers follow the house AI ladder (Edge-First doctrine; ported from Draft's `sidecar/ladder.mjs` and `byok.mjs`): closest to the writer first. A reader is an interface (`open() → {model, maxInput, measure, run(prompt, schema), close}`), so engines can change; Gemini Nano is a placeholder (decision 2026-10-04).
 
-| Reader | Where the story goes | Context | Notes |
-|---|---|---|---|
-| `nano` | nowhere: Chrome's Prompt API on the device | the session's `contextWindow` (6,144 reported; 1,000 in headless Chromium) minus 1,600 reserved for the answer | first use downloads the model and needs a click; a window under 2,800 is refused as `no_reader` |
-| `anthropic` | api.anthropic.com, from the tab, with the writer's key | 150,000 tokens per call (chars ÷ 3.5) | default `claude-opus-5-5`, effort `medium`, `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`), `output_config.format` JSON schema, `max_tokens` 16,000; raw `fetch`, not the SDK, because sandhi is one static file that loads nothing from third parties; CORS preflight checked 2026-10-04 |
+| Rung | What reads | Where the words go | Per call | Notes |
+|---|---|---|---|---|
+| `machine` | an OpenAI-compatible server on 127.0.0.1: Ollama (`:11434/v1`) or LM Studio (`:1234/v1`) | stay on the writer's machine | 3,000 tokens of input (Ollama's default context is small) | found only when the writer clicks *Look for…*; the server must allow this origin (`OLLAMA_ORIGINS`, LM Studio's CORS switch); Chrome may ask to allow local network access |
+| `device` | Gemini Nano, Chrome's Prompt API | stay on the device | `contextWindow` − 1,600 (9,216 on Chrome 153) | first use downloads the model and needs a click; a window under 2,800 is refused as `no_reader`; measured below the floor (history 2026-10-04) |
+| `provider` | the writer's provider, with the writer's key: OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral, DeepSeek, Together, or any OpenAI-compatible base URL | leave the device for that provider, billed to the writer | 24,000 tokens (150,000 for Anthropic) | browser CORS checked 2026-10-04 for every listed host; models listed from the provider's own `/models`; only Anthropic has a preset (`claude-opus-5-5`) |
+
+**Detection, not exposure.** `detectLadder` is pure with injected probes; a throwing or missing probe reads as absent, because the ground floor has no AI. Nothing is probed at page load. The default rung is the writer's last choice, else the first rung that can read without a download.
+
+**Requests.** OpenAI-compatible: `POST {base}/chat/completions` with `Authorization: Bearer <key>` (no header for a local server). JSON is asked for strictly first (`response_format: json_schema`, strict); on HTTP 400 the page steps down to `json_object` with the schema in the prompt, then to the prompt alone, and remembers the mode that worked per base and model. Replies may carry the JSON in code fences. Anthropic: its own Messages API by raw `fetch` (one static file, nothing loaded from third parties): `output_config.format` JSON schema, effort `medium`, `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`), `max_tokens` 16,000.
+
+**Keys.** One per provider, in this browser's IndexedDB (`sandhi-byok`), never in localStorage, the journal, the story file or the agent face. The page and `reader.status` show a fingerprint only (`key·` + 8 hex of SHA-256). The key field is cleared as soon as the key is stored. Setting or forgetting a key is `reader.key`, person-only.
+
+**Content-Security-Policy.** Inline script and style only; `connect-src` is `'self'`, any `https:` host (the writer chooses the provider) and `http://127.0.0.1:*` / `http://localhost:*`.
 
 **The prose stays the writer's.** A reader returns labels and exact quotes, never text for the story. `storyFromWhole` cuts the writer's own text where each beat's opening quote lands (quotes, dashes, case and spacing folded; a quote under 12 characters is not trusted). Threads map their plant and payoff quotes to the beats that contain them. A quote that does not match is dropped and counted in the report.
 
@@ -95,6 +104,7 @@ A reader is an interface (`open() → {model, maxInput, measure, run(prompt, sch
 |---|---|---|
 | Core | `node test/core.mjs` | schema, round trip, checks, arc fit |
 | Parity | `node test/parity.mjs` | manifest ⊇ command bus; closed classes |
-| Face + TTFV | `node test/face.mjs` | first value ≤ 5 s cold ×3; agent face drives the story; splash and tour; read mode with a stand-in Nano (whole and two-pass) and an intercepted Anthropic API (request shape, refusal, rejected key) |
+| Ladder | `node test/ladder.mjs` | rung order and readiness, labels, request modes, reply parsing, fingerprints, https hosts |
+| Face + TTFV | `node test/face.mjs` | first value ≤ 5 s cold ×3; agent face drives the story; splash and tour; read mode with a stand-in Nano (whole and two-pass); every ladder rung intercepted: Anthropic (request shape, refusal, rejected key), OpenRouter (model list, json_schema → json_object step-down), Ollama on 127.0.0.1 (found only on request); keys as fingerprints only |
 
 Roadmap and status: `plan/workplan.md`.

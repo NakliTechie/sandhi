@@ -12,9 +12,9 @@ Open https://sandhi.naklitechie.com. Or download [`index.html`](index.html) and 
 
 Your story autosaves in the browser. **Save** writes a `.sandhi.json` file; **Open** (or drag the file onto the page) reads it back.
 
-**Status (v0.2):** write mode, and read mode. In write mode you label beats, joints, fortune, phases and threads; sandhi draws the views and runs the checks on those labels. In read mode (**Read a story**) Gemini Nano on your device, or Claude with your own Anthropic key, marks a pasted story's structure; you review it before it replaces anything. Proposals and questions while you write are Batch C in `plan/`.
+**Status (v0.2):** write mode, and read mode. In write mode you label beats, joints, fortune, phases and threads; sandhi draws the views and runs the checks on those labels. In read mode (**Read a story**) a model on your machine, Gemini Nano in Chrome, or your own provider marks a pasted story's structure; you review it before it replaces anything. Proposals and questions while you write are Batch C in `plan/`.
 
-Tests: `cd test && npm install && npm test` (core, parity, face + cold-load timing). Agent face: `window.sandhi` (28 tools, see [`SPEC.md`](SPEC.md) §0).
+Tests: `cd test && npm install && npm test` (core, ladder, parity, face + cold-load timing). Agent face: `window.sandhi` (29 tools, see [`SPEC.md`](SPEC.md) §0).
 
 ## What it does
 
@@ -38,11 +38,13 @@ Both ways land on the same views, taken from the explainer [How stories work](ht
 
 ## Where the model runs
 
-- **Default: Gemini Nano** through Chrome's Prompt API. It runs on the device; the story stays on the machine.
-- **BYOK:** the writer's own key, sent from the tab straight to the provider. The story goes to that provider, and the page says so.
-- **Neither:** write mode works on the writer's labels; read mode is unavailable and says why.
+On the house AI ladder, closest to you first. You choose; nothing is probed until you ask.
 
-Nano's context is 6,144 tokens. A story longer than about 3,000 words gets a two-pass read: scene summaries first, then one read over all of them to place the phases, the turn, the joints and the plant links. BYOK models with long context read it whole.
+1. **A model server on your machine:** Ollama or LM Studio on 127.0.0.1. The story stays on your machine. Let the server accept this site (`OLLAMA_ORIGINS=https://sandhi.naklitechie.com`, or LM Studio's CORS switch).
+2. **Gemini Nano, built into Chrome.** The story stays on the device. Fast, but in a test it missed the turn of a 400-word story.
+3. **Your provider, with your key:** OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral, DeepSeek, Together, or any OpenAI-compatible URL. The story goes from the tab to that provider; the key stays in this browser and shows only as a fingerprint.
+
+With none of them, write mode works on your own labels; read mode says why it cannot run.
 
 ## Context
 
