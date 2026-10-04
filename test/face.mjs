@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 30 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
+check('face.manifest', man.length === 31 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -109,6 +109,13 @@ const dimmed = await page.evaluate(() => document.querySelectorAll('#beats .beat
 check('face.focus_dims_untagged', r.ok && dimmed === 8, dimmed);
 await call('view.focus', { principle: 'all' });
 
+// paste as beats, with no model: one beat per paragraph, nothing labelled for the writer
+{
+  const pr = await call('story.paste', { text: 'First paragraph of a story.\n\nSecond paragraph.\n\nThird.' });
+  const st = (await call('story.get', {})).data.story;
+  check('face.paste_as_beats', pr.ok && st.beats.length === 3 && st.beats.every(b => b.tags.length === 0 && b.joint === null && b.by === 'writer') && st.beats[1].text === 'Second paragraph.' && st.title === '', { pr: pr.class, n: st.beats.length });
+  await call('undo', {});
+}
 // ---- 3. splash + tour, then a UI click goes through the same bus; autosave survives a reload
 check('splash.open_on_first_visit', await page.evaluate(() => document.querySelector('#splash').open), 'closed');
 await page.click('#splash-close');
@@ -421,6 +428,10 @@ async function readPage(opts) {
   const here = (await call('story.get', {})).data.story.title;
   const back = await call('undo', {});
   check('persist.two_tabs', here === 'From the other tab' && back.ok && (await call('story.get', {})).data.story.title === 'Edited, never blurred', { here });
+  // edit the title, then click straight into a beat and type: the keystrokes land (a header edit no longer redraws the beats)
+  await p.fill('#title', 'Retitled'); await p.click('#beat-b3 textarea.btext'); await p.keyboard.type(' ZZZ'); await p.waitForTimeout(600);
+  const b3t = (await call('story.get', {})).data.story.beats[2].text;
+  check('persist.click_after_title_keeps_typing', b3t.includes(' ZZZ') && (await call('story.get', {})).data.story.title === 'Retitled', b3t.slice(-30));
   check('persist.no_errors', errs.length === 0, errs);
   await ctx2.close();
 }

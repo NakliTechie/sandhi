@@ -5,7 +5,7 @@
 sandhi is a single-page tool for writers at https://sandhi.naklitechie.com. You write a story on the Story Spine (beats with a fortune, phase, joint word and the principles each serves), or paste prose and let a model you choose mark its beats, turn, low point, joints and threads. The model only labels; every beat is the writer's own text, cut where the model's exact quote lands. Checks compare labels: empty or idle beats, slack joints ("and then"), plants that never pay off, payoffs with no plant, luck after the turn.
 
 ## Agent face
-- `window.sandhi` (and `navigator.modelContext` tools named `sandhi.<tool>` where the browser has it): 30 tools over one command bus. Start with `status`. Mutations are undoable. `read.accept` and `reader.key` are person-only.
+- `window.sandhi` (and `navigator.modelContext` tools named `sandhi.<tool>` where the browser has it): 31 tools over one command bus. Start with `status`. Mutations are undoable. `read.accept` and `reader.key` are person-only.
 - Outcome envelope: `{ok, class, data?, message?, next?}`; classes are a closed list (see SPEC.md §0).
 
 ## Readers (the AI ladder)

@@ -53,7 +53,7 @@ node cli-read.mjs score <reply> <name> --story gift-of-the-magi   # score a mode
 node live.mjs --base http://127.0.0.1:11434/v1 --model <id>       # a local model reads The whistle
 ```
 
-Agents: `window.sandhi` exposes 30 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading and entering a key stay with the writer. Contract: [SPEC.md §0](SPEC.md).
+Agents: `window.sandhi` exposes 31 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading and entering a key stay with the writer. Contract: [SPEC.md §0](SPEC.md).
 
 ## Verify it yourself
 

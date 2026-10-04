@@ -106,6 +106,7 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 .beat.hit .bnum{color:var(--accent)}
 .blabel{flex:1;min-width:120px;border:none;background:transparent;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);padding:2px 0}
 .blabel:focus{outline:none;color:var(--ink)}
+.blabel:hover{text-decoration:underline dashed var(--line-strong);text-underline-offset:3px}
 .sel{font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--muted);padding:2px 4px;max-width:100%}
 .mark{font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--faint)}
 .mark[aria-pressed="true"]{background:var(--accent-bg);color:var(--accent-ink);border-color:transparent}
@@ -142,7 +143,9 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 
 /* checks + threads */
 #checks ul,#threads ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
-#checks li{font-size:13px;line-height:1.5;cursor:pointer}
+#checks li{font-size:13px;line-height:1.5}
+#checks .check{all:unset;display:block;cursor:pointer;border-radius:6px}
+#checks .check:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #checks li b{font-weight:500}
 #checks li .nx{display:block;color:var(--muted);font-size:12.5px}
 #checks li .at{color:var(--accent-ink);background:var(--accent-bg);border-radius:999px;padding:0 7px;font-size:11px;margin-right:4px}
@@ -163,6 +166,9 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 
 /* coverage */
 #coverage{margin-top:18px}
+.scrollhint{font-size:12px;color:var(--faint);margin:6px 0 0}
+.legend{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.55}
+.legend b{font-weight:500;color:var(--ink)}
 .mwrap{overflow-x:auto;position:relative}   /* contains the matrix's screen-reader text, so it cannot widen the page */
 table.matrix{border-collapse:collapse}
 .matrix th,.matrix td{padding:0;font-weight:400}
@@ -251,7 +257,7 @@ footer code{font-size:11.5px}
     <button class="btn" data-cmd="story.new" title="Start a blank Story Spine. Undo brings this story back.">New</button>
     <button class="btn" data-ui="open" title="Open a .sandhi.json file">Open</button>
     <button class="btn" data-cmd="story.save" title="Save this story as a .sandhi.json file">Save</button>
-    <button class="btn" data-cmd="story.demo" title="Load the demo story from the explainer">The whistle</button>
+    <button class="btn" data-cmd="story.demo" title="Load The whistle, the demo story from the explainer. Undo brings your story back.">Demo story</button>
     <button class="btn" data-ui="read-open" title="Paste a story and let a model mark its structure">Read a story</button>
     <button class="btn" data-cmd="undo" id="undo">Undo</button>
     <button class="btn" data-cmd="redo" id="redo">Redo</button>
@@ -263,7 +269,7 @@ footer code{font-size:11.5px}
 
 <main>
   <div class="about">
-    <label>Title<input id="title" data-sfield="title" autocomplete="off"></label>
+    <label>Title<input id="title" data-sfield="title" placeholder="Untitled" autocomplete="off"></label>
     <label>Logline<textarea id="logline" data-sfield="logline" rows="1" placeholder="The story in one sentence"></textarea></label>
     <label>Why you are telling it<textarea id="belief" data-sfield="belief" rows="1" placeholder="The belief under the plot"></textarea></label>
   </div>
@@ -291,6 +297,7 @@ footer code{font-size:11.5px}
   <section class="card" id="coverage" aria-labelledby="cov-h">
     <h2 class="lab" id="cov-h">Thirteen principles in this story · tap a dot to tag a beat, a name to focus on it</h2>
     <div class="mwrap"><table class="matrix" id="matrix"></table></div>
+    <p class="scrollhint" id="scrollhint" hidden>Scroll sideways to see every beat →</p>
     <div id="panel"></div>
   </section>
 </main>
@@ -319,7 +326,7 @@ footer code{font-size:11.5px}
   <h2 id="reader-h">Read a story</h2>
   <p class="intro">Paste a short story or a chapter. A model marks its beats, phases, turn, joints and threads. It never rewrites your prose: each beat is your own text, cut where the model's exact quote lands. You see the result before anything changes.</p>
   <textarea id="read-text" placeholder="Paste the story here, or open a .txt or .md file" aria-label="Story text"></textarea>
-  <div class="rrow"><button class="btn" data-ui="read-file" type="button">Open a text file</button><span id="read-count">0 words</span><input type="file" id="read-file" accept=".txt,.md,text/plain,text/markdown" hidden></div>
+  <div class="rrow"><button class="btn" data-ui="read-file" type="button">Open a text file</button><button class="btn" data-ui="read-paste" type="button" title="One beat per paragraph; you label them. No model.">Use paragraphs as beats</button><span id="read-count">0 words</span><input type="file" id="read-file" accept=".txt,.md,text/plain,text/markdown" hidden></div>
   <fieldset class="readers"><legend class="lab">Who reads it · closest to you first</legend>
     <div class="rung"><label><input type="radio" name="rung" value="machine"> A model server on this machine</label><span id="machine-state" class="faint"></span>
       <div class="rfields" id="machine-fields" hidden><button class="btn" data-ui="read-probe" type="button">Look for Ollama or LM Studio</button><label>model <input type="text" id="machine-model" list="machine-models" spellcheck="false" aria-label="Local model id"></label><datalist id="machine-models"></datalist><button class="btn" data-ui="read-models" type="button">Load models</button></div></div>
@@ -521,7 +528,7 @@ footer code{font-size:11.5px}
       tags: [], marks: [], driver: null, avastha: null, kis: null, drafts: [], by: 'writer' };
   }
   function blankStory() {
-    return { sandhi: SCHEMA, title: 'Untitled', logline: '', belief: '',
+    return { sandhi: SCHEMA, title: '', logline: '', belief: '',
       beats: ['once', 'everyday', 'oneday', 'because', 'until'].map((spine, i) => newBeat('b' + (i + 1), { spine })), threads: [], notes: {} };
   }
 
@@ -549,6 +556,8 @@ footer code{font-size:11.5px}
     const written = s.beats.filter(b => b.text.trim()), turnAt = s.beats.findIndex(b => b.marks.includes('turn'));
     s.beats.forEach((b, i) => beatChecks(b, i, turnAt, add));
     for (const t of s.threads) threadCheck(t, s, pos, add);
+    const lowAt = s.beats.findIndex(b => b.marks.includes('low')), lowest = written.reduce((m, b) => (b.fortune < m.fortune ? b : m), written[0] || { fortune: 0 });
+    if (lowAt >= 0 && written.length && lowest.fortune < s.beats[lowAt].fortune) add('low_not_lowest', lowAt + 1, s.beats[lowAt].id, null, `Beat ${lowAt + 1} is marked the low point, but beat ${pos.get(lowest.id)} is lower (fortune ${lowest.fortune}).`, 'Move the low-point mark, or the fortunes.');
     if (written.length >= 4 && turnAt < 0) add('no_turn', null, null, null, 'No beat is marked as the turn.', 'Mark the beat where the story turns.');
     if (written.length >= 3 && written.every(b => b.fortune === written[0].fortune)) add('flat_fortune', null, null, null, `Fortune stays at ${written[0].fortune} in every written beat.`, 'Something must change: move the line (Vonnegut).');
     return out.toSorted((a, b) => (a.at === null) - (b.at === null) || (a.at || 0) - (b.at || 0));
@@ -944,7 +953,7 @@ const nano = {
     try { base = await globalThis.LanguageModel.create({ ...LM_OPTS, signal: readSignal(), monitor(m) { m.addEventListener('downloadprogress', e => progress(`Downloading Gemini Nano… ${Math.round(e.loaded * 100)}%`)); } }); }
     catch (e) { throw readerFail('no_reader', `Gemini Nano did not start (${e.message}).`, 'Click Read it in the page once: the first download needs a click. Or use another rung.'); }
     const window = base.contextWindow || base.inputQuota || 6144, f = base.measureContextUsage || base.measureInputUsage || base.countPromptTokens;
-    if (window - 1600 < 1200) { base.destroy(); throw readerFail('no_reader', `Gemini Nano in this browser holds ${window} tokens, too few for the reading instructions.`, 'Use a local model server or your provider.'); }
+    if (window - 1600 < 1200) { base.destroy(); throw readerFail('no_reader', `Gemini Nano in this browser is too small to read a story (it holds ${window} tokens).`, 'Use a model server on your machine, or your provider.'); }
     const measure = async (t) => { try { if (f) return await f.call(base, t); } catch { /* a character estimate below */ } return Math.ceil(t.length / 4); };
     return { model: 'gemini-nano', maxInput: window - 1600, charsPerToken: 4, measure, run: nanoRun, close: () => base.destroy() };
   }
@@ -1228,6 +1237,15 @@ const TOOLS = [
       app.dirty = false; app.savedNote = 'Download started'; persist();
       return ok({ filename, bytes: new TextEncoder().encode(text).length });
     } },
+  { name: 'story.paste', description: 'Replace the story with pasted prose, one beat per paragraph, every label left to the writer. No model, nothing guessed. Undo brings the old story back.', mutating: true,
+    inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+    handler: async (a) => {
+      const paras = String(a.text || '').split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+      if (!paras.length) return fail('invalid', 'There is no text to paste.', 'Paste the story itself.');
+      if (paras.length > 200) return fail('invalid', `${paras.length} paragraphs is more beats than a page can hold.`, 'Paste one chapter or part at a time, or let a model read it.');
+      const n = C.blankStory(); n.beats = paras.map((t, i) => C.newBeat('b' + (i + 1), { text: t, spine: i ? 'because' : 'once' }));
+      return commit(n, null) || ok({ beats: n.beats.length });
+    } },
   { name: 'beat.add', description: 'Insert a beat after the beat with id `after` (default: at the end). Returns the new id and position.', mutating: true,
     inputSchema: { type: 'object', properties: { after: { type: 'string' }, spine: { enum: C.SPINE.map(x => x.id) }, label: { type: 'string' }, text: { type: 'string' }, fortune: { type: 'integer', minimum: -5, maximum: 5 }, joint: { enum: [...C.JOINTS, null] } } },
     handler: async (a) => {
@@ -1400,14 +1418,22 @@ function toast(msg, next) {
   el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 5000);
 }
 
+// what to redraw after a command: header and plant-label edits leave the beat cards alone, so a click into a beat keeps its cursor
+const NOTICES = { 'story.new': 'New story.', 'story.demo': 'Demo story loaded.' };
+const patchKeys = (args) => (args.patch ? Object.keys(args.patch) : []);
+const AFTER = {
+  'view.focus': (args, door) => { renderAll(); if (door === 'ui' && args.principle !== 'all') $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
+  'read.discard': () => renderProposal(),
+  'story.update': () => { renderHeader(); renderViews(); },
+  'thread.update': (args) => (patchKeys(args).every(k => k === 'label') ? renderViews() : renderAll()),
+  'beat.update': (args, door) => (door === 'ui' && patchKeys(args).length && patchKeys(args).every(k => k === 'text' || k === 'label') ? renderViews() : renderAll())
+};
 function afterDispatch(name, args, door, env, t) {
   if (!env.ok) { if (door === 'ui') toast(env.message, env.next); return; }
-  if (name === 'view.focus') { renderAll(); return; }
-  if (name === 'read.discard') { renderProposal(); return; }
+  if (AFTER[name]) { AFTER[name](args, door); return; }
   if (!t.mutating && name !== 'story.save') return;
-  const keys = args.patch ? Object.keys(args.patch) : [];
-  if (door === 'ui' && name === 'beat.update' && keys.length && keys.every(k => k === 'text' || k === 'label')) renderViews();
-  else renderAll();
+  if (door === 'ui' && NOTICES[name]) toast(NOTICES[name], 'Undo brings your previous story back.');
+  renderAll();
 }
 
 function renderAll() {
@@ -1424,7 +1450,7 @@ function renderViews() { renderChart(); renderArc(); renderChecks(); renderThrea
 
 function renderHeader() {
   for (const k of ['title', 'logline', 'belief']) { const el = $('#' + k); if (el !== document.activeElement) el.value = S()[k]; }
-  document.title = (S().title ? S().title + ' · ' : '') + 'sandhi';
+  document.title = (S().title || 'Untitled') + ' · sandhi';
 }
 function renderSaveState() {
   $('#savestate').textContent = app.dirty ? 'Kept in this browser · not saved to a file' : app.savedNote || 'Saved';
@@ -1481,7 +1507,10 @@ function renderArc() {
     return `<figure class="mini${best ? ' best' : ''}" title="${esc(arc.d)}"><svg viewBox="0 0 60 24" aria-hidden="true"><path d="${d}"/></svg><figcaption>${esc(arc.name)}${best ? ` · r ${a.r.toFixed(2)}` : ''}</figcaption></figure>`;
   }).join('');
   const lead = a.best ? `Closest of the six shapes: <b>${esc(a.name)}</b>` : a.reason === 'flat' ? 'The fortune line is flat, so no shape fits yet.' : 'Three beats or more give the line a shape.';
-  $('#arc').innerHTML = `<p class="lead">${lead} <span class="faint">· Reagan et al. 2016, fitted to your fortune numbers</span></p><div class="minis">${minis}</div>`;
+  // the three phase rows in a line each, so a phone reader sees what the words mean without a tooltip
+  const used = (k) => S().beats.some(b => b[k]);
+  const legend = `<p class="legend"><b>Story Spine</b>: Kenn Adams’s frame, once upon a time … until finally.${used('avastha') ? ' <b>Nāṭyaśāstra</b>: the five stages of the hero’s effort, from beginning to the fruit reached.' : ''}${used('kis') ? ' <b>Kishōtenketsu</b>: introduction, development, twist, conclusion.' : ''}</p>`;
+  $('#arc').innerHTML = `<p class="lead">${lead} <span class="faint">· Reagan et al. 2016, fitted to your fortune numbers</span></p><div class="minis">${minis}</div>${legend}`;
 }
 
 function jointHtml(b, i) {
@@ -1521,7 +1550,7 @@ function beatCard(b, i, s) {
     <div class="bhead">
       <span class="bnum">${P}</span>
       ${b.by === 'model' ? `<span class="byline" title="Labels proposed by ${esc(b.model || 'a model')}. Change any label to make them yours.">read by ${esc(b.model || 'a model')}</span>` : ''}
-      <input class="blabel" data-beat="${id}" data-field="label" value="${esc(b.label)}" placeholder="${esc(C.spineName(b.spine))}" aria-label="Label for beat ${P}" maxlength="200">
+      <input class="blabel" data-beat="${id}" data-field="label" value="${esc(b.label)}" placeholder="${esc(C.spineName(b.spine))}" aria-label="Label for beat ${P}" title="Name this beat" maxlength="200">
       <select class="sel" data-beat="${id}" data-field="spine" aria-label="Story Spine stage of beat ${P}">${opts(C.SPINE, b.spine)}</select>
       ${markBtn(b, 'turn', 'turn')}${markBtn(b, 'low', 'low point')}
       <details class="menu"><summary aria-label="More actions for beat ${P}">⋯</summary><div>
@@ -1546,12 +1575,12 @@ function renderBeats() {
   $('#beats').innerHTML = s.beats.length ? s.beats.map((b, i) => beatCard(b, i, s)).join('') : '<p class="empty">No beats. Add one, or load The whistle.</p>';
 }
 
-const CHECK_NAMES = { beat_empty: 'Empty beat', beat_idle: 'Idle beat', joint_unlabelled: 'Unlabelled joint', joint_slack: 'Slack joint', plant_unpaid: 'Plant never fires', payoff_unplanted: 'Payoff without a plant', payoff_early: 'Payoff before its plant', thread_unused: 'Unused thread', ending_luck: 'Luck after the turn', no_turn: 'No turn marked', flat_fortune: 'Flat fortune' };
+const CHECK_NAMES = { beat_empty: 'Empty beat', beat_idle: 'Idle beat', joint_unlabelled: 'Unlabelled joint', joint_slack: 'Slack joint', plant_unpaid: 'Plant never fires', payoff_unplanted: 'Payoff without a plant', payoff_early: 'Payoff before its plant', low_not_lowest: 'Low point is not the lowest', thread_unused: 'Unused plant', ending_luck: 'Luck after the turn', no_turn: 'No turn marked', flat_fortune: 'Flat fortune' };
 function renderChecks() {
   const list = C.checks(S()), box = $('#checks div');
   $('#checks-h').textContent = list.length ? `Checks · ${list.length}` : 'Checks';
-  box.innerHTML = list.length ? `<ul>${list.map(c => `<li data-goto="${c.beat || ''}" title="${esc(c.class)}">${c.at ? `<span class="at">beat ${c.at}</span>` : ''}<b>${esc(CHECK_NAMES[c.class])}.</b> ${esc(c.message)}<span class="nx">${esc(c.next)}</span></li>`).join('')}</ul>`
-    : `<p class="clean">Nothing to flag in ${S().beats.length} beats and ${S().threads.length} threads.</p>`;
+  box.innerHTML = list.length ? `<ul>${list.map(c => `<li><button class="check" type="button" data-goto="${c.beat || ''}" title="${esc(c.class)}">${c.at ? `<span class="at">beat ${c.at}</span>` : ''}<b>${esc(CHECK_NAMES[c.class])}.</b> ${esc(c.message)}<span class="nx">${esc(c.next)}</span></button></li>`).join('')}</ul>`
+    : `<p class="clean">Nothing to flag in ${S().beats.length} beats and ${S().threads.length} plants.</p>`;
 }
 function renderThreads() {
   const s = S(), beatOpts = (cur, none) => `<option value="">${none}</option>` + s.beats.map((b, i) => `<option value="${b.id}"${b.id === cur ? ' selected' : ''}>beat ${i + 1}</option>`).join('');
@@ -1575,6 +1604,7 @@ function renderCoverage() {
     h += `<td class="n">${c.beats.length}/${n}</td></tr>`;
   }
   $('#matrix').innerHTML = h + '</tbody>';
+  const wrap = $('.mwrap'); $('#scrollhint').hidden = wrap.scrollWidth <= wrap.clientWidth + 2;
   const p = C.PRINCIPLES.find(x => x.id === app.focus), panel = $('#panel');
   if (!p) { panel.innerHTML = ''; return; }
   const dis = p.dissent || [], src = C.SOURCES.filter(x => p.src[x.id]);
@@ -1652,7 +1682,8 @@ async function openText(text) {
   let story;
   try { story = JSON.parse(text); } catch { toast('That file is not JSON.', 'Open a .sandhi.json file saved from sandhi.'); return; }
   const r = await ui('story.load', { story });
-  if (r.ok) { app.dirty = false; persist(); renderSaveState(); toast(`Opened "${S().title}".`, 'Undo brings the previous story back.'); }
+  if (r.ok) { app.dirty = false; persist(); renderSaveState(); toast(`Opened "${S().title || 'Untitled'}".`, 'Undo brings the previous story back.'); }
+  else if (r.class === 'invalid') toast('This file is not a sandhi story. Nothing changed.', 'Open a .sandhi.json file saved from sandhi.');
 }
 $('#file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) openText(await f.text()); });
 document.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
@@ -1678,11 +1709,13 @@ addEventListener('storage', (e) => {
   renderAll(); toast('Updated from another tab.', "Undo brings this tab's version back.");
 });
 // keyboard: Enter commits a one-line field; Cmd/Ctrl+S saves; Cmd/Ctrl+Z undoes outside text; ? opens the splash
+const escClearsFocus = (e) => e.key === 'Escape' && app.focus !== 'all' && !tour.layer && !document.querySelector('dialog[open]');
 function shortcut(e, typing) {
   const mod = e.metaKey || e.ctrlKey, key = e.key.toLowerCase();
   if (mod && key === 's') return () => { flushPending(); ui('story.save', {}); };
   if (mod && key === 'z' && !typing) return () => ui(e.shiftKey ? 'redo' : 'undo', {});
   if (e.key === '?' && !typing && !tour.layer) return () => openSplash(false);
+  if (escClearsFocus(e)) return () => ui('view.focus', { principle: 'all' });
   return null;
 }
 document.addEventListener('keydown', (e) => {
@@ -1729,7 +1762,7 @@ new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width); if (w &
 // ---- the read dialog: paste, choose a rung on the ladder, read, review, then use or discard (read.accept is person-only)
 const reader = $('#reader');
 $('#provider').innerHTML = Object.entries(LD.PROVIDERS).map(([id, x]) => `<option value="${id}">${esc(x.label)}</option>`).join('');
-const NANO_TEXT = { ready: 'ready · a preview: fast, but in our tests it missed the story’s turn', download: 'downloads once, about 22 GB free disk', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
+const NANO_TEXT = { ready: 'ready · a preview: fast, but in our tests it missed the story’s turn', download: 'needs about 22 GB free disk; Chrome downloads it once', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
 function machineText(m) {
   if (!m.checked) return 'not looked for yet';
   if (m.access === 'denied') return 'Chrome blocks local network access for this site (Site settings → Local network access)';
@@ -1756,7 +1789,7 @@ function renderProposal() {
   if (!p) { box.innerHTML = ''; return; }
   const r = p.report, drop = r.dropped.beats + r.dropped.quotes;
   const arc = C.ARCS.find(x => x.id === r.arc);
-  box.innerHTML = `<p class="sum"><b>${r.beats} beats, ${r.threads} threads</b> from ${r.words} words, read by ${esc(r.model)} (${r.mode === 'split' ? 'beats first, then labels' : r.mode === 'whole' ? 'whole story' : `${r.calls - 1} parts, then the outline`}).${arc ? ` Closest shape: ${esc(arc.name)}.` : ''}${drop ? ` ${drop} quote${drop > 1 ? 's' : ''} did not match the text and ${drop > 1 ? 'were' : 'was'} dropped.` : ''}</p>
+  box.innerHTML = `<p class="sum"><b>${r.beats} beats, ${r.threads} plants</b> from ${r.words} words, read by ${esc(r.model)} (${r.mode === 'split' ? 'beats first, then labels' : r.mode === 'whole' ? 'whole story' : `${r.calls - 1} parts, then the outline`}).${arc ? ` Closest shape: ${esc(arc.name)}.` : ''}${drop ? ` ${drop} quote${drop > 1 ? 's' : ''} did not match the text and ${drop > 1 ? 'were' : 'was'} dropped.` : ''}</p>
     <ol>${p.story.beats.map(b => `<li><b>${esc(b.label || C.spineName(b.spine))}</b>${b.label && b.label !== C.spineName(b.spine) ? ' · ' + esc(C.spineName(b.spine)) : ''} · fortune ${fmtF(b.fortune)}${b.marks.length ? ' · ' + b.marks.map(m => (m === 'low' ? 'low point' : m)).join(', ') : ''} — ${esc(snip(b.text, 80))}</li>`).join('')}</ol>`;
 }
 async function openReader() { $('#read-progress').textContent = ''; renderProposal(); await renderReader(false); if (!reader.open) reader.showModal(); $('#read-text').focus(); }
@@ -1765,7 +1798,7 @@ const countWords = () => { $('#read-count').textContent = `${C.wordCount($('#rea
 $('#read-text').addEventListener('input', countWords);
 $('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) { $('#read-text').value = await f.text(); countWords(); } });
 const READER_CHANGES = {
-  rung: (el) => ui('reader.select', { rung: el.value }),
+  rung: (el) => { readProgress(''); return ui('reader.select', { rung: el.value }); },
   provider: (el) => ui('reader.select', { provider: el.value }),
   'provider-model': (el) => ui('reader.select', { rung: 'provider', model: el.value }),
   'machine-model': (el) => ui('reader.select', { rung: 'machine', model: el.value }),
@@ -1797,6 +1830,11 @@ async function onReadControl(kind, e) {
   if (kind === 'read-open') return openReader();
   if (kind === 'read-close') return reader.close();
   if (kind === 'read-file') return $('#read-file').click();
+  if (kind === 'read-paste') {
+    const r = await ui('story.paste', { text: $('#read-text').value });
+    if (r.ok) { reader.close(); toast(`${r.data.beats} beats, one per paragraph. Label them yourself.`, 'Undo brings your previous story back.'); }
+    return null;
+  }
   if (kind === 'read-run') {
     $('#read-result').innerHTML = ''; readProgress('Starting…');
     const run = $('#read-actions [data-ui="read-run"]'); run.hidden = true; $('#read-stop').hidden = false;

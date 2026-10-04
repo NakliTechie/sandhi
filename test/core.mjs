@@ -67,7 +67,8 @@ const fixtures = {
   thread_unused: s => { s.threads.push({ id: 't1', label: 'x', plant: null, payoffs: [] }); },
   ending_luck: s => { s.beats[8].driver = 'luck'; },
   no_turn: s => { s.beats[7].marks = []; },
-  flat_fortune: s => { for (const b of s.beats) b.fortune = 1; }
+  flat_fortune: s => { for (const b of s.beats) b.fortune = 1; },
+  low_not_lowest: s => { s.beats[0].fortune = -5; s.beats[6].fortune = -4; }
 };
 for (const [cls, fn] of Object.entries(fixtures)) {
   const s = mut(fn), ok = C.validate(s).ok, fired = classes(s);

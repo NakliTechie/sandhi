@@ -71,6 +71,7 @@ Structure is read, not guessed (decision 2026-10-04). In v0.1 the writer supplie
 | `ending_luck` | a beat at or after the turn has `driver: luck` |
 | `no_turn` | 4+ written beats and none marked `turn` |
 | `flat_fortune` | 3+ written beats and fortune never moves |
+| `low_not_lowest` | a beat is marked the low point but another written beat is lower |
 
 **Arc fit** is arithmetic on the writer's fortune numbers: Pearson r against each of the six idealised arcs sampled at the beat positions. *The whistle* fits Man in a hole at r = 0.874.
 
