@@ -797,8 +797,11 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   const ORDER = [RUNGS.MACHINE, RUNGS.DEVICE, RUNGS.PROVIDER];
   // Local servers that speak the OpenAI-compatible surface on 127.0.0.1. No key; the words stay on the machine.
   const SERVERS = {
-    ollama: { label: 'Ollama', base: 'http://127.0.0.1:11434/v1', cors: 'start Ollama with OLLAMA_ORIGINS=https://sandhi.naklitechie.com' },
-    lmstudio: { label: 'LM Studio', base: 'http://127.0.0.1:1234/v1', cors: 'turn on CORS in LM Studio’s server settings' }
+    // Ollama's OpenAI-compatible API ignores num_ctx and runs every model in 4,096 tokens, which cuts a story's answer off:
+    // reads go to its own /api/chat, which takes num_ctx per request (seen on Ollama 0.35, 2026-10-04). LM Studio fixes the
+    // window when it loads a model; its /api/v0/models says what it is.
+    ollama: { label: 'Ollama', base: 'http://127.0.0.1:11434/v1', native: 'http://127.0.0.1:11434/api', window: 16384, cors: 'start Ollama with OLLAMA_ORIGINS=https://sandhi.naklitechie.com' },
+    lmstudio: { label: 'LM Studio', base: 'http://127.0.0.1:1234/v1', native: 'http://127.0.0.1:1234/api/v0', cors: 'turn on CORS in LM Studio’s server settings' }
   };
   // The writer's provider: any OpenAI-compatible API, or Anthropic's own. Browser CORS checked 2026-10-04 for every
   // listed host. No model is preset except Anthropic's: the writer picks one, or loads the provider's own list.
@@ -839,9 +842,9 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   // 'schema' (response_format json_schema), 'object' (json_object, schema in the prompt), 'prompt' (schema in the prompt only).
   const JSON_MODES = ['schema', 'object', 'prompt'];
   // extra: fields a rung adds, such as reasoning_effort 'none' for local models (thinking can use up a small model's whole context).
+  const messagesFor = (prompt, schema, mode) => [{ role: 'system', content: mode === 'schema' ? prompt.system : `${prompt.system}\nAnswer with one JSON object and nothing else. It follows this JSON Schema:\n${JSON.stringify(schema)}` }, { role: 'user', content: prompt.user }];
   function openaiBody(model, prompt, schema, mode, extra) {
-    const system = mode === 'schema' ? prompt.system : `${prompt.system}\nAnswer with one JSON object and nothing else. It follows this JSON Schema:\n${JSON.stringify(schema)}`;
-    const body = { model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt.user }], ...extra };
+    const body = { model, messages: messagesFor(prompt, schema, mode), ...extra };
     if (mode === 'schema') body.response_format = { type: 'json_schema', json_schema: { name: 'sandhi_read', strict: true, schema } };
     if (mode === 'object') body.response_format = { type: 'json_object' };
     return body;
@@ -858,6 +861,13 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
       else if (c === '}' && --depth === 0) return i;
     }
     return -1;
+  }
+  // Ollama's own chat body: the window asked for per request, no thinking, and the same three JSON modes ('object' is format "json").
+  function ollamaBody(model, prompt, schema, mode, numCtx) {
+    const body = { model, messages: messagesFor(prompt, schema, mode), stream: false, think: false, options: { num_ctx: numCtx } };
+    if (mode === 'schema') body.format = schema;
+    if (mode === 'object') body.format = 'json';
+    return body;
   }
   // The first JSON object in a reply: the whole reply, a fenced block, or the first balanced object in the prose around it.
   function extractJson(text) {
@@ -887,6 +897,12 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     const json = extractJson(m.content);
     return json ? { json, model: out.model } : { error: 'not_json' };
   }
+  function parseOllama(out) {
+    if (!out || !out.message) return { error: 'not_json' };
+    if (out.done_reason === 'length') return { error: 'too_long' };
+    const json = extractJson(out.message.content);
+    return json ? { json, model: out.model } : { error: 'not_json' };
+  }
   function parseAnthropic(out) {
     if (!out) return { error: 'not_json' };
     if (out.stop_reason === 'refusal') return { error: 'refused' };
@@ -902,7 +918,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   // A /models reply -> model ids (OpenAI-compatible and Anthropic both answer { data: [{ id }] }).
   const modelIds = (out) => ((out && out.data) || []).map(m => m && m.id).filter(Boolean).toSorted();
 
-  root.SandhiLadder = { RUNGS, ORDER, SERVERS, PROVIDERS, JSON_MODES, detectLadder, rungLabel, rungIsLocal, openaiBody, extractJson, scrub, parseOpenAI, parseAnthropic, fingerprint, modelIds };
+  root.SandhiLadder = { RUNGS, ORDER, SERVERS, PROVIDERS, JSON_MODES, detectLadder, rungLabel, rungIsLocal, openaiBody, ollamaBody, extractJson, scrub, parseOpenAI, parseOllama, parseAnthropic, fingerprint, modelIds };
 })(globalThis);
 </script>
 
@@ -1042,6 +1058,15 @@ async function nanoRun({ system, user }, schema) {
 }
 // Local models answer without thinking: Qwen 3.5 4B on Ollama thought ~6,000 tokens and ran out of context on The whistle (2026-10-04).
 const LOCAL_EXTRA = { reasoning_effort: 'none' };
+// tokens kept free in a local window for the answer: a labelled 14-beat story comes back in about 2,700 (Qwen 3.5 4B, 2026-10-04)
+const ANSWER_ROOM = 4096;
+// the window LM Studio loaded a model with, or null when it does not say
+async function lmWindow(model) {
+  try {
+    const r = await fetch(`${LD.SERVERS.lmstudio.native}/models`, { signal: AbortSignal.timeout(3000) }), m = ((await r.json()).data || []).find(x => x.id === model);
+    return (m && m.loaded_context_length) || null;
+  } catch { return null; }
+}
 // machine rung: an OpenAI-compatible server on 127.0.0.1; found only by an explicit probe (Chrome may ask to allow local network access)
 let machine = { checked: false, found: null, access: null };
 // Chrome asks the writer before a public page may reach 127.0.0.1 ("local network access"). Until the writer answers, a request
@@ -1076,10 +1101,14 @@ const machineReader = {
     const f = machine.found;
     if (!f && machine.access === 'denied') throw readerFail('no_reader', 'Chrome blocks this site from your local network.', 'Allow it: the site icon in the address bar, Site settings, Local network access, Allow. Then look again.');
     if (!f) throw readerFail('no_reader', 'No model server answered on this machine.', `Start Ollama (${LD.SERVERS.ollama.cors}) or LM Studio (${LD.SERVERS.lmstudio.cors}), allow local network access if Chrome asks, then look again.`);
-    const model = rcfg.models[f.id];
-    if (!f.models.length) throw readerFail('no_reader', `${LD.SERVERS[f.id].label} has no model loaded.`, 'Pull or load a model, then try again.');
-    if (!model) throw readerFail('no_reader', `No model is chosen for ${LD.SERVERS[f.id].label}.`, 'Load models and pick one in the model field (reader.select with model).');
-    return { model, maxInput: 3000, charsPerToken: 4, measure: async (t) => Math.ceil(t.length / 4), run: (p, schema) => openaiCall(LD.SERVERS[f.id].base, null, model, p, schema, LOCAL_EXTRA), close() { /* nothing held open */ } };
+    const model = rcfg.models[f.id], server = LD.SERVERS[f.id];
+    if (!f.models.length) throw readerFail('no_reader', `${server.label} has no model loaded.`, 'Pull or load a model, then try again.');
+    if (!model) throw readerFail('no_reader', `No model is chosen for ${server.label}.`, 'Load models and pick one in the model field (reader.select with model).');
+    const base = { model, charsPerToken: 4, measure: async (t) => Math.ceil(t.length / 4), close() { /* nothing held open */ } };
+    if (f.id === 'ollama') return { ...base, maxInput: server.window - ANSWER_ROOM, run: (p, schema) => ollamaCall(model, p, schema) };
+    const win = await lmWindow(model);
+    if (win && win < 2 * ANSWER_ROOM) throw readerFail('no_reader', `LM Studio loaded ${model} with a ${win}-token window, too small to read a story and answer.`, `In LM Studio, load the model with a context length of ${server.window || 16384} or more, then read again.`);
+    return { ...base, maxInput: win ? win - ANSWER_ROOM : 3000, run: (p, schema) => openaiCall(server.base, null, model, p, schema, LOCAL_EXTRA) };
   }
 };
 // provider rung: the writer's own provider and key; any OpenAI-compatible API, or Anthropic's own
@@ -1123,19 +1152,28 @@ function parsed(r, model) {
   if (r.error) throw readerFail('reader_error', 'The model returned text that is not JSON.', 'Try again; if it repeats, try another model.');
   return { json: r.json, model: r.model || model };
 }
-// OpenAI-compatible: ask for JSON strictly first; on HTTP 400 ask more plainly (json_object, then the prompt alone). Remember what worked.
+// Ask for JSON strictly first; on HTTP 400 ask more plainly (a plain JSON mode, then the prompt alone). Remember what worked
+// per address and model. send(mode) -> {status, out}; the last mode, 'prompt', always returns or throws.
 const jsonMode = new Map();
-async function openaiCall(base, key, model, prompt, schema, extra) {
-  const memo = `${base}|${model}`, modes = LD.JSON_MODES.slice(LD.JSON_MODES.indexOf(jsonMode.get(memo) || 'schema'));
-  const headers = { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) };
-  let res;   // the last mode, 'prompt', always returns or throws
+async function stepDown(memo, send, parse, who, key, model) {
+  const modes = LD.JSON_MODES.slice(LD.JSON_MODES.indexOf(jsonMode.get(memo) || 'schema'));
   for (const mode of modes) {
-    res = await post(`${base}/chat/completions`, headers, LD.openaiBody(model, prompt, schema, mode, extra));
+    const res = await send(mode);
     if (res.status === 400 && mode !== 'prompt') continue;
-    apiStatus(res.status, res.out, hostOf(base), key);
+    apiStatus(res.status, res.out, who, key);
     jsonMode.set(memo, mode);
-    return parsed(LD.parseOpenAI(res.out), model);
+    return parsed(parse(res.out), model);
   }
+}
+// OpenAI-compatible: providers and LM Studio
+function openaiCall(base, key, model, prompt, schema, extra) {
+  const headers = { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) };
+  return stepDown(`${base}|${model}`, (mode) => post(`${base}/chat/completions`, headers, LD.openaiBody(model, prompt, schema, mode, extra)), LD.parseOpenAI, hostOf(base), key, model);
+}
+// Ollama's own chat API, with the window asked for per request
+function ollamaCall(model, prompt, schema) {
+  const url = `${LD.SERVERS.ollama.native}/chat`;
+  return stepDown(`${url}|${model}`, (mode) => post(url, { 'content-type': 'application/json' }, LD.ollamaBody(model, prompt, schema, mode, LD.SERVERS.ollama.window)), LD.parseOllama, 'Ollama', null, model);
 }
 // Anthropic's own Messages API, raw fetch (one static file, nothing loaded from third parties): JSON-schema output, effort medium, fallbacks "default".
 async function anthropicCall(key, model, { system, user }, schema) {
@@ -1926,6 +1964,7 @@ const READER_CHANGES = {
   'provider-key': async (el) => { const r = await ui('reader.key', { provider: $('#provider').value, key: el.value, base: $('#provider-base').value }); el.value = ''; return r; }   // the key never stays in the page
 };
 reader.addEventListener('change', async (e) => {
+  readerDraws++;   // the writer's change wins: a draw already under way read the settings before it, so it must not write
   const fn = READER_CHANGES[e.target.name === 'rung' ? 'rung' : e.target.id];
   if (fn) { await fn(e.target); renderReader(false); }
 });

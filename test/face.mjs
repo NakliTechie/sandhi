@@ -423,11 +423,11 @@ async function readPage(opts) {
   const { ctx2, p, errs, call } = await readPage({});
   const sent = [];
   const reply = (body) => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
-  await p.route('http://127.0.0.1:11434/v1/**', async (route) => {
+  await p.route('http://127.0.0.1:11434/**', async (route) => {
     const q = route.request();
     if (q.method() === 'GET') return route.fulfill(reply({ object: 'list', data: [{ id: 'llama3.2' }] }));
-    sent.push({ headers: q.headers(), body: JSON.parse(q.postData()) });
-    return route.fulfill(reply({ model: 'llama3.2', choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(FIX.whole) } }] }));
+    sent.push({ url: q.url(), headers: q.headers(), body: JSON.parse(q.postData()) });   // Ollama's own chat API: the reply shape is {message, done_reason}
+    return route.fulfill(reply({ model: 'llama3.2', message: { role: 'assistant', content: JSON.stringify(FIX.whole) }, done: true, done_reason: 'stop' }));
   });
   const unprobed = (await call('reader.status', {})).data;
   await p.click('[data-ui="read-open"]');
@@ -443,6 +443,7 @@ async function readPage(opts) {
   check('ladder.machine_model_must_be_chosen', noModel.class === 'no_reader' && /No model is chosen/.test(noModel.message), noModel);
   check('ladder.machine_not_probed_at_load', unprobed.machine.checked === false && unprobed.machine.server === null, unprobed.machine);
   check('ladder.machine_read', r.ok && r.data.reader === 'machine' && r.data.model === 'llama3.2' && r.data.beats === 10 && sent.length >= 1 && !sent[0].headers.authorization && /Ollama on this machine: the story stays on your machine/.test(privacy), { r, privacy });
+  check('ladder.ollama_window_per_request', sent[0].url === 'http://127.0.0.1:11434/api/chat' && sent[0].body.options.num_ctx === 16384 && sent[0].body.think === false && sent[0].body.format && sent[0].body.format.type === 'object', sent[0] && { url: sent[0].url, options: sent[0].body.options });
   check('ladder.machine_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }

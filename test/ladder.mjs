@@ -36,7 +36,7 @@ check('ladder.local', L.rungIsLocal('machine') && L.rungIsLocal('device') && !L.
 const provs = plain(L.PROVIDERS);
 check('ladder.providers_https', Object.entries(provs).every(([id, p]) => (id === 'custom' ? p.base === '' : p.base.startsWith('https://'))) && isDeepStrictEqual(Object.keys(provs).toSorted(), ['anthropic', 'custom', 'deepseek', 'gemini', 'groq', 'mistral', 'openai', 'openrouter', 'together']), Object.keys(provs));
 check('ladder.model_presets', Object.entries(provs).every(([id, p]) => (id === 'anthropic' ? p.model === 'claude-opus-5-5' : !p.model)), 'presets');
-check('ladder.servers_loopback', Object.values(plain(L.SERVERS)).every(x => /^http:\/\/127\.0\.0\.1:\d+\/v1$/.test(x.base)), 'servers');
+check('ladder.servers_loopback', Object.values(plain(L.SERVERS)).every(x => /^http:\/\/127\.0\.0\.1:\d+\/v1$/.test(x.base) && /^http:\/\/127\.0\.0\.1:\d+\/api/.test(x.native)) && L.SERVERS.ollama.window === 16384, 'servers');
 
 // 4. the OpenAI-compatible body in three JSON modes, strictest first
 const schema = { type: 'object', additionalProperties: false, required: ['a'], properties: { a: { type: 'string' } } };
@@ -49,6 +49,13 @@ check('ladder.body_object', bo.response_format.type === 'json_object' && bo.mess
 check('ladder.body_prompt', bp.response_format === undefined && bp.messages[0].content.includes('JSON Schema'), bp);
 const bx = plain(L.openaiBody('m', pr, schema, 'schema', { reasoning_effort: 'none' }));
 check('ladder.body_extra', bx.reasoning_effort === 'none' && bx.response_format.type === 'json_schema', bx);
+
+// 4b. Ollama's own chat body: the window per request (its OpenAI API ignores num_ctx and runs in 4,096), no thinking
+const os = plain(L.ollamaBody('q', pr, schema, 'schema', 16384)), oo = plain(L.ollamaBody('q', pr, schema, 'object', 16384)), op = plain(L.ollamaBody('q', pr, schema, 'prompt', 16384));
+check('ladder.ollama_body', os.options.num_ctx === 16384 && os.think === false && os.stream === false && isDeepStrictEqual(os.format, schema) && os.messages[0].content === 'SYS'
+  && oo.format === 'json' && oo.messages[0].content.includes('JSON Schema') && op.format === undefined, { os, oo: oo.format, op: op.format });
+check('ladder.parse_ollama', isDeepStrictEqual(plain(L.parseOllama({ model: 'q', message: { content: '{"a":"1"}' }, done_reason: 'stop' })), { json: { a: '1' }, model: 'q' })
+  && L.parseOllama({ message: { content: '{"a":' }, done_reason: 'length' }).error === 'too_long' && L.parseOllama({}).error === 'not_json', 'ollama replies');
 
 // 5. replies: plain JSON, fenced JSON, refusal, cut off, not JSON; Anthropic's shape too
 const oa = (content, extra) => ({ model: 'x/y', choices: [{ finish_reason: 'stop', message: { content, ...extra } }] });
