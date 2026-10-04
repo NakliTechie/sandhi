@@ -247,7 +247,7 @@ async function readPage(opts) {
   check('read.accept_in_page', shown === 10 && sameProse && sameLabels && after.beats.every(b => b.by === 'model' && b.model === 'gemini-nano') && byline === 10 && (await call('checks', {})).data.count === 0, { shown, sameProse, sameLabels, byline });
   await call('beat.update', { id: 'b3', patch: { fortune: -2 } });
   const b3 = (await call('story.get', {})).data.story.beats[2];
-  check('read.label_edit_makes_it_writers', b3.by === 'writer' && b3.model === undefined, b3);
+  check('read.agent_label_edit_attributed', b3.by === 'agent' && b3.model === undefined, b3);   // an agent's label edit is the agent's, not the model's or the writer's
   await call('undo', {}); await call('undo', {});
   const back = (await call('story.get', {})).data.story;
   check('read.undo_restores_previous', back.beats.every(b => b.by === 'writer') && back.title === 'The whistle', back.beats.map(b => b.by));

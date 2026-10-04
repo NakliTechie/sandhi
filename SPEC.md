@@ -48,11 +48,11 @@ draft   { n, text, note }
 | `driver` | `luck` · `choice` · `null` (who moves this beat) |
 | `avastha` | `arambha` · `prayatna` · `praptyasha` · `niyatapti` · `phalagama` · `null` (Nāṭyaśāstra's five stages) |
 | `kis` | `ki` · `sho` · `ten` · `ketsu` · `null` (kishōtenketsu) |
-| `by` | `writer` · `model` (with `model: <id>`) |
+| `by` | `writer` · `model` (with `model: <id>`, 1–200 characters) · `agent` (an agent's edit through `window.sandhi` or `navigator.modelContext`) |
 
-Unknown fields are rejected. Ids match `[a-z0-9-]{1,40}`. Per-principle beat lists are derived from beat `tags`, never stored. In the explainer they matched the tags for all 13 principles (checked 2026-10-04).
+Unknown fields are rejected. Ids match `[a-z0-9-]{1,40}`. One story holds at most 400 beats, 100 threads and 3,000,000 characters of text (`LIMITS`): every thread picker lists every beat, so beats × threads is the drawing cost. Per-principle beat lists are derived from beat `tags`, never stored. In the explainer they matched the tags for all 13 principles (checked 2026-10-04).
 
-**Round trip.** `toExplainer(story)` renders the explainer's data shape (`BEATS`, per-principle story text and beats, `ARCS` with `ours`). `fromExplainer` reads it back. *The whistle* must survive both ways with nothing lost: `test/core.mjs`.
+**Round trip.** *The whistle*'s projection to the explainer's data shape (`BEATS`, per-principle story text and beats, `ARCS` with `ours`) equals the explainer's own data, and reading that shape back and projecting again gives the same data (`test/core.mjs`, which holds the adapters; the page never converts). The story holds more than the explainer does (threads, joints, drivers, Nāṭyaśāstra and kishōtenketsu stages, logline, belief), so story → explainer → story is lossy by design.
 
 ## §2 Checks (computed from labels, never from prose)
 
@@ -93,11 +93,11 @@ Readers follow the house AI ladder (Edge-First doctrine; ported from Draft's `si
 
 **Content-Security-Policy.** Inline script and style only; `connect-src` is `'self'`, any `https:` host (the writer chooses the provider) and `http://127.0.0.1:*` / `http://localhost:*`.
 
-**The prose stays the writer's.** A reader returns labels and exact quotes, never text for the story. `storyFromWhole` cuts the writer's own text where each beat's opening quote lands (quotes, dashes, case and spacing folded; a quote under 12 characters is not trusted). Threads map their plant and payoff quotes to the beats that contain them. A quote that does not match is dropped and counted in the report.
+**The prose stays the writer's.** A reader returns labels and exact quotes, never text for the story. `storyFromWhole` cuts the writer's own text where each beat's opening quote lands (quotes, dashes, case and spacing folded; a quote under 12 characters is not trusted). Threads map their plant and payoff quotes to the beats that contain them. Quote marks are ignored, accents, soft hyphens and zero-width spaces folded away, and a beat that opens with a quote mark, a dash or an ellipsis keeps it. A payoff quote is looked for after its plant first. A quote that does not match, or a beat quote that lands at or before the beat before it, is dropped and counted in the report; so is a reply row of the wrong shape.
 
-**Two passes when a story does not fit.** Pass 1 reads paragraph-aligned parts and returns scenes (opening quote, a 30-word summary, fortune, things introduced and used). Pass 2 reads every scene summary at once and labels the whole story, so the turn, the low point and the threads are judged against the whole, never one part.
+**Two passes when a story does not fit.** Pass 1 reads parts cut at the last blank line, newline or sentence end inside each window (Latin, Devanagari and CJK sentence ends) and returns scenes (opening quote, a 30-word summary, fortune, things introduced and used). Pass 2 reads every scene summary at once and labels the whole story, so the turn, the low point and the threads are judged against the whole, never one part.
 
-**Staged, then accepted.** `read.run` stages a proposal (`read.get` shows it) and changes nothing. `read.accept` (person-only) commits it, undoable. Beats carry `by: model` and `model: <id>`; changing any label of a beat makes it `by: writer`.
+**Staged, then accepted.** `read.run` stages a proposal (`read.get` shows it) and changes nothing. `read.accept` (person-only) commits it, undoable. Beats carry `by: model` and `model: <id>`; changing any label of a beat makes it `by: writer` (or `by: agent` when an agent changes it).
 
 ## §4 Gates
 

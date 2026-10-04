@@ -450,13 +450,21 @@ footer code{font-size:11.5px}
   const PIDS = new Set(PRINCIPLES.map(p => p.id));
   const ids = a => new Set(a.map(x => x.id));
   const SPINE_IDS = ids(SPINE), AV_IDS = ids(AVASTHA), KIS_IDS = ids(KIS);
-  const JOINT_SET = new Set(JOINTS), MARK_SET = new Set(MARKS), DRIVER_SET = new Set(DRIVERS), BY_SET = new Set(['writer', 'model']);
+  const JOINT_SET = new Set(JOINTS), MARK_SET = new Set(MARKS), DRIVER_SET = new Set(DRIVERS), BY_SET = new Set(['writer', 'model', 'agent']);
   const BEAT_KEYS = ['id', 'label', 'spine', 'joint', 'text', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis', 'drafts', 'by', 'model'];
   const STORY_KEYS = ['sandhi', 'title', 'logline', 'belief', 'beats', 'threads', 'notes'];
   const ID_RE = /^[a-z0-9-]{1,40}$/;
+  // what one page can hold and draw: thread pickers list every beat, so beats × threads is the cost that grows
+  const LIMITS = { beats: 400, threads: 100, chars: 3000000 };
 
   const clone = o => JSON.parse(JSON.stringify(o));
-  const wordCount = s => (s.trim().match(/\S+/g) || []).length;
+  // words: spaces separate them, except in scripts written without spaces (Japanese, Chinese, Thai), where Intl finds them
+  const UNSPACED = /[\u0e00-\u0e7f\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;
+  const SEG = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'word' }) : null;
+  const wordCount = s => {
+    if (!SEG || !UNSPACED.test(s)) return (s.trim().match(/\S+/g) || []).length;
+    let n = 0; for (const x of SEG.segment(s)) if (x.isWordLike) n++; return n;
+  };
   const spineName = id => (SPINE.find(s => s.id === id) || {}).name || id;
 
   // A small error collector; each part of the story has its own validator below.
@@ -494,7 +502,7 @@ footer code{font-size:11.5px}
     v.oneOf(b.driver, DRIVER_SET, `${p}.driver`, true); v.oneOf(b.avastha, AV_IDS, `${p}.avastha`, true); v.oneOf(b.kis, KIS_IDS, `${p}.kis`, true);
     if (Array.isArray(b.drafts)) b.drafts.forEach((d, k) => validateDraft(v, d, `${p}.drafts[${k}]`)); else v.e(`${p}.drafts`, 'must be an array');
     v.oneOf(b.by, BY_SET, `${p}.by`);
-    if (b.model !== undefined && (b.by !== 'model' || typeof b.model !== 'string')) v.e(`${p}.model`, 'only with by: model, as a string');
+    if (b.by === 'model' ? typeof b.model !== 'string' || !b.model || b.model.length > 200 : b.model !== undefined) v.e(`${p}.model`, b.by === 'model' ? 'by: model needs the model id, 1–200 characters' : 'only with by: model');
   }
   function validateThread(v, t, p, beatIds, threadIds) {
     if (!v.obj(t, p)) return;
@@ -511,16 +519,25 @@ footer code{font-size:11.5px}
     if (s.sandhi !== SCHEMA) v.e('sandhi', `must be ${SCHEMA}`);
     v.str(s.title, 'title', 200); v.str(s.logline, 'logline', 2000); v.str(s.belief, 'belief', 2000);
     const beatIds = new Set(), threadIds = new Set();
-    if (Array.isArray(s.beats)) s.beats.forEach((b, i) => validateBeat(v, b, `beats[${i}]`, beatIds)); else v.e('beats', 'must be an array');
-    if (Array.isArray(s.threads)) s.threads.forEach((t, i) => validateThread(v, t, `threads[${i}]`, beatIds, threadIds)); else v.e('threads', 'must be an array');
+    if (!Array.isArray(s.beats)) v.e('beats', 'must be an array');
+    else if (s.beats.length > LIMITS.beats) v.e('beats', `more than ${LIMITS.beats} beats; split the story into parts`);
+    else if (s.beats.reduce((n, b) => n + (b && typeof b.text === 'string' ? b.text.length : 0), 0) > LIMITS.chars) v.e('beats', `more than ${LIMITS.chars} characters of text; split the story into parts`);
+    else s.beats.forEach((b, i) => validateBeat(v, b, `beats[${i}]`, beatIds));
+    if (!Array.isArray(s.threads)) v.e('threads', 'must be an array');
+    else if (s.threads.length > LIMITS.threads) v.e('threads', `more than ${LIMITS.threads} threads`);
+    else s.threads.forEach((t, i) => validateThread(v, t, `threads[${i}]`, beatIds, threadIds));
     if (v.obj(s.notes, 'notes')) for (const [k, x] of Object.entries(s.notes)) { if (!PIDS.has(k)) v.e(`notes.${k}`, 'not a principle id'); v.str(x, `notes.${k}`, 5000); }
     return { ok: v.errors.length === 0, errors: v.errors };
   }
 
   function nextId(prefix, list) {
-    let max = 0;
-    for (const x of list) { const m = new RegExp(`^${prefix}(\\d+)$`).exec(x.id); if (m) max = Math.max(max, +m[1]); }
-    return prefix + (max + 1);
+    let max = 0n;
+    for (const x of list) { const m = new RegExp(`^${prefix}(\\d+)$`).exec(x.id); if (m && BigInt(m[1]) > max) max = BigInt(m[1]); }
+    const id = prefix + (max + 1n);
+    if (id.length <= 40) return id;
+    const have = new Set(list.map(x => x.id)); let n = 1;   // past the id length limit: the smallest free number
+    while (have.has(prefix + n)) n++;
+    return prefix + n;
   }
   function newBeat(id, f) {
     f = f || {};
@@ -550,10 +567,11 @@ footer code{font-size:11.5px}
     if (first > p) return;
     add('payoff_early', first, at, t.id, first === p ? `"${label}" is planted and paid off in the same beat, ${p}.` : `"${label}" pays off in beat ${first}, before its plant in beat ${p}.`, 'Move the plant earlier, or the payoff later.');
   }
+  const writtenBeats = (s) => s.beats.filter(b => b.text.trim());   // the fortune line the checks and the arc both read
   function checks(s) {
     const out = [], pos = new Map(s.beats.map((b, i) => [b.id, i + 1]));
     const add = (cls, at, beat, thread, message, next) => out.push({ class: cls, at, beat, thread, message, next });
-    const written = s.beats.filter(b => b.text.trim()), turnAt = s.beats.findIndex(b => b.marks.includes('turn'));
+    const written = writtenBeats(s), turnAt = s.beats.findIndex(b => b.marks.includes('turn'));
     s.beats.forEach((b, i) => beatChecks(b, i, turnAt, add));
     for (const t of s.threads) threadCheck(t, s, pos, add);
     const lowAt = s.beats.findIndex(b => b.marks.includes('low')), lowest = written.reduce((m, b) => (b.fortune < m.fortune ? b : m), written[0] || { fortune: 0 });
@@ -569,9 +587,9 @@ footer code{font-size:11.5px}
     for (let i = 0; i < n; i++) { s += (a[i] - ma) * (b[i] - mb); sa += (a[i] - ma) ** 2; sb += (b[i] - mb) ** 2; }
     return sa && sb ? s / Math.sqrt(sa * sb) : 0;
   }
-  // Arithmetic on the writer's fortune numbers, not a reading of the prose.
+  // Arithmetic on the writer's fortune numbers for the written beats, not a reading of the prose.
   function arcMatch(s) {
-    const f = s.beats.map(b => b.fortune), n = f.length;
+    const f = writtenBeats(s).map(b => b.fortune), n = f.length;
     if (n < 3) return { best: null, reason: 'short' };
     if (f.every(v => v === f[0])) return { best: null, reason: 'flat' };
     const scores = ARCS.map(a => ({ id: a.id, r: +pearson(f, f.map((_, i) => a.fn(i / (n - 1)))).toFixed(3) }));
@@ -581,32 +599,6 @@ footer code{font-size:11.5px}
 
   function coverage(s) {
     return PRINCIPLES.map((p, k) => ({ id: p.id, n: k + 1, name: p.name, beats: s.beats.map((b, i) => (b.tags.includes(p.id) ? i + 1 : 0)).filter(Boolean) }));
-  }
-
-  // The explainer's data shape (reference/how-stories-work.html, DATA block) <-> story.
-  const renderDrafts = d => d.map(x => `<s>Draft ${x.n}: ${x.text}</s> ${x.note}`).join(' ');
-  function parseDrafts(html) {
-    if (!html) return [];
-    const out = [], re = /<s>Draft (\d+): ([\s\S]*?)<\/s>\s*([\s\S]*?)(?=\s*<s>|$)/g;
-    let m; while ((m = re.exec(html))) out.push({ n: +m[1], text: m[2], note: m[3] });
-    return out;
-  }
-  function toExplainer(s) {
-    const a = arcMatch(s), cov = coverage(s);
-    return {
-      BEATS: s.beats.map((b, i) => { const o = { n: i + 1, spine: b.label || spineName(b.spine), f: b.fortune, text: b.text, tags: b.tags.slice() }; if (b.drafts.length) o.draft = renderDrafts(b.drafts); return o; }),
-      STORY: Object.fromEntries(cov.map(c => [c.id, { story: s.notes[c.id] || '', beats: c.beats }])),
-      ARCS: ARCS.map(x => (x.id === a.best ? { id: x.id, name: x.name, d: `${x.d} ${s.title}.`, ours: true } : { id: x.id, name: x.name, d: x.d }))
-    };
-  }
-  const LABEL_SPINE = { 'Once upon a time': 'once', 'Every day': 'everyday', 'One day': 'oneday', 'Until finally': 'until', 'And ever since then': 'since' };
-  function fromExplainer(d, title) {
-    return { sandhi: SCHEMA, title: title || 'Untitled', logline: '', belief: '',
-      beats: d.BEATS.map(b => ({ id: 'b' + b.n, label: b.spine, spine: LABEL_SPINE[b.spine] || 'because',
-        joint: b.spine === 'But' ? 'but' : b.spine === 'Therefore' ? 'therefore' : null, text: b.text, fortune: b.f, tags: b.tags.slice(),
-        marks: b.spine === 'The turn' ? ['turn'] : b.spine === 'The low point' ? ['low'] : [], driver: null, avastha: null, kis: null,
-        drafts: parseDrafts(b.draft), by: 'writer' })),
-      threads: [], notes: Object.fromEntries(d.PRINCIPLES.filter(p => p.story).map(p => [p.id, p.story])) };
   }
 
   // ---- read mode, pure part (SPEC §3): prompts, schemas, quote anchoring, story assembly.
@@ -652,22 +644,36 @@ footer code{font-size:11.5px}
     labels: (scenes) => ({ system: GUIDE, user: `Here is a whole story as numbered scene summaries. Label every scene as one beat ("scene" = its number). Choose the turn and the low point for the story as a whole. Link threads: for each thing planted in one scene and used in later scenes, give plant_scene and payoff_scenes.\n\n${scenes.map(sceneLine).join('\n')}` })
   };
 
-  const FOLD = { '‘': "'", '’': "'", '‚': "'", '‛': "'", '′': "'", '“': '"', '”': '"', '„': '"', '‟': '"', '″': '"', '–': '-', '—': '-', '―': '-', '−': '-', '…': '...' };
-  // A folded copy of the text (quotes, dashes, case and whitespace normalised) and, per folded char, its index in the original.
+  const FOLD = { '‘': "'", '’': "'", '‚': "'", '‛': "'", '′': "'", '‹': "'", '›': "'", '“': '"', '”': '"', '„': '"', '‟': '"', '″': '"', '«': '"', '»': '"',
+    '‐': '-', '‑': '-', '‒': '-', '–': '-', '—': '-', '―': '-', '−': '-', '…': '...' };
+  const INVISIBLE = /[\u00ad\u200b-\u200d\u2060\ufeff]/;
+  // one character, folded: dashes and accents to their plain form; '' for quote marks (a model straightens or drops them),
+  // invisible characters and lone accent marks
+  const foldChar = (c) => {
+    const f = FOLD[c] !== undefined ? FOLD[c] : c < '\u0080' ? c : INVISIBLE.test(c) ? '' : c.normalize('NFD').replace(/\p{M}/gu, '');
+    return f === '"' || f === "'" ? '' : f;
+  };
+  // A folded copy of the text (quotes, dashes, accents, case and whitespace normalised) and, per folded char, its index in the original.
   function foldText(t) {
     let out = '', space = false;
     const map = [];
     for (let i = 0; i < t.length; i++) {
-      const f = FOLD[t[i]] === undefined ? t[i] : FOLD[t[i]];
+      const f = foldChar(t[i]);
+      if (!f) continue;
       if (/\s/.test(f)) { if (!space && out) { out += ' '; map.push(i); } space = true; continue; }
       space = false;
       for (const ch of f.toLowerCase()) { out += ch; map.push(i); }
     }
     return { out, map };
   }
-  // Folded index of an exact quote (or its first six words), searching from `from`; -1 when absent or too short to trust.
+  const EDGE = new Set([' ', '.', ',', ';', ':', '!', '?', '-']);
+  const trimEdges = (q) => { let a = 0, b = q.length; while (a < b && EDGE.has(q[a])) a++; while (b > a && EDGE.has(q[b - 1])) b--; return q.slice(a, b); };
+  // a beat that opens with a quote mark, a dash or an ellipsis at a word start keeps it: the cut steps back over it in the writer's text
+  const OPEN_MARK = /["'“‘«‹([—–\-….]/;
+  const openAt = (text, pos) => { let j = pos; while (j > 0 && OPEN_MARK.test(text[j - 1])) j--; return j < pos && (j === 0 || /\s/.test(text[j - 1])) ? j : pos; };
+  // Folded index of an exact quote (or its first six words), searching from `from`, then from the start; -1 when absent or too short to trust.
   function findQuote(folded, quote, from) {
-    const q = foldText(String(quote || '')).out.replace(/^[\s"'.,;:!?-]+|[\s"'.,;:!?-]+$/g, '');
+    const q = trimEdges(foldText(String(quote || '')).out);
     for (const t of [q, q.split(' ').slice(0, 6).join(' ')]) {
       if (t.length < 12) continue;
       let k = folded.out.indexOf(t, from || 0);
@@ -676,17 +682,20 @@ footer code{font-size:11.5px}
     }
     return -1;
   }
-  const pick = (v, set) => (set.has(v) ? v : null);
+  // a model's reply may not match its schema (the object and prompt JSON modes do not enforce it): arrays and rows are checked, never trusted
+  const arr = (x) => (Array.isArray(x) ? x : []);
+  const rows = (x) => arr(x).filter(o => o && typeof o === 'object' && !Array.isArray(o));
+  const low = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : v);
+  const pick = (v, set) => (set.has(low(v)) ? low(v) : null);
   function coerceLabels(r) {
-    const f = Math.round(Number(r.fortune));
-    return { label: String(r.label || '').slice(0, 200), spine: SPINE_IDS.has(r.spine) ? r.spine : 'because', joint: pick(r.joint, JOINT_SET),
-      fortune: Number.isFinite(f) ? Math.max(-5, Math.min(5, f)) : 0, tags: [...new Set((r.tags || []).filter(t => PIDS.has(t)))],
-      marks: MARKS.filter(m => (r.marks || []).includes(m)), driver: pick(r.driver, DRIVER_SET), avastha: pick(r.avastha, AV_IDS), kis: pick(r.kis, KIS_IDS) };
+    const f = Math.round(Number(r.fortune)), marks = arr(r.marks).map(low);
+    return { label: String(r.label || '').slice(0, 200), spine: pick(r.spine, SPINE_IDS) || 'because', joint: pick(r.joint, JOINT_SET),
+      fortune: Number.isFinite(f) ? Math.max(-5, Math.min(5, f)) : 0, tags: [...new Set(arr(r.tags).map(low).filter(t => PIDS.has(t)))],
+      marks: MARKS.filter(m => marks.includes(m)), driver: pick(r.driver, DRIVER_SET), avastha: pick(r.avastha, AV_IDS), kis: pick(r.kis, KIS_IDS) };
   }
-  // Paragraph-aligned chunks of at most maxChars (a paragraph longer than that becomes its own chunk).
-  // The last break inside a window, best kind first: a blank line, a single newline, a sentence end. -1 if none past a third.
+  // The last break inside a window, best kind first: a blank line, a single newline, a sentence end (Latin, Devanagari, CJK). -1 if none past a third.
   function lastBreak(w) {
-    for (const re of [/\n\s*\n/g, /\n/g, /[.!?\u2026]["'\u201d\u2019)]*\s+/g]) {
+    for (const re of [/\n\s*\n/g, /\n/g, /[.!?\u2026]["'\u201d\u2019)]*\s+|[\u0964\u0965\u3002\uff01\uff1f]["'\u201d\u2019)\u300d\u300f]*\s*/g]) {
       let m, at = -1;
       while ((m = re.exec(w))) at = m.index + m[0].length;
       if (at > w.length / 3) return at;
@@ -698,7 +707,9 @@ footer code{font-size:11.5px}
     const out = [];
     let start = 0;
     while (text.length - start > maxChars) {
-      const cut = lastBreak(text.slice(start, start + maxChars)), end = start + (cut > 0 ? cut : maxChars);
+      const cut = lastBreak(text.slice(start, start + maxChars));
+      let end = start + (cut > 0 ? cut : maxChars);
+      if (cut <= 0 && /[\ud800-\udbff]/.test(text[end - 1])) end--;   // a hard cut never splits a surrogate pair
       if (text.slice(start, end).trim()) out.push({ start, end });
       start = end;
     }
@@ -708,7 +719,8 @@ footer code{font-size:11.5px}
   // anchors: [{pos, labels}] in any order -> story with beats cut at the anchors; threadsAt: [{label, plant: pos|null, payoffs: [pos]}]
   function assemble(text, anchors, threadsAt, model, title) {
     const a = anchors.toSorted((x, y) => x.pos - y.pos).filter((x, i, all) => i === 0 || x.pos !== all[i - 1].pos);
-    const beats = a.map((x, i) => ({ id: 'b' + (i + 1), ...x.labels, text: text.slice(i ? x.pos : 0, i + 1 < a.length ? a[i + 1].pos : text.length).trim(), drafts: [], by: 'model', model }));
+    const by = String(model || 'a model').slice(0, 200);
+    const beats = a.map((x, i) => ({ id: 'b' + (i + 1), ...x.labels, text: text.slice(i ? x.pos : 0, i + 1 < a.length ? a[i + 1].pos : text.length).trim(), drafts: [], by: 'model', model: by }));
     if (beats.length) beats[0].joint = null;
     const beatAt = (pos) => beats[Math.max(0, a.findLastIndex(x => x.pos <= pos))].id;
     const threads = threadsAt.map((t, i) => {
@@ -717,48 +729,56 @@ footer code{font-size:11.5px}
     }).filter(t => t.plant || t.payoffs.length);
     return { sandhi: SCHEMA, title: String(title || 'Untitled').slice(0, 200), logline: '', belief: '', beats, threads, notes: {} };
   }
+  // a beat quote that is not found, or lands at or before the beat before it (repeated, out of order), is dropped and counted
   function storyFromWhole(text, json, model) {
-    const folded = foldText(text), dropped = { beats: 0, quotes: 0 }, anchors = [];
-    const locate = (q) => { const k = findQuote(folded, q, 0); if (k < 0) dropped.quotes++; return k < 0 ? null : folded.map[k]; };
+    const folded = foldText(text), dropped = { beats: 0, quotes: 0 }, anchors = [], j = json && typeof json === 'object' ? json : {};
+    const locate = (q, from) => { const k = findQuote(folded, q, from); if (k < 0) dropped.quotes++; return k < 0 ? null : folded.map[k]; };
+    const beatRows = rows(j.beats);
+    dropped.beats += arr(j.beats).length - beatRows.length;
     let from = 0;
-    for (const b of (json && json.beats) || []) {
-      const k = findQuote(folded, b.start, from);
-      if (k < 0) { dropped.beats++; continue; }
-      anchors.push({ pos: folded.map[k], labels: coerceLabels(b) }); from = k + 1;
+    for (const b of beatRows) {
+      const k = findQuote(folded, b.start, from), pos = k < 0 ? -1 : openAt(text, folded.map[k]);
+      if (k < 0 || (anchors.length && pos <= anchors[anchors.length - 1].pos)) { dropped.beats++; continue; }
+      anchors.push({ pos, labels: coerceLabels(b) }); from = k + 1;
     }
-    const threads = ((json && json.threads) || []).map(t => ({ label: String(t.label || ''), plant: t.plant ? locate(t.plant) : null, payoffs: (t.payoffs || []).map(locate).filter(p => p !== null) }));
-    return { story: anchors.length ? assemble(text, anchors, threads, model, json.title) : null, dropped };
+    // a payoff is looked for after its plant first: a callback repeats the plant's line word for word
+    const threads = rows(j.threads).map(t => {
+      const pk = t.plant ? findQuote(folded, t.plant, 0) : -1;
+      if (t.plant && pk < 0) dropped.quotes++;
+      return { label: String(t.label || ''), plant: pk < 0 ? null : folded.map[pk], payoffs: arr(t.payoffs).map(q => locate(q, pk < 0 ? 0 : pk + 1)).filter(p => p !== null) };
+    });
+    return { story: anchors.length ? assemble(text, anchors, threads, model, j.title) : null, dropped };
   }
   // pass 1 output (scenes from every chunk, in order) -> anchored scenes; unanchored scenes are dropped before pass 2 numbers them
   function anchorScenes(text, scenes) {
-    const folded = foldText(text), out = [];
-    let from = 0, dropped = 0;
-    for (const x of scenes) {
-      const k = findQuote(folded, x.start, from);
-      if (k < 0) { dropped++; continue; }
-      out.push({ pos: folded.map[k], summary: String(x.summary || '').slice(0, 400), fortune: coerceLabels(x).fortune, introduces: (x.introduces || []).map(String), uses: (x.uses || []).map(String) });
+    const folded = foldText(text), out = [], list = rows(scenes);
+    let from = 0, dropped = arr(scenes).length - list.length;
+    for (const x of list) {
+      const k = findQuote(folded, x.start, from), pos = k < 0 ? -1 : openAt(text, folded.map[k]);
+      if (k < 0 || (out.length && pos <= out[out.length - 1].pos)) { dropped++; continue; }
+      out.push({ pos, summary: String(x.summary || '').slice(0, 400), fortune: coerceLabels(x).fortune, introduces: arr(x.introduces).map(String), uses: arr(x.uses).map(String) });
       from = k + 1;
     }
     return { scenes: out, dropped };
   }
   function storyFromLabels(text, scenes, json, model) {
-    const byScene = new Map(((json && json.beats) || []).map(b => [b.scene, b]));
+    const byScene = new Map(rows(json && json.beats).map(b => [b.scene, b]));
     const anchors = scenes.map((x, k) => ({ pos: x.pos, labels: coerceLabels(byScene.get(k + 1) || { fortune: x.fortune, label: '' }) }));
     const at = (n) => (Number.isInteger(n) && n >= 1 && n <= scenes.length ? scenes[n - 1].pos : null);
-    const threads = ((json && json.threads) || []).map(t => ({ label: String(t.label || ''), plant: at(t.plant_scene), payoffs: (t.payoff_scenes || []).map(at).filter(p => p !== null) }));
+    const threads = rows(json && json.threads).map(t => ({ label: String(t.label || ''), plant: at(t.plant_scene), payoffs: arr(t.payoff_scenes).map(at).filter(p => p !== null) }));
     return { story: scenes.length ? assemble(text, anchors, threads, model, json && json.title) : null, dropped: { beats: 0, quotes: 0, unlabelled: scenes.filter((x, k) => !byScene.has(k + 1)).length } };
   }
 
   // the writer's text of each anchored beat, for the labelling call
   const beatTexts = (text, scenes) => scenes.map((x, i) => text.slice(i ? x.pos : 0, i + 1 < scenes.length ? scenes[i + 1].pos : text.length).trim());
   function storyFromSplit(text, scenes, json, model) {
-    const j = json || {};
-    return storyFromLabels(text, scenes, { title: j.title, beats: (j.beats || []).map(b => ({ ...b, scene: b.beat })),
-      threads: (j.threads || []).map(t => ({ label: t.label, plant_scene: t.plant_beat, payoff_scenes: t.payoff_beats })) }, model);
+    const j = json && typeof json === 'object' ? json : {};
+    return storyFromLabels(text, scenes, { title: j.title, beats: rows(j.beats).map(b => ({ ...b, scene: b.beat })),
+      threads: rows(j.threads).map(t => ({ label: t.label, plant_scene: t.plant_beat, payoff_scenes: t.payoff_beats })) }, model);
   }
 
   root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
-    seed: () => clone(SEED), validate, blankStory, newBeat, nextId, checks, arcMatch, coverage, toExplainer, fromExplainer, clone, wordCount, spineName,
+    LIMITS, seed: () => clone(SEED), validate, blankStory, newBeat, nextId, checks, arcMatch, coverage, clone, wordCount, spineName,
     READ_SCHEMAS, READ_PROMPTS, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
 })(globalThis);
 </script>
@@ -1258,11 +1278,12 @@ const TOOLS = [
     } },
   { name: 'beat.add', description: 'Insert a beat after the beat with id `after` (default: at the end). Returns the new id and position.', mutating: true,
     inputSchema: { type: 'object', properties: { after: { type: 'string' }, spine: { enum: C.SPINE.map(x => x.id) }, label: { type: 'string' }, text: { type: 'string' }, fortune: { type: 'integer', minimum: -5, maximum: 5 }, joint: { enum: [...C.JOINTS, null] } } },
-    handler: async (a) => {
+    handler: async (a, door) => {
       const n = C.clone(S()), at = a.after === undefined ? n.beats.length - 1 : n.beats.findIndex(b => b.id === a.after);
       if (a.after !== undefined && at < 0) return noBeat(a.after);
-      const id = C.nextId('b', n.beats);
-      n.beats.splice(at + 1, 0, C.newBeat(id, a));
+      const id = C.nextId('b', n.beats), nb = C.newBeat(id, a);
+      if (door !== 'ui') nb.by = 'agent';   // attribution: the story records who wrote each beat's labels
+      n.beats.splice(at + 1, 0, nb);
       return commit(n, null) || ok({ id, position: at + 2 });
     } },
   { name: 'beat.update', description: 'Change fields of one beat: label, spine, joint (into this beat), text, fortune, tags, marks, driver, avastha, kis, drafts. Arrays replace whole. Undo reverses it.', mutating: true,
@@ -1273,7 +1294,7 @@ const TOOLS = [
       const n = C.clone(S()), b = n.beats.find(x => x.id === a.id);
       if (!b) return noBeat(a.id);
       Object.assign(b, C.clone(a.patch));
-      if (Object.keys(a.patch).some(k => k !== 'text' && k !== 'drafts')) { b.by = 'writer'; delete b.model; }
+      if (Object.keys(a.patch).some(k => k !== 'text' && k !== 'drafts')) { b.by = door === 'ui' ? 'writer' : 'agent'; delete b.model; }
       if (Array.isArray(b.marks)) b.marks = C.MARKS.filter(m => b.marks.includes(m)).concat(b.marks.filter(m => !C.MARKS.includes(m)));
       return commit(n, `beat.update:${door}:${a.id}:${Object.keys(a.patch).toSorted().join(',')}`) || ok({ id: a.id, position: posOf(a.id) + 1 });
     } },

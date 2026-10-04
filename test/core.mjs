@@ -34,17 +34,45 @@ const ts = [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1];
 const arcFns = D.ARCS.every((a, i) => C.ARCS[i].id === a.id && C.ARCS[i].name === a.name && ts.every(t => Math.abs(C.ARCS[i].fn(t) - a.fn(t)) < 1e-12));
 check('library.arc_functions', arcFns, 'arc ids, names or functions differ');
 
-// 2. the seed is valid and round-trips to the explainer with nothing lost
+// The explainer's data shape (reference/how-stories-work.html, DATA block) <-> story. Test-only: the page never converts.
+// The projection to the explainer round-trips; the story carries more than the explainer holds (threads, joints after b3,
+// drivers, avastha, kis, logline, belief), so story -> explainer -> story is lossy by design.
+const renderDrafts = d => d.map(x => `<s>Draft ${x.n}: ${x.text}</s> ${x.note}`).join(' ');
+function parseDrafts(html) {
+  if (!html) return [];
+  const out = [], re = /<s>Draft (\d+): ([\s\S]*?)<\/s>\s*([\s\S]*?)(?=\s*<s>|$)/g;
+  let m; while ((m = re.exec(html))) out.push({ n: +m[1], text: m[2], note: m[3] });
+  return out;
+}
+function toExplainer(s) {
+  const a = C.arcMatch(s), cov = C.coverage(s);
+  return {
+    BEATS: s.beats.map((b, i) => { const o = { n: i + 1, spine: b.label || C.spineName(b.spine), f: b.fortune, text: b.text, tags: b.tags.slice() }; if (b.drafts.length) o.draft = renderDrafts(b.drafts); return o; }),
+    STORY: Object.fromEntries(cov.map(c => [c.id, { story: s.notes[c.id] || '', beats: c.beats }])),
+    ARCS: C.ARCS.map(x => (x.id === a.best ? { id: x.id, name: x.name, d: `${x.d} ${s.title}.`, ours: true } : { id: x.id, name: x.name, d: x.d }))
+  };
+}
+const LABEL_SPINE = { 'Once upon a time': 'once', 'Every day': 'everyday', 'One day': 'oneday', 'Until finally': 'until', 'And ever since then': 'since' };
+function fromExplainer(d, title) {
+  return { sandhi: C.SCHEMA, title: title || 'Untitled', logline: '', belief: '',
+    beats: d.BEATS.map(b => ({ id: 'b' + b.n, label: b.spine, spine: LABEL_SPINE[b.spine] || 'because',
+      joint: b.spine === 'But' ? 'but' : b.spine === 'Therefore' ? 'therefore' : null, text: b.text, fortune: b.f, tags: b.tags.slice(),
+      marks: b.spine === 'The turn' ? ['turn'] : b.spine === 'The low point' ? ['low'] : [], driver: null, avastha: null, kis: null,
+      drafts: parseDrafts(b.draft), by: 'writer' })),
+    threads: [], notes: Object.fromEntries(d.PRINCIPLES.filter(p => p.story).map(p => [p.id, p.story])) };
+}
+
+// 2. the seed is valid, and its projection to the explainer matches the explainer and round-trips
 const seed = C.seed();
 const v = C.validate(seed);
 check('seed.valid', v.ok, v.errors);
 const want = { BEATS: plain(D.BEATS), STORY: Object.fromEntries(plain(D.PRINCIPLES).map(p => [p.id, { story: p.story, beats: p.beats }])),
   ARCS: plain(D.ARCS.map(a => without(a, ['fn']))) };
-const got = plain(C.toExplainer(seed));
+const got = plain(toExplainer(seed));
 check('seed.to_explainer', isDeepStrictEqual(got, want), firstDiff(got, want));
-const back = C.fromExplainer({ BEATS: plain(D.BEATS), PRINCIPLES: plain(D.PRINCIPLES) }, 'The whistle');
+const back = fromExplainer({ BEATS: plain(D.BEATS), PRINCIPLES: plain(D.PRINCIPLES) }, 'The whistle');
 check('explainer.from.valid', C.validate(back).ok, C.validate(back).errors);
-const again = plain(C.toExplainer(back));
+const again = plain(toExplainer(back));
 check('explainer.round_trip', isDeepStrictEqual(again, want), firstDiff(again, want));
 check('seed.text_matches_explainer', seed.beats.every((b, i) => b.text === D.BEATS[i].text && b.label === D.BEATS[i].spine), 'beat text or label differs');
 
@@ -80,7 +108,10 @@ check('blank.five_empty_beats', isDeepStrictEqual(classes(blank), ['beat_empty',
 
 // 4. arc fit on the writer's numbers: The whistle is a Man in a hole (the explainer's own reading)
 const a = plain(C.arcMatch(seed));
-check('arc.whistle_is_hole', a.best === 'hole' && a.r > 0.8, a);
+check('arc.whistle_is_hole', a.best === 'hole' && a.r === 0.874, a);
+// one rule, one owner: the arc reads the same written beats the flat-fortune check reads
+const flatPlusEmpty = mut(s => { s.beats = s.beats.slice(0, 5); s.threads = []; s.beats.forEach((b, i) => { b.fortune = i < 3 ? 2 : 0; if (i >= 3) b.text = ''; }); });
+check('arc.agrees_with_flat_check', C.arcMatch(flatPlusEmpty).best === null && classes(flatPlusEmpty).includes('flat_fortune'), { arc: plain(C.arcMatch(flatPlusEmpty)), fired: classes(flatPlusEmpty) });
 check('arc.flat_has_no_shape', C.arcMatch(mut(fixtures.flat_fortune)).best === null, plain(C.arcMatch(mut(fixtures.flat_fortune))));
 
 // 5. the validator rejects what it should (closed vocabularies, unknown fields, dangling ids)
@@ -93,14 +124,25 @@ const rejects = {
   dup_tag: s => { s.beats[0].tags = ['care', 'care']; },
   unknown_beat_field: s => { s.beats[0].mood = 'grim'; },
   unknown_story_field: s => { s.author = 'x'; },
-  dup_beat_id: s => { s.beats[1].id = 'b1'; },
+  dup_beat_id: s => { s.beats[5].id = 'b1'; },
+  dup_thread_id: s => { s.threads[1].id = s.threads[0].id; },
+  model_without_id: s => { s.beats[0].by = 'model'; },
+  model_id_too_long: s => { s.beats[0].by = 'model'; s.beats[0].model = 'm'.repeat(201); },
+  too_many_beats: s => { s.beats = Array.from({ length: C.LIMITS.beats + 1 }, (_, i) => C.newBeat('b' + (i + 1), { text: 'x' })); s.threads = []; },
+  too_many_threads: s => { s.threads = Array.from({ length: C.LIMITS.threads + 1 }, (_, i) => ({ id: 'x' + i, label: 'x', plant: 'b1', payoffs: [] })); },
   dangling_plant: s => { s.threads[0].plant = 'b99'; },
   dangling_payoff: s => { s.threads[0].payoffs = ['b99']; },
   bad_note_key: s => { s.notes.drama = 'x'; },
   model_without_by: s => { s.beats[0].model = 'nano'; },
   wrong_schema: s => { s.sandhi = 2; }
 };
-for (const [name, fn] of Object.entries(rejects)) check(`rejects.${name}`, !C.validate(mut(fn)).ok, 'accepted');
+// each rejection names the field it rejects, so a different guard firing cannot pass it (a vacuous negative)
+const REJECT_PATH = { dup_beat_id: 'beats[5].id', dup_thread_id: 'threads[1].id', model_without_id: 'beats[0].model', model_id_too_long: 'beats[0].model', too_many_beats: 'beats', too_many_threads: 'threads', bad_note_key: 'notes.drama' };
+for (const [name, fn] of Object.entries(rejects)) {
+  const r = plain(C.validate(mut(fn))), want = REJECT_PATH[name];
+  check(`rejects.${name}`, !r.ok && (!want || r.errors.some(e => e.path === want)), r.errors.slice(0, 3));
+}
+check('accepts.agent_provenance', C.validate(mut(s => { s.beats[0].by = 'agent'; })).ok, 'rejected');
 check('accepts.model_provenance', C.validate(mut(s => { s.beats[0].by = 'model'; s.beats[0].model = 'gemini-nano'; })).ok, 'rejected');
 
 // 6. read mode, pure part: the model's quotes cut the writer's own prose; labels come from the model; bad quotes drop
@@ -130,10 +172,10 @@ check('read.whole.checks_clean', ws && C.checks(ws).length === 0, ws && plain(C.
 const folded = C.foldText(prose);
 check('read.fold.curly_and_dashes', C.findQuote(folded, "So Tavi went - two hundred steps, the way he'd carried the water") >= 0, 'not found');
 check('read.fold.rejects_short', C.findQuote(folded, 'Tavi') === -1, 'short quote matched');
-// chunks: paragraph-aligned, cover the text, none over the limit unless one paragraph is
+// chunks: cover the text, none over the limit, each cut on a blank line when the window has one
 const chunks = plain(C.chunkText(prose, 900));
 const covered = chunks.map(c => prose.slice(c.start, c.end)).join('');
-check('read.chunks', chunks.length > 2 && covered === prose && chunks.every(c => c.end - c.start <= 900 || !prose.slice(c.start, c.end).trim().includes('\n\n')), chunks);
+check('read.chunks', chunks.length > 2 && covered === prose && chunks.every(c => c.end - c.start <= 900) && chunks.slice(0, -1).every(c => prose.slice(c.end - 2, c.end) === '\n\n'), chunks);
 // text without blank lines still splits: single newlines first, then sentence ends; a hard cut only with no break at all
 const lines = Array.from({ length: 200 }, (_, i) => `Line ${i} of a story with no blank lines between its paragraphs at all.`).join('\n');
 const lc = plain(C.chunkText(lines, 4000));
@@ -161,6 +203,54 @@ const splitJson = { title: 'The whistle', beats: S0.beats.map((b, k) => ({ beat:
 const split = plain(C.storyFromSplit(prose, bounds.scenes, splitJson, 'fixture').story);
 check('read.split.same_as_whole', isDeepStrictEqual(split.beats, ws.beats) && isDeepStrictEqual(split.threads.map(t => [t.plant, t.payoffs]), ws.threads.map(t => [t.plant, t.payoffs])), 'differs');
 check('read.split.prompts', C.READ_PROMPTS.bounds('x').system.length < C.READ_PROMPTS.whole('x').system.length / 3 && C.READ_PROMPTS.beatLabels(['a', 'b']).user.includes('Beat 2:\nb'), 'prompt shape');
+// a beat that opens with dialogue, a dash or an ellipsis keeps its opening mark (the model's quote often drops it)
+const talk = 'The fog came early and thick that night over the harbour.\n\n“Hush, Tavi,” said everyone on the quay, and nobody listened.\n\n—And then the rope snapped, and the bell fell silent for good.\n\n…and so the island waited in the dark for the boats.';
+const tw = C.storyFromWhole(talk, { title: 't', beats: [{ start: 'The fog came early and thick that night' }, { start: 'Hush, Tavi, said everyone on the quay' }, { start: 'And then the rope snapped, and the bell' }, { start: 'and so the island waited in the dark' }], threads: [] }, 'fixture');
+const tb = tw.story ? plain(tw.story).beats.map(b => b.text) : [];
+check('read.opening_marks_kept', tb.length === 4 && tb[1].startsWith('“Hush') && tb[2].startsWith('—And') && tb[3].startsWith('…and') && tb[0].endsWith('harbour.') && tb[1].endsWith('listened.'), tb);
+// a reply of the wrong shape is coerced or dropped row by row, never a crash that loses the whole read
+const odd = { title: 't', beats: [{ start: first(seed.beats[0].text), tags: 'care, want', marks: { turn: true }, spine: 'once' }, null, 7, { start: first(seed.beats[1].text), tags: ['care'], marks: 'turnaround' }],
+  threads: [null, { label: 'w', plant: first(seed.beats[1].text), payoffs: 'beat eight' }, { label: 'x', plant: 5, payoffs: [null, 3] }] };
+const oddRuns = { whole: () => C.storyFromWhole(prose, odd, 'f'), whole_obj: () => C.storyFromWhole(prose, { beats: { a: 1 }, threads: 'no' }, 'f'),
+  scenes: () => C.anchorScenes(prose, [null, { start: first(seed.beats[0].text), introduces: 'whistle', uses: 3 }]),
+  labels: () => C.storyFromLabels(prose, plain(C.anchorScenes(prose, [{ start: first(seed.beats[0].text) }])).scenes, { beats: 'x', threads: [{ plant_scene: 1, payoff_scenes: 'y' }] }, 'f'),
+  split: () => C.storyFromSplit(prose, plain(C.anchorScenes(prose, [{ start: first(seed.beats[0].text) }])).scenes, { beats: [null, { beat: 1, tags: 'care' }], threads: 7 }, 'f') };
+const oddOut = Object.fromEntries(Object.entries(oddRuns).map(([k, fn]) => { try { fn(); return [k, 'ok']; } catch (e) { return [k, e.message]; } }));
+check('read.malformed_rows_no_crash', Object.values(oddOut).every(x => x === 'ok'), oddOut);
+const oddWhole = plain(C.storyFromWhole(prose, odd, 'f'));
+check('read.malformed_rows_coerced', oddWhole.story && oddWhole.story.beats.length === 2 && oddWhole.story.beats[0].tags.length === 0 && oddWhole.story.beats[1].marks.length === 0 && oddWhole.dropped.beats === 2, oddWhole.dropped);
+// a quote repeated or out of order is dropped and counted, never an empty or overlapping beat
+const dupJson = { title: 't', beats: [0, 1, 0, 2, 1, 3].map(i => ({ start: first(seed.beats[i].text) })), threads: [] };
+const dw = plain(C.storyFromWhole(prose, dupJson, 'f'));
+check('read.whole.repeated_quote_counted', dw.story && dw.story.beats.length === 4 && dw.dropped.beats === 2 && dw.story.beats.every(b => b.text.trim()), { n: dw.story && dw.story.beats.length, dropped: dw.dropped });
+const ds = plain(C.anchorScenes(prose, [0, 3, 6, 0, 8].map(i => ({ start: first(seed.beats[i].text) }))));
+check('read.scenes.repeated_quote_counted', ds.scenes.length === 4 && ds.dropped === 1 && ds.scenes.every((x, i) => !i || x.pos > ds.scenes[i - 1].pos) && C.beatTexts(prose, ds.scenes).every(t => t.trim()), { pos: ds.scenes.map(x => x.pos), dropped: ds.dropped });
+// a payoff that repeats its plant's line word for word anchors where it is repeated, after the plant
+const echo = 'Oren said a bell is not loud, it is steady and true.\n\nThe fog came and the boats were lost out on the water.\n\nTavi whistled, and remembered: a bell is not loud, it is steady and true.';
+const ew = plain(C.storyFromWhole(echo, { title: 'e', beats: [{ start: 'Oren said a bell is not loud' }, { start: 'The fog came and the boats were lost' }, { start: 'Tavi whistled, and remembered' }], threads: [{ label: 'steady', plant: 'a bell is not loud, it is steady and true', payoffs: ['a bell is not loud, it is steady and true'] }] }, 'f'));
+check('read.payoff_repeating_plant', ew.story && ew.story.threads.length === 1 && ew.story.threads[0].plant === 'b1' && ew.story.threads[0].payoffs[0] === 'b3', ew.story && ew.story.threads);
+// labels match whatever case the model writes them in
+const cap = plain(C.coerceLabels({ spine: 'Once', joint: 'Therefore', marks: ['Turn'], driver: 'Choice', avastha: 'Arambha', kis: 'Ki', tags: ['Care'], fortune: 2 }));
+check('read.labels_any_case', cap.spine === 'once' && cap.joint === 'therefore' && cap.marks[0] === 'turn' && cap.driver === 'choice' && cap.avastha === 'arambha' && cap.kis === 'ki' && cap.tags[0] === 'care', cap);
+// quote folding: decomposed accents, soft hyphens, zero-width spaces, guillemets and non-breaking hyphens
+const nfd = 'Ārambha begins the story here, and the whole island waits.'.normalize('NFD');
+const fq = (text, q) => C.findQuote(C.foldText(text), q);
+check('read.fold.unicode', fq(nfd, 'Ārambha begins the story here') === 0 && fq('The sea\u00ADwall held, and the grown\u200Bups lit fires.', 'The seawall held, and the grownups lit') === 0 && fq('He said «hush» and the gull flew off into the dark.', 'He said "hush" and the gull flew off') === 0 && fq('A well\u2011known whistle came out of the fog.', 'A well-known whistle came out of the fog') === 0, 'a form did not match');
+// scripts that end sentences without . ! ? still split at sentence ends; a cut never splits a surrogate pair
+const hindi = Array.from({ length: 80 }, (_, i) => `धीरे धीरे घंटी बजी और नावें घर लौटीं ${i}।`).join(' ');
+const hc = plain(C.chunkText(hindi, 700));
+check('read.chunks_devanagari', hc.length >= 3 && hc.slice(0, -1).every(x => /।\s*$/.test(hindi.slice(x.start, x.end))), hc.map(x => hindi.slice(x.end - 3, x.end)));
+const emoji = '🔔'.repeat(1001);
+const ec = plain(C.chunkText(emoji, 501));
+check('read.chunks_surrogates', ec.every(x => !/[\uD800-\uDBFF]$/.test(emoji.slice(x.start, x.end))) && ec.map(x => emoji.slice(x.start, x.end)).join('') === emoji, ec.map(x => x.end - x.start));
+// a story in a script without spaces between words has words to count
+const ja = 'タビは霧の夜に塔へ登った。ベルは鳴らなかった。彼は口笛を吹いた。'.repeat(40);
+check('read.word_count_unspaced', C.wordCount(ja) >= 200, C.wordCount(ja));
+// ids stay fresh after a load of long numeric ids
+const longIds = [{ id: 'b' + '9'.repeat(20) }, { id: 'b100000000000000000' }];
+const nid = C.nextId('b', longIds);
+check('ids.next_after_long_ids', /^[a-z0-9-]{1,40}$/.test(nid) && !longIds.some(x => x.id === nid), nid);
+
 // schemas: every object closes additionalProperties and requires all its keys (structured-output rules)
 const closed = (o) => !o || typeof o !== 'object' || ((o.type !== 'object' || (o.additionalProperties === false && isDeepStrictEqual([...o.required].toSorted(), Object.keys(o.properties).toSorted()))) && Object.values(o).every(closed));
 check('read.schemas_closed', Object.values(plain(C.READ_SCHEMAS)).every(closed), 'open object in a schema');
