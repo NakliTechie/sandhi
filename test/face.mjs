@@ -385,6 +385,18 @@ async function readPage(opts) {
   });
   const unchosen = (await call('reader.status', {})).data;
   const none = await call('read.run', { text: prose });
+  // the dialog in three numbered steps; your provider first and recommended; the others folded away until chosen
+  await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);
+  const layout = await p.evaluate(() => ({ steps: [...document.querySelectorAll('#reader .rstep h3')].map(h => h.textContent.trim()), first: document.querySelector('#reader input[name=rung]').value,
+    recommended: /recommended/.test(document.querySelector('#reader input[value="provider"]').closest('label').textContent), othersOpen: document.querySelector('#other-readers').open,
+    machineVisible: document.querySelector('#reader input[value="machine"]').checkVisibility() }));
+  // with no reader chosen, the dialog asks for a provider key; Read it puts the cursor in the key field
+  const asks = await p.evaluate(() => ({ fields: document.querySelector('#provider-key').checkVisibility(), prompt: document.querySelector('#key-prompt').checkVisibility() }));
+  await p.fill('#read-text', prose); await p.click('#read-actions [data-ui="read-run"]');
+  const asked = await p.evaluate(() => ({ progress: document.querySelector('#read-progress').textContent, focus: document.activeElement && document.activeElement.id }));
+  check('read.prompts_for_key', asks.fields && asks.prompt && /API key in step 2/.test(asked.progress) && asked.focus === 'provider-key' && (await call('status', {})).data.read.proposal === null, { asks, asked });
+  check('read.dialog_steps_provider_first', JSON.stringify(layout.steps) === JSON.stringify(['1 Your story', '2 Who reads it', '3 Read']) && layout.first === 'provider' && layout.recommended && !layout.othersOpen && !layout.machineVisible, layout);
+  await p.click('[data-ui="read-close"]');
   check('ladder.no_reader_until_chosen', unchosen.rung === null && unchosen.where === 'no reader chosen yet' && none.class === 'no_reader' && /Choose who reads it/.test(none.next), { rung: unchosen.rung, none });
   // Anthropic: choose the rung and provider in the page, paste the key (person-only), read
   await p.click('[data-ui="read-open"]');
@@ -464,7 +476,8 @@ async function readPage(opts) {
     return route.fulfill(reply({ model: 'llama3.2', message: { role: 'assistant', content: JSON.stringify(FIX.whole) }, done: true, done_reason: 'stop' }));
   });
   const unprobed = (await call('reader.status', {})).data;
-  await p.click('[data-ui="read-open"]');
+  await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);
+  await p.click('#other-readers summary');   // the model server sits under "Other readers"
   await p.check('#reader input[value="machine"]');
   await p.click('[data-ui="read-probe"]');
   await p.waitForFunction(() => /Ollama found, 1 model/.test(document.querySelector('#machine-state').textContent));
@@ -472,6 +485,7 @@ async function readPage(opts) {
   await p.waitForFunction(() => document.querySelectorAll('#machine-models option').length === 1);   // the probe fills the model list
   await p.fill('#machine-model', 'llama3.2'); await p.locator('#machine-model').blur();
   await p.waitForFunction(() => /Ollama on this machine/.test(document.querySelector('#read-privacy').textContent));
+  await p.waitForFunction(() => !/Pick a model/.test(document.querySelector('#read-measured').textContent), null, { timeout: 3000 }).catch(() => {});   // the model choice redraws the line
   const privacy = await p.textContent('#read-privacy'), measuredLocal = await p.textContent('#read-measured');
   const r = await call('read.run', { text: prose });
   check('read.picker_unmeasured_model', /not measured yet/.test(measuredLocal), measuredLocal);

@@ -38,7 +38,7 @@ sandhi lays the story on its spine and shows its joints. Each beat has a fortune
 
 Paste a story or a chapter. A model marks its beats, turn, low point, joints and threads. It returns labels and exact quotes only; sandhi cuts your own text where each quote lands and drops any quote that does not match. You see the result before it replaces anything, and Undo brings your story back.
 
-You choose who reads it, closest to you first: a model server on your machine (Ollama or LM Studio), Gemini Nano in Chrome, or your own provider and key (OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral, DeepSeek, Together, or any OpenAI-compatible URL). Keys stay in this browser and show only as a fingerprint. Large models read structure well; small on-device ones do not yet (see *Verify it yourself*).
+You choose who reads it. Your own provider and key is the recommended way: OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral, DeepSeek, Together, or any OpenAI-compatible URL. Keys stay in this browser and show only as a fingerprint. A model server on your machine (Ollama or LM Studio) or Gemini Nano in Chrome also read; in our tests they missed the turn. The dialog shows each reader's measured result.
 
 ## Write on the spine
 
@@ -62,7 +62,7 @@ Agents: `window.sandhi` exposes 32 tools over one command bus, and `navigator.mo
 cd test && npm install && npm test
 ```
 
-The gates refuse a demo story that does not match the explainer's data, a check with no test that fires it, a control with no tool behind it, a cold load over five seconds, an agent door that offers the accept or key tools or sends the story off the device on its own, and any serious accessibility violation. Reading quality is measured, not gated: on *The whistle* and three public-domain stories, codex `gpt-6-astra` and a Claude subagent marked the turn in all four with every quote matching the text, while a 4B local model found the turn in 5 of 12 reads, and Gemini Nano missed it in 8 of 8 and could not finish a 7,082-word story (table in [SPEC.md §5](SPEC.md)). The read dialog shows each reader's measured result.
+The gates refuse a demo story that does not match the explainer's data, a check with no test that fires it, a control with no tool behind it, a cold load over five seconds, an agent door that offers the accept or key tools or sends the story off the device on its own, and any serious accessibility violation. Reading quality is measured, not gated: on *The whistle* and three public-domain stories, codex `gpt-6-astra` and a Claude subagent marked the turn in all four with every quote matching the text, and DeepSeek in the page with a real key found it in 4 of 4, while a 4B local model found it in 5 of 12 reads, and Gemini Nano missed it in 8 of 8 and could not finish a 7,082-word story (table in [SPEC.md §5](SPEC.md)). The read dialog shows each reader's measured result.
 
 ## License
 

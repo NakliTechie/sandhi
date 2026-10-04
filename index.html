@@ -229,6 +229,12 @@ table.matrix{border-collapse:collapse}
 #reader{border:1px solid var(--line-strong);border-radius:14px;background:var(--card);color:var(--ink);padding:22px 24px 18px;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 32px)}
 #reader::backdrop{background:rgba(28,26,22,.42)}
 #reader h2{font-size:18px;font-weight:500;margin:0 0 4px}
+#reader .rstep{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+#reader .rstep h3{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;margin:0 0 8px}
+#reader .rnum{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:11.5px}
+#reader .tag{font-size:10.5px;border:1px solid var(--line-strong);border-radius:999px;padding:0 7px;margin-left:4px;color:var(--muted)}
+#reader details.others{margin-top:8px}
+#reader details.others summary{font-size:12.5px;color:var(--muted);cursor:pointer}
 #reader .intro{font-size:13px;color:var(--muted);margin:0 0 12px}
 #read-text{width:100%;min-height:9em;max-height:40vh;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px 10px;font:14px/1.6 var(--serif);resize:vertical}
 .rrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:8px 0 14px;font-size:12.5px;color:var(--faint)}
@@ -349,28 +355,37 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 
 <dialog id="reader" aria-labelledby="reader-h">
   <h2 id="reader-h">Read a story</h2>
-  <p class="intro">Paste a short story or a chapter. A model marks its beats, phases, turn, joints and threads. It never rewrites your prose: each beat is your own text, cut where the model's exact quote lands. You see the result before anything changes.</p>
-  <textarea id="read-text" placeholder="Paste the story here, or open a .txt or .md file" aria-label="Story text"></textarea>
-  <div class="rrow"><button class="btn" data-ui="read-file" type="button">Open a text file</button><button class="btn" data-ui="read-paste" type="button" title="One beat per paragraph; you label them. No model.">Use paragraphs as beats</button><span id="read-count">0 words</span><input type="file" id="read-file" accept=".txt,.md,text/plain,text/markdown" hidden></div>
-  <fieldset class="readers"><legend class="lab">Who reads it · closest to you first</legend>
-    <div class="rung"><label><input type="radio" name="rung" value="machine"> A model server on this machine</label><span id="machine-state" class="faint"></span>
-      <div class="rfields" id="machine-fields" hidden><button class="btn" data-ui="read-probe" type="button">Look for Ollama or LM Studio</button><label>model <input type="text" id="machine-model" list="machine-models" spellcheck="false" aria-label="Local model id"></label><datalist id="machine-models"></datalist><button class="btn" data-ui="read-models" type="button">Load models</button></div></div>
-    <div class="rung"><label><input type="radio" name="rung" value="device"> Gemini Nano, built into Chrome</label><span id="nano-state" class="faint"></span></div>
-    <div class="rung"><label><input type="radio" name="rung" value="provider"> Your provider, with your key</label><span id="key-state" class="faint"></span>
-      <div class="rfields" id="provider-fields" hidden>
-        <select id="provider" class="sel" aria-label="Provider"></select>
-        <input type="url" id="provider-base" placeholder="https://host/v1" aria-label="OpenAI-compatible base URL" spellcheck="false" hidden>
-        <input type="password" id="provider-key" placeholder="paste the API key" autocomplete="off" aria-label="API key for this provider">
-        <button class="x" data-ui="read-forget-key" id="key-forget" type="button" hidden>forget key</button>
-        <label>model <input type="text" id="provider-model" list="provider-models" spellcheck="false" aria-label="Model id"></label><datalist id="provider-models"></datalist>
-        <button class="btn" data-ui="read-models" type="button">Load models</button>
-      </div></div>
-  </fieldset>
-  <p id="read-measured" class="faint"></p>
-  <p id="read-privacy"></p>
-  <div id="read-progress" role="status"></div>
-  <div id="read-result"></div>
-  <div class="sp-actions" id="read-actions"><button class="btn primary" data-ui="read-run" type="button">Read it</button><button class="btn" data-cmd="read.cancel" id="read-stop" type="button" hidden>Stop</button><button class="btn primary" data-ui="read-accept" type="button" hidden>Use this structure</button><button class="btn" data-cmd="read.discard" type="button" hidden>Discard</button><button class="btn" data-ui="read-close" type="button">Close</button></div>
+  <p class="intro">A model marks your story's beats, turn, joints and threads. It never rewrites your prose: each beat is your own text, cut where the model's exact quote lands. You see the result before anything changes.</p>
+  <section class="rstep" aria-labelledby="rs1"><h3 id="rs1"><span class="rnum" aria-hidden="true">1</span> Your story</h3>
+    <textarea id="read-text" placeholder="Paste the story here, or open a .txt or .md file" aria-label="Story text"></textarea>
+    <div class="rrow"><button class="btn" data-ui="read-file" type="button">Open a text file</button><button class="btn" data-ui="read-paste" type="button" title="One beat per paragraph; you label them. No model.">Use paragraphs as beats, no model</button><span id="read-count">0 words</span><input type="file" id="read-file" accept=".txt,.md,text/plain,text/markdown" hidden></div>
+  </section>
+  <section class="rstep" aria-labelledby="rs2"><h3 id="rs2"><span class="rnum" aria-hidden="true">2</span> Who reads it</h3>
+    <fieldset class="readers"><legend class="sr-only">Who reads it</legend>
+      <div class="rung"><label><input type="radio" name="rung" value="provider"> Your provider, with your key <span class="tag">recommended</span></label><span id="key-state" class="faint"></span>
+        <div class="rfields" id="provider-fields" hidden>
+          <label>provider <select id="provider" class="sel" aria-label="Provider"></select></label>
+          <input type="url" id="provider-base" placeholder="https://host/v1" aria-label="OpenAI-compatible base URL" spellcheck="false" hidden>
+          <label>key <input type="password" id="provider-key" placeholder="paste the API key" autocomplete="off" aria-label="API key for this provider"></label>
+          <button class="x" data-ui="read-forget-key" id="key-forget" type="button" hidden>forget key</button>
+          <label>model <input type="text" id="provider-model" list="provider-models" spellcheck="false" aria-label="Model id"></label><datalist id="provider-models"></datalist>
+          <button class="btn" data-ui="read-models" type="button">Load models</button>
+          <p id="key-prompt" class="faint">Choose your provider and paste its API key. The key stays in this browser and shows only as a fingerprint; each read is billed to your account.</p>
+        </div></div>
+      <details class="others" id="other-readers"><summary>Other readers: a model server on this machine, or Gemini Nano in Chrome. In our tests they missed the story's turn.</summary>
+        <div class="rung"><label><input type="radio" name="rung" value="machine"> A model server on this machine</label><span id="machine-state" class="faint"></span>
+          <div class="rfields" id="machine-fields" hidden><button class="btn" data-ui="read-probe" type="button">Look for Ollama or LM Studio</button><label>model <input type="text" id="machine-model" list="machine-models" spellcheck="false" aria-label="Local model id"></label><datalist id="machine-models"></datalist><button class="btn" data-ui="read-models" type="button">Load models</button></div></div>
+        <div class="rung"><label><input type="radio" name="rung" value="device"> Gemini Nano, built into Chrome</label><span id="nano-state" class="faint"></span></div>
+      </details>
+    </fieldset>
+    <p id="read-measured" class="faint"></p>
+  </section>
+  <section class="rstep" aria-labelledby="rs3"><h3 id="rs3"><span class="rnum" aria-hidden="true">3</span> Read</h3>
+    <p id="read-privacy"></p>
+    <div id="read-progress" role="status"></div>
+    <div id="read-result"></div>
+    <div class="sp-actions" id="read-actions"><button class="btn primary" data-ui="read-run" type="button">Read it</button><button class="btn" data-cmd="read.cancel" id="read-stop" type="button" hidden>Stop</button><button class="btn primary" data-ui="read-accept" type="button" hidden>Use this structure</button><button class="btn" data-cmd="read.discard" type="button" hidden>Discard</button><button class="btn" data-ui="read-close" type="button">Close</button></div>
+  </section>
 </dialog>
 <div id="toast" role="status"></div>
 
@@ -1248,7 +1263,7 @@ async function readerStatus(probe) {
   const lad = await LD.detectLadder({ probeMachine: probe ? probeMachine : async () => (machine.found ? machine.found.id : null), nanoState: () => nano.state(), hasKey: async () => !!prints[t.id] });
   // nothing reads until the writer chooses: the ladder only suggests (Nano reads below the floor; history 2026-10-04)
   const rung = rcfg.rung || null;
-  return { rung, suggested: lad.ready || lad.best, ladder: lad.rungs, ready: lad.ready, local: rung ? LD.rungIsLocal(rung) : true, where: rung ? LD.rungLabel(rung, { server: machine.found && machine.found.id, provider: t.id }) : 'no reader chosen yet',
+  return { rung, suggested: lad.key ? 'provider' : lad.ready || lad.best, ladder: lad.rungs, ready: lad.ready, local: rung ? LD.rungIsLocal(rung) : true, where: rung ? LD.rungLabel(rung, { server: machine.found && machine.found.id, provider: t.id }) : 'no reader chosen yet',
     machine: machineInfo(),
     device: lad.device, provider: { id: t.id, label: t.p.label, kind: t.p.kind, base: t.base, model: t.model || null, key: prints[t.id] || null },
     keys: Object.entries(prints).map(([provider, fp]) => ({ provider, fingerprint: fp })) };
@@ -1966,12 +1981,15 @@ const MEASURED = {
   "gemini-nano": "Measured: Gemini Nano missed the turn in 8 of 8 reads of a 394-word story, and could not finish a 7,082-word one (2 of 2 reads failed after about 10 minutes).",
   "qwen3.5:4b": "Measured: Qwen 3.5 4B on Ollama found the turn in 5 of 12 reads across four stories, and linked a planted thread in 1 of 12.",
   "qwen3.5:2b": "Measured: Qwen 3.5 2B on Ollama missed the turn in 4 of 4 reads it finished; 1 of 5 ran out of room to answer.",
+  "deepseek-flash": "Measured: DeepSeek's deepseek-flash, reading in this page with the writer's key, found the turn in 4 of 4 stories and linked every labelled thread, with no quote dropped.",
   "claude-opus-5-5": "Measured: Claude Opus 5.5, reading with this page's prompt, marked the turn in 4 of 4 stories, every quote matching the text."
 };
 const MEASURED_NONE = 'This model is not measured yet. In our tests small local models often missed the turn; large provider models found it (SPEC §5).';
 function measuredLine(st) {
   const id = st.rung === 'device' ? 'gemini-nano' : st.rung === 'machine' ? st.machine.model : st.rung === 'provider' ? st.provider.model : null;
-  return !st.rung ? '' : (id && Object.hasOwn(MEASURED, id) ? MEASURED[id] : MEASURED_NONE);
+  if (!st.rung) return '';
+  if (!id) return 'Pick a model to see how it read in our tests.';
+  return Object.hasOwn(MEASURED, id) ? MEASURED[id] : MEASURED_NONE;
 }
 function machineText(m) {
   if (!m.checked) return 'not looked for yet';
@@ -1979,6 +1997,16 @@ function machineText(m) {
   return m.server ? `${LD.SERVERS[m.server].label} found, ${m.models} model${m.models === 1 ? '' : 's'}` : 'none answered on 127.0.0.1';
 }
 let readerDraws = 0;   // draws overlap (the writer's change and an agent's call); only the newest one writes the dialog
+// the fields under each reader: shown for the chosen one; a chosen reader under "Other readers" opens that section
+function readerFields(st) {
+  // before any reader is chosen, the provider's fields show: the dialog asks for a key (Chirag 2026-10-04); pasting one chooses it
+  $('#machine-fields').hidden = st.rung !== 'machine'; $('#provider-fields').hidden = !!st.rung && st.rung !== 'provider';
+  $('#key-prompt').hidden = !!st.provider.key;
+  if (st.rung === 'machine' || st.rung === 'device') $('#other-readers').open = true;
+  $('#provider').value = st.provider.id; $('#provider-base').hidden = st.provider.id !== 'custom';
+  $('#key-forget').hidden = !st.provider.key;
+  for (const [id, v] of [['#provider-base', st.provider.base], ['#provider-model', st.provider.model || ''], ['#machine-model', st.machine.model || '']]) if (document.activeElement !== $(id)) $(id).value = v;
+}
 async function renderReader(probe) {
   const mine = ++readerDraws, st = await readerStatus(probe);
   if (mine !== readerDraws) return;
@@ -1986,13 +2014,10 @@ async function renderReader(probe) {
   $('#machine-state').textContent = '· ' + machineText(st.machine);
   $('#nano-state').textContent = '· ' + NANO_TEXT[st.device];
   $('#key-state').textContent = st.provider.key ? `· ${st.provider.label}, ${st.provider.key}` : '· no key yet';
-  $('#machine-fields').hidden = st.rung !== 'machine'; $('#provider-fields').hidden = st.rung !== 'provider';
-  $('#provider').value = st.provider.id; $('#provider-base').hidden = st.provider.id !== 'custom';
-  $('#key-forget').hidden = !st.provider.key;
-  for (const [id, v] of [['#provider-base', st.provider.base], ['#provider-model', st.provider.model || ''], ['#machine-model', st.machine.model || '']]) if (document.activeElement !== $(id)) $(id).value = v;
+  readerFields(st);
   const hint = { machine: 'a model server on this machine', device: 'Gemini Nano', provider: 'your provider' }[st.suggested];
   $('#read-measured').textContent = measuredLine(st);
-  $('#read-privacy').textContent = !st.rung ? `Choose who reads it.${hint ? ` Available here: ${hint}.` : ''}` : st.local ? `Read by ${st.where}.` : `Read by ${st.where}, billed to your account.`;
+  $('#read-privacy').textContent = !st.rung ? `Add your provider’s key to read with it, or choose another reader.${hint && st.suggested !== 'provider' ? ` Available here: ${hint}.` : ''}` : st.local ? `Read by ${st.where}.` : `Read by ${st.where}, billed to your account.`;
 }
 function fillModels(listId, models) { $(listId).innerHTML = models.map(m => `<option value="${esc(m)}">`).join(''); }
 function renderProposal() {
@@ -2042,6 +2067,9 @@ async function onReaderTool(kind) {
   return renderReader(false);
 }
 async function readRunClick() {
+  if (!reader.querySelector('input[name=rung]:checked')) {   // no reader yet: ask for the key, the recommended way in
+    readProgress('Paste your provider’s API key in step 2 to read with it, or open Other readers.'); $('#provider-key').focus(); return null;
+  }
   readProgress('Starting…');
   const run = $('#read-actions [data-ui="read-run"]'); run.hidden = true; $('#read-stop').hidden = false;
   const rung = reader.querySelector('input[name=rung]:checked');   // read with the rung the writer sees chosen
@@ -2136,7 +2164,7 @@ const TOUR = [
   { target: '#checks', title: 'Checks', body: 'sandhi compares your labels: empty beats, slack joints, plants that never fire, luck after the turn. Each check names the next step.' },
   { target: '#threads', title: 'Plants and payoffs', body: "Chekhov's gun, the Nāṭyaśāstra's seed. Name what the story plants, where, and where it pays off." },
   { target: '#coverage', title: 'Thirteen principles', body: 'Tap a dot to tag a beat with a principle. Tap a name to read what the masters said, and note how it works in your story.' },
-  { target: '[data-ui="read-open"]', title: 'Read a story', body: 'Paste a story you have written. A model server on your machine, Gemini Nano in Chrome, or your own provider marks its beats, phases, turn and threads in your own words. You decide whether to use it.' },
+  { target: '[data-ui="read-open"]', title: 'Read a story', body: 'Paste a story you have written. Your own provider, with your key, marks its beats, phases, turn and threads in your own words; a model server on your machine or Gemini Nano in Chrome can too, less well in our tests. You decide whether to use it.' },
   { target: '.actions', title: 'Your story, your file', body: 'It autosaves in this browser. Save writes a .sandhi.json file; Open, or drop one on the page, reads it back. Press ? to see all this again.' }
 ];
 const splash = $('#splash');
