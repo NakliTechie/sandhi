@@ -940,18 +940,21 @@ async function lanAccess() {
   }
   return 'granted';
 }
+// A hard deadline: in Chrome 153 an aborted fetch that is waiting on the local network prompt stays pending (seen live,
+// 158 s past a 60 s abort), so the timer, not the abort signal, decides when the probe gives up.
 async function probeServer(id, waitMs) {
-  try { const r = await fetch(`${LD.SERVERS[id].base}/models`, { signal: AbortSignal.timeout(waitMs) }); return r.ok ? LD.modelIds(await r.json()) : null; }
-  catch { return null; }
+  const ask = fetch(`${LD.SERVERS[id].base}/models`, { signal: AbortSignal.timeout(waitMs) })
+    .then(async r => (r.ok ? LD.modelIds(await r.json()) : null)).catch(() => null);
+  return Promise.race([ask, new Promise(done => { setTimeout(() => done(null), waitMs + 250); })]);
 }
 async function probeMachine() {
   const ids = Object.keys(LD.SERVERS).toSorted((a, b) => (b === rcfg.server) - (a === rcfg.server)), access = await lanAccess();
   machine = { checked: true, found: null, access };
   if (access === 'denied') return null;
-  for (const id of ids) {
-    const models = await probeServer(id, (await lanAccess()) === 'prompt' ? 60000 : 1500);
-    if (models) { machine.found = { id, models }; break; }
-  }
+  // every server at once, under one deadline: one prompt from Chrome covers them all
+  const waitMs = access === 'prompt' ? 60000 : 1500, lists = await Promise.all(ids.map(id => probeServer(id, waitMs)));
+  const k = lists.findIndex(Boolean);
+  if (k >= 0) machine.found = { id: ids[k], models: lists[k] };
   machine.access = await lanAccess();
   return machine.found ? machine.found.id : null;
 }

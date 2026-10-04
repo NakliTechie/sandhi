@@ -333,6 +333,19 @@ async function readPage(opts) {
   check('ladder.machine_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // a local server that never answers (as when Chrome holds the request on its prompt): the probe still ends on time
+  const ctx4 = await browser.newContext();
+  await ctx4.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } delete window.LanguageModel;
+    const f0 = window.fetch; window.fetch = (u, o) => (String(u).startsWith('http://127.0.0.1:') ? new Promise(() => {}) : f0(u, o));
+    const q = navigator.permissions.query.bind(navigator.permissions);   // access already granted: the short deadline applies
+    navigator.permissions.query = (d) => (d && /local-network|loopback/.test(d.name) ? Promise.resolve({ state: 'granted' }) : q(d)); });
+  const p4 = await ctx4.newPage(); await p4.goto(base); await p4.evaluate(() => window.sandhi.ready);
+  const t4 = Date.now();
+  const st4 = (await p4.evaluate(() => window.sandhi.tools['reader.status']({ probe: true }))).data;
+  const took = Date.now() - t4;
+  check('ladder.probe_ends_on_time', st4.machine.checked && st4.machine.server === null && took < 4000, { took, machine: st4.machine });
+  await ctx4.close();
+}
 { // Chrome has blocked this site from the local network: say so at once, and say how to allow it
   const ctx3 = await browser.newContext();
   await ctx3.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } delete window.LanguageModel;
