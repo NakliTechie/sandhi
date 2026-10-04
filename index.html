@@ -217,6 +217,15 @@ table.matrix{border-collapse:collapse}
 .tour-actions .skip{margin-right:auto}
 
 /* read dialog */
+#wizard{border:1px solid var(--line-strong);border-radius:14px;background:var(--card);color:var(--ink);padding:24px 26px 18px;width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px)}
+#wizard::backdrop{background:rgba(28,26,22,.42)}
+.wiz-progress{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);margin-bottom:8px}
+#wiz-h{font:22px/1.35 var(--serif);font-weight:500;margin:0 0 4px}
+#wiz-hint{font-size:13px;color:var(--muted);margin:0 0 12px}
+#wiz-text{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);padding:8px 10px;font:16px/1.6 var(--serif);resize:vertical;margin-bottom:10px}
+#wiz-more{margin:0 0 14px}
+.wiz-alt{font-size:12px;color:var(--faint);margin:14px 0 0}
+.link{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;font-size:12px;cursor:pointer}
 #reader{border:1px solid var(--line-strong);border-radius:14px;background:var(--card);color:var(--ink);padding:22px 24px 18px;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 32px)}
 #reader::backdrop{background:rgba(28,26,22,.42)}
 #reader h2{font-size:18px;font-weight:500;margin:0 0 4px}
@@ -256,7 +265,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 <header class="top">
   <div class="brand"><h1>sandhi</h1><span>the joints of a story</span></div>
   <nav class="actions" aria-label="Story">
-    <button class="btn" data-cmd="story.new" title="Start a blank Story Spine. Undo brings this story back.">New</button>
+    <button class="btn" data-ui="wizard" title="Start a new story, one question at a time. Undo brings this story back.">New</button>
     <button class="btn" data-ui="open" title="Open a .sandhi.json file">Open</button>
     <button class="btn" data-cmd="story.save" title="Save this story as a .sandhi.json file">Save</button>
     <button class="btn" data-cmd="story.demo" title="Load The whistle, the demo story from the explainer. Undo brings your story back.">Demo story</button>
@@ -321,9 +330,23 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   <div class="sp-actions">
     <button class="btn primary" data-ui="tour" autofocus>Take the tour</button>
     <button class="btn" data-ui="splash-close" id="splash-close">Explore The whistle</button>
-    <button class="btn" data-cmd="story.new">Start a blank story</button>
+    <button class="btn" data-ui="wizard">Start a new story</button>
   </div>
 </dialog>
+<dialog id="wizard" aria-labelledby="wiz-h" aria-describedby="wiz-hint">
+  <div class="wiz-progress" id="wiz-progress"></div>
+  <h2 id="wiz-h"></h2>
+  <p id="wiz-hint"></p>
+  <textarea id="wiz-text" aria-labelledby="wiz-h" aria-describedby="wiz-hint" rows="4"></textarea>
+  <button class="ghost" type="button" data-ui="wiz-more" id="wiz-more" hidden>Add another “Because of that”</button>
+  <div class="sp-actions">
+    <button class="btn" type="button" data-ui="wiz-back">Back</button>
+    <button class="btn" type="button" data-ui="wiz-skip">Skip</button>
+    <button class="btn primary" type="button" data-ui="wiz-next" id="wiz-next">Next</button>
+  </div>
+  <p class="wiz-alt"><button class="link" type="button" data-ui="wiz-blank">Start with an empty spine instead</button> · Esc keeps the story you have.</p>
+</dialog>
+
 <dialog id="reader" aria-labelledby="reader-h">
   <h2 id="reader-h">Read a story</h2>
   <p class="intro">Paste a short story or a chapter. A model marks its beats, phases, turn, joints and threads. It never rewrites your prose: each beat is your own text, cut where the model's exact quote lands. You see the result before anything changes.</p>
@@ -550,6 +573,16 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   function blankStory() {
     return { sandhi: SCHEMA, title: '', logline: '', belief: '',
       beats: ['once', 'everyday', 'oneday', 'because', 'until'].map((spine, i) => newBeat('b' + (i + 1), { spine })), threads: [], notes: {} };
+  }
+
+  // A story from Story Spine lines, in the order given (the New-story wizard, story.start). The stage words carry the joint:
+  // "One day" breaks the every day (but); "Because of that", "Until finally", "And ever since then" follow from it (therefore).
+  const SPINE_JOINT = { oneday: 'but', because: 'therefore', until: 'therefore', since: 'therefore' };
+  function storyFromSpine(o) {
+    const lines = Array.isArray(o.lines) && o.lines.length ? o.lines : ['once', 'everyday', 'oneday', 'because', 'until'].map(stage => ({ stage, text: '' }));
+    const beats = lines.map((l, i) => ({ ...newBeat('b' + (i + 1), { spine: l.stage, text: String(l.text || '').trim() }), joint: i ? SPINE_JOINT[l.stage] || null : null }));
+    const str = (x) => String(x || '').trim();
+    return { sandhi: SCHEMA, title: str(o.title), logline: str(o.logline), belief: str(o.belief), beats, threads: [], notes: {} };
   }
 
   // Checks compare the writer's labels; they never read the prose (SPEC §2).
@@ -781,7 +814,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   }
 
   root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
-    LIMITS, seed: () => clone(SEED), validate, blankStory, newBeat, nextId, checks, arcMatch, coverage, clone, wordCount, spineName,
+    LIMITS, seed: () => clone(SEED), validate, blankStory, storyFromSpine, newBeat, nextId, checks, arcMatch, coverage, clone, wordCount, spineName,
     READ_SCHEMAS, READ_PROMPTS, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
 })(globalThis);
 </script>
@@ -1343,6 +1376,14 @@ const TOOLS = [
     } },
   { name: 'story.new', description: 'Replace the story with a blank Story Spine of five beats. Undo brings the old story back.', mutating: true, inputSchema: NONE,
     handler: async () => commit(C.blankStory(), null) || ok({ beats: 5 }) },
+  { name: 'story.start', description: 'Start a new story from Story Spine lines, in order: lines [{stage, text}] with stage once, everyday, oneday, because, until or since; plus title, logline and belief. The stage words set the joints (one day: but; because of that, until finally, ever since then: therefore). The New-story wizard calls this. Undo brings the old story back.', mutating: true,
+    inputSchema: { type: 'object', properties: { title: { type: 'string' }, logline: { type: 'string' }, belief: { type: 'string' }, lines: { type: 'array', items: { type: 'object', properties: { stage: { enum: C.SPINE.map(x => x.id) }, text: { type: 'string' } }, required: ['stage'] } } } },
+    handler: async (a, door) => {
+      if (a.lines !== undefined && (!Array.isArray(a.lines) || a.lines.some(l => !l || typeof l !== 'object'))) return fail('invalid', 'lines must be a list of {stage, text}', 'Pass lines as [{stage, text}], stage one of the six Story Spine stages.');
+      const n = C.storyFromSpine(a);
+      if (door !== 'ui') for (const b of n.beats) b.by = 'agent';
+      return commit(n, null) || ok({ beats: n.beats.length });
+    } },
   { name: 'story.demo', description: 'Replace the story with "The whistle", the ten-beat demo from the explainer. Undo brings the old story back.', mutating: true, inputSchema: NONE,
     handler: async () => commit(C.seed(), null) || ok({ beats: S().beats.length }) },
   { name: 'story.load', description: 'Replace the story with the given JSON (schema sandhi:1). It is validated first; on failure the story is unchanged. Undo reverses it.', mutating: true,
@@ -1547,7 +1588,7 @@ function toast(msg, next) {
 }
 
 // what to redraw after a command: header and plant-label edits leave the beat cards alone, so a click into a beat keeps its cursor
-const NOTICES = { 'story.new': 'New story.', 'story.demo': 'Demo story loaded.' };
+const NOTICES = { 'story.new': 'New story.', 'story.demo': 'Demo story loaded.', 'story.start': 'Your story is on the spine. Label each beat when you are ready.' };
 const patchKeys = (args) => (args.patch ? Object.keys(args.patch) : []);
 const AFTER = {
   'view.focus': (args, door) => { renderAll(); if (door === 'ui' && args.principle !== 'all') $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
@@ -1798,13 +1839,13 @@ document.addEventListener('change', (e) => {
   delete d.dirty;
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
+const UI_ACTIONS = { help: () => openSplash(false), tour: () => startTour(), 'splash-close': () => splash.close(), open: () => $('#file').click(), wizard: () => openWizard(),
+  'wiz-next': () => wizardMove(1), 'wiz-back': () => wizardMove(-1), 'wiz-skip': () => { $('#wiz-text').value = ''; wizardMove(1); }, 'wiz-more': () => wizardMore(),
+  'wiz-blank': () => { wizard.close(); ui('story.new', {}); } };
 function onUiControl(u, e) {
   const kind = u.dataset.ui;
   if (kind.startsWith('read-')) { onReadControl(kind, e); return; }
-  if (kind === 'help') { openSplash(false); return; }
-  if (kind === 'tour') { startTour(); return; }
-  if (kind === 'splash-close') { splash.close(); return; }
-  if (kind === 'open') { $('#file').click(); return; }
+  if (UI_ACTIONS[kind]) { UI_ACTIONS[kind](); return; }
   if (u.dataset.ui !== 'keep-draft') return;
   flushPending();
   const b = S().beats.find(x => x.id === u.dataset.id); if (!b) return;
@@ -2027,6 +2068,65 @@ async function onReadControl(kind, e) {
   }
   return onReaderTool(kind);
 }
+// ---- the New-story wizard: one question per screen, in Story Spine order; Finish writes the story through story.start
+const wizard = $('#wizard');
+const WIZ = [
+  { key: 'title', h: 'What is the story called?', hint: 'A working title is fine. You can change it any time.', rows: 1 },
+  { key: 'logline', h: 'Who is it about, and what do they want?', hint: 'One sentence: who wants what, and what stands in the way.', rows: 2 },
+  { key: 'once', h: 'Once upon a time…', hint: 'Who is here, and where. The world before anything happens.' },
+  { key: 'everyday', h: 'Every day…', hint: 'What usually happens: the routine the story will break.' },
+  { key: 'oneday', h: 'One day…', hint: 'The thing that breaks the routine.' },
+  { key: 'because', h: 'Because of that…', hint: 'What follows, each thing causing the next. Add as many as the story needs.', many: true },
+  { key: 'until', h: 'Until finally…', hint: 'How it comes to a head.' },
+  { key: 'since', h: 'And ever since then…', hint: 'The new normal: what has changed. Skip it if the story ends at the climax.' },
+  { key: 'belief', h: 'Why are you telling it?', hint: 'The belief under the plot. Skip it for now if you do not know yet.', rows: 2 }
+];
+const wiz = { steps: [], values: [], i: 0 };
+function openWizard() {
+  if (splash.open) splash.close();
+  flushPending();
+  wiz.steps = WIZ.map(x => ({ ...x })); wiz.values = WIZ.map(() => ''); wiz.i = 0;
+  if (!wizard.open) wizard.showModal();
+  wizardStep();
+}
+function wizardStep() {
+  const st = wiz.steps[wiz.i], t = $('#wiz-text');
+  $('#wiz-progress').textContent = `New story · ${wiz.i + 1} of ${wiz.steps.length}`;
+  $('#wiz-h').textContent = st.h + (st.n ? ` (${st.n})` : '');
+  $('#wiz-hint').textContent = st.hint;
+  t.value = wiz.values[wiz.i]; t.rows = st.rows || 4;
+  $('#wiz-more').hidden = !st.many;
+  wizard.querySelector('[data-ui="wiz-back"]').disabled = wiz.i === 0;
+  $('#wiz-next').textContent = wiz.i === wiz.steps.length - 1 ? 'Finish' : 'Next';
+  t.focus();
+}
+function wizardMove(d) {
+  wiz.values[wiz.i] = $('#wiz-text').value;
+  if (wiz.i + d >= wiz.steps.length) return wizardFinish();
+  wiz.i = Math.max(0, wiz.i + d); return wizardStep();
+}
+// another "Because of that" step, right after this one
+function wizardMore() {
+  wiz.values[wiz.i] = $('#wiz-text').value;
+  const n = wiz.steps.filter(x => x.key === 'because').length + 1;
+  wiz.steps.splice(wiz.i + 1, 0, { ...wiz.steps[wiz.i], n }); wiz.values.splice(wiz.i + 1, 0, ''); wiz.i++;
+  wizardStep();
+}
+// every spine stage the wizard asked, skipped ones as empty beats, except an empty "ever since then" or an extra empty "because"
+function wizardLines() {
+  return wiz.steps.map((st, k) => ({ st, text: wiz.values[k].trim() })).filter(({ st, text }) => C.SPINE.some(x => x.id === st.key) && (text || (st.key !== 'since' && !st.n))).map(({ st, text }) => ({ stage: st.key, text }));
+}
+async function wizardFinish() {
+  const v = (key) => wiz.values[wiz.steps.findIndex(x => x.key === key)].trim();
+  const r = await ui('story.start', { title: v('title'), logline: v('logline'), belief: v('belief'), lines: wizardLines() });
+  if (r.ok) { wizard.close(); scrollTo({ top: 0, behavior: 'smooth' }); }
+}
+// Enter moves on from a one-line answer; Cmd/Ctrl+Enter from any
+$('#wiz-text').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.shiftKey || !(e.metaKey || e.ctrlKey || $('#wiz-text').rows === 1)) return;
+  e.preventDefault(); e.stopPropagation(); wizardMove(1);
+});
+
 // ---- splash and tour: first visit only; `?` brings both back (Slate's first-run pattern)
 const SEEN = 'sandhi:intro-seen';
 const TOUR = [

@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 31 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
+check('face.manifest', man.length === 32 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -142,6 +142,38 @@ check('splash.not_shown_again', !(await page.evaluate(() => document.querySelect
 const after = (await call('story.get', {})).data.story;
 check('ui.autosave_survives_reload', after.beats[1].tags.includes('care') && after.title === 'The whistle', after.beats[1].tags);
 check('ui.journal_persists', (await call('journal', { n: 200 })).data.entries.length >= 20, 'journal short');
+// New opens a wizard: one question per screen, in Story Spine order; Finish builds the story through story.start
+{
+  const before = (await call('story.get', {})).data.story.title;
+  await page.click('[data-ui="wizard"]');
+  await page.waitForFunction(() => document.querySelector('#wizard').open);
+  const first = await page.textContent('#wiz-h');
+  await page.keyboard.type('The lighthouse'); await page.keyboard.press('Enter');   // a one-line answer: Enter moves on
+  await page.fill('#wiz-text', 'A keeper who wants one more winter at the light.'); await page.click('#wiz-next');
+  for (const t of ['Mara keeps the light on the north rock.', 'Every night she climbs and trims the wick.', 'One day the company writes: the light will be automated.', 'So she hides the letter from her daughter.']) { await page.fill('#wiz-text', t); await page.click('#wiz-next'); }
+  await page.click('[data-ui="wiz-back"]'); await page.click('#wiz-more');           // back on "Because of that", add a second one
+  await page.fill('#wiz-text', 'Because of that the inspector finds her asleep at the lamp.'); await page.click('#wiz-next');
+  await page.fill('#wiz-text', 'Until finally the storm comes and the new lamp fails.'); await page.click('#wiz-next');
+  await page.click('[data-ui="wiz-skip"]');                                           // no "ever since then"
+  const lastLabel = await page.textContent('#wiz-next');
+  await page.fill('#wiz-text', 'Care is a kind of light.'); await page.click('#wiz-next');
+  await page.waitForFunction(() => !document.querySelector('#wizard').open);
+  const w = (await call('story.get', {})).data.story;
+  check('wizard.builds_the_spine', first === 'What is the story called?' && lastLabel === 'Finish' && w.title === 'The lighthouse' && w.logline.startsWith('A keeper') && w.belief === 'Care is a kind of light.'
+    && JSON.stringify(w.beats.map(b => b.spine)) === JSON.stringify(['once', 'everyday', 'oneday', 'because', 'because', 'until'])
+    && JSON.stringify(w.beats.map(b => b.joint)) === JSON.stringify([null, null, 'but', 'therefore', 'therefore', 'therefore']) && w.beats[4].text.includes('inspector') && w.beats.every(b => b.by === 'writer') && (await domBeats()) === 6,
+    { first, lastLabel, title: w.title, spine: w.beats.map(b => b.spine), joints: w.beats.map(b => b.joint) });
+  await call('undo', {});
+  check('wizard.undo_restores', (await call('story.get', {})).data.story.title === before, 'not restored');
+  await page.click('[data-ui="wizard"]'); await page.waitForFunction(() => document.querySelector('#wizard').open);
+  await page.keyboard.type('Never finished'); await page.keyboard.press('Escape');
+  check('wizard.escape_keeps_story', !(await page.evaluate(() => document.querySelector('#wizard').open)) && (await call('story.get', {})).data.story.title === before, 'story changed');
+  const agent = await call('story.start', { title: 'By an agent', lines: [{ stage: 'once', text: 'A start.' }, { stage: 'oneday', text: 'A turn.' }] });
+  const ag = (await call('story.get', {})).data.story;
+  const bad = await call('story.start', { lines: [{ stage: 'climax', text: 'x' }] }), bad2 = await call('story.start', { lines: 'once' });
+  check('wizard.agent_door', agent.ok && ag.beats.length === 2 && ag.beats[1].joint === 'but' && ag.beats.every(b => b.by === 'agent') && bad.class === 'invalid' && bad2.class === 'invalid', { agent: agent.class, bad: bad.class, bad2: bad2.class });
+  await call('undo', {});
+}
 check('page.no_errors', errors.length === 0, errors);
 await ctx.close();
 
@@ -305,7 +337,7 @@ async function readPage(opts) {
   const names = await p5.evaluate(() => window.__mc.map(t => t.name));
   const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
   const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
-  check('door.model_context', names.length === 29 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  check('door.model_context', names.length === 30 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
   await ctx5.close();
 }
 { // a page opened as a file stores no key: every local file shares its storage

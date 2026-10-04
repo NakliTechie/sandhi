@@ -246,6 +246,11 @@ check('read.chunks_surrogates', ec.every(x => !/[\uD800-\uDBFF]$/.test(emoji.sli
 // a story in a script without spaces between words has words to count
 const ja = 'タビは霧の夜に塔へ登った。ベルは鳴らなかった。彼は口笛を吹いた。'.repeat(40);
 check('read.word_count_unspaced', C.wordCount(ja) >= 200, C.wordCount(ja));
+// the New-story wizard's story: beats in the order given, joints from the stage words, valid; no lines gives the blank spine
+const sp = plain(C.storyFromSpine({ title: ' T ', lines: [{ stage: 'once', text: 'a' }, { stage: 'everyday', text: '' }, { stage: 'oneday', text: 'b' }, { stage: 'because', text: 'c' }, { stage: 'until', text: 'd' }, { stage: 'since', text: 'e' }] }));
+check('spine.story_from_lines', C.validate(sp).ok && sp.title === 'T' && isDeepStrictEqual(sp.beats.map(b => b.joint), [null, null, 'but', 'therefore', 'therefore', 'therefore']) && sp.beats.map(b => b.id).join() === 'b1,b2,b3,b4,b5,b6', sp.beats.map(b => b.joint));
+check('spine.no_lines_is_blank_spine', isDeepStrictEqual(plain(C.storyFromSpine({})).beats.map(b => b.spine), ['once', 'everyday', 'oneday', 'because', 'until']), 'not the blank spine');
+check('spine.bad_stage_invalid', !C.validate(plain(C.storyFromSpine({ lines: [{ stage: 'climax', text: 'x' }] }))).ok, 'accepted');
 // ids stay fresh after a load of long numeric ids
 const longIds = [{ id: 'b' + '9'.repeat(20) }, { id: 'b100000000000000000' }];
 const nid = C.nextId('b', longIds);

@@ -20,7 +20,7 @@
 | Any desktop browser | Open [sandhi.naklitechie.com](https://sandhi.naklitechie.com) |
 | From source | `git clone https://github.com/NakliTechie/sandhi && cd sandhi && python3 -m http.server -b 127.0.0.1 8000`, then open `127.0.0.1:8000` |
 
-It opens on *The whistle*, a ten-beat demo story, with a short tour. Move a beat's fortune, name the word that joins two beats, tag a principle, and the chart and the checks follow. **New** starts a blank Story Spine; **Read a story** takes one you have written. An agent drives the same page:
+It opens on *The whistle*, a ten-beat demo story, with a short tour. Move a beat's fortune, name the word that joins two beats, tag a principle, and the chart and the checks follow. **New** walks you through the Story Spine one question at a time; **Read a story** takes one you have written. An agent drives the same page:
 
 ```js
 await window.sandhi.status()   // title, counts, checks by class, closest arc, undo depth
@@ -54,7 +54,7 @@ node cli-read.mjs score <reply> <name> --story gift-of-the-magi   # score a mode
 node page-read.mjs --model qwen3.5:4b --story to-build-a-fire     # the real page reads with a local model
 ```
 
-Agents: `window.sandhi` exposes 31 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
+Agents: `window.sandhi` exposes 32 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
 
 ## Verify it yourself
 
