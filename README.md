@@ -34,9 +34,9 @@ You can feel the middle of your story sag, but not where. The advice says every 
 
 sandhi lays the story on its spine and shows its joints. Each beat has a fortune, a phase in three traditions (Story Spine, the Nāṭyaśāstra's five stages, kishōtenketsu), the word that joins it to the last (*therefore*, *but*, or a slack *and then*), and what it plants or pays off. The thirteen principles come from [How stories work](https://assets.chiragpatnaik.com/how-stories-work), which also shows where the masters disagree. *Sandhi* is the Nāṭyaśāstra's word for those joints.
 
-## Read a story with the AI you choose
+## Import a story, and let the AI you choose read it
 
-Paste a story or a chapter. A model marks its beats, turn, low point, joints and threads. It returns labels and exact quotes only; sandhi cuts your own text where each quote lands and drops any quote that does not match. You see the result before it replaces anything, and Undo brings your story back.
+Paste a story or a chapter. Split it by paragraph, or let a model mark its beats, turn, low point, joints and threads. It returns labels and exact quotes only; sandhi cuts your own text where each quote lands and drops any quote that does not match. You see the result before it replaces anything, and Undo brings your story back.
 
 You choose who reads it. Your own provider and key is the recommended way: OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral, DeepSeek, Together, or any OpenAI-compatible URL. Keys stay in this browser and show only as a fingerprint. A model server on your machine (Ollama or LM Studio) or Gemini Nano in Chrome also read; in our tests they missed the turn. The dialog shows each reader's measured result.
 
