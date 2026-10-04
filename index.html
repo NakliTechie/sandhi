@@ -603,8 +603,13 @@ footer code{font-size:11.5px}
     scenes: obj({ scenes: { type: 'array', items: obj({ start: { type: 'string' }, summary: { type: 'string' }, fortune: { type: 'integer' },
       introduces: { type: 'array', items: { type: 'string' } }, uses: { type: 'array', items: { type: 'string' } } }) } }),
     labels: obj({ title: { type: 'string' }, beats: { type: 'array', items: obj({ scene: { type: 'integer' }, ...LABEL_PROPS }) },
-      threads: { type: 'array', items: obj({ label: { type: 'string' }, plant_scene: { type: 'integer' }, payoff_scenes: { type: 'array', items: { type: 'integer' } } }) } })
+      threads: { type: 'array', items: obj({ label: { type: 'string' }, plant_scene: { type: 'integer' }, payoff_scenes: { type: 'array', items: { type: 'integer' } } }) } }),
+    // the split strategy: one call finds where the beats start, a second labels the numbered beats (the writer's own text)
+    bounds: obj({ beats: { type: 'array', items: obj({ start: { type: 'string' } }) } }),
+    beatLabels: obj({ title: { type: 'string' }, beats: { type: 'array', items: obj({ beat: { type: 'integer' }, ...LABEL_PROPS }) },
+      threads: { type: 'array', items: obj({ label: { type: 'string' }, plant_beat: { type: 'integer' }, payoff_beats: { type: 'array', items: { type: 'integer' } } }) } })
   };
+  const BEAT_GUIDE = 'You split a story into beats. A beat is one turn of events: something happens, or a situation changes. A beat is not a paragraph and not a sentence. You never rewrite or invent text. Every quote you give is copied exactly from the story.';
   const GUIDE = [
     'You read a story and mark its structure. You never rewrite or invent text. Every quote you give is copied exactly from the story.',
     'A beat is one turn of events, not a paragraph. Story Spine stage of a beat: ' + SPINE.map(x => `${x.id} = "${x.name}"`).join('; ') + '. Setup is once and everyday, the inciting event is oneday, the chain of consequences is because, the resolution is until, the new normal is since.',
@@ -619,6 +624,8 @@ footer code{font-size:11.5px}
   ].join('\n');
   const sceneLine = (x, k) => `Scene ${k + 1} (fortune ${x.fortune}): ${x.summary}${x.introduces.length ? ' Introduces: ' + x.introduces.join(', ') + '.' : ''}${x.uses.length ? ' Uses: ' + x.uses.join(', ') + '.' : ''}`;
   const READ_PROMPTS = {
+    bounds: (text) => ({ system: BEAT_GUIDE, user: `Split this story into its beats, in order, usually 6 to 14. For each beat, "start" is the beat's first 6 to 12 words, copied exactly.\n\nSTORY:\n${text}` }),
+    beatLabels: (texts) => ({ system: GUIDE, user: `Here is a story split into numbered beats. Label every beat ("beat" = its number). Mark at most one turn and one low point, for the story as a whole. Link threads: for each thing planted in one beat and used in later beats, give plant_beat and payoff_beats.\n\n${texts.map((t, k) => `Beat ${k + 1}:\n${t}`).join('\n\n')}` }),
     whole: (text) => ({ system: GUIDE, user: `Mark the structure of this story. Split it into beats in story order, usually 6 to 14. For each beat, "start" is the beat's first 6 to 12 words, copied exactly. For each thread, "plant" and every "payoffs" entry are exact quotes of 6 to 12 words.\n\nSTORY:\n${text}` }),
     scenes: (chunk, i, n) => ({ system: GUIDE, user: `This is part ${i} of ${n} of a story. Split this part into scenes in order. For each scene: "start" = its first 6 to 12 words, copied exactly; "summary" = what happens, at most 30 words; "fortune" as defined; "introduces" = short names of things planted here that may matter later; "uses" = short names of earlier things that matter here.\n\nPART ${i}:\n${chunk}` }),
     labels: (scenes) => ({ system: GUIDE, user: `Here is a whole story as numbered scene summaries. Label every scene as one beat ("scene" = its number). Choose the turn and the low point for the story as a whole. Link threads: for each thing planted in one scene and used in later scenes, give plant_scene and payoff_scenes.\n\n${scenes.map(sceneLine).join('\n')}` })
@@ -721,9 +728,17 @@ footer code{font-size:11.5px}
     return { story: scenes.length ? assemble(text, anchors, threads, model, json && json.title) : null, dropped: { beats: 0, quotes: 0, unlabelled: scenes.filter((x, k) => !byScene.has(k + 1)).length } };
   }
 
+  // the writer's text of each anchored beat, for the labelling call
+  const beatTexts = (text, scenes) => scenes.map((x, i) => text.slice(i ? x.pos : 0, i + 1 < scenes.length ? scenes[i + 1].pos : text.length).trim());
+  function storyFromSplit(text, scenes, json, model) {
+    const j = json || {};
+    return storyFromLabels(text, scenes, { title: j.title, beats: (j.beats || []).map(b => ({ ...b, scene: b.beat })),
+      threads: (j.threads || []).map(t => ({ label: t.label, plant_scene: t.plant_beat, payoff_scenes: t.payoff_beats })) }, model);
+  }
+
   root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
     seed: () => clone(SEED), validate, blankStory, newBeat, nextId, checks, arcMatch, coverage, toExplainer, fromExplainer, clone, wordCount, spineName,
-    READ_SCHEMAS, READ_PROMPTS, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels };
+    READ_SCHEMAS, READ_PROMPTS, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
 })(globalThis);
 </script>
 
@@ -1092,15 +1107,26 @@ async function selectReader(a) {
   saveCfg(); return ok(await readerStatus(false));
 }
 // whole story in one call when it fits; otherwise scenes per part, then one call over all scene summaries (SPEC §3)
-async function readText(text, reader, progress) {
+async function readText(text, reader, progress, strategy) {
   const r = await reader.open(progress);
   try {
     const whole = C.READ_PROMPTS.whole(text);
     if (await r.measure(whole.system + '\n' + whole.user) > r.maxInput) return await readInParts(text, r, progress);
+    if (strategy === 'split') return await readSplit(text, r, progress);
     progress(`Reading the whole story with ${r.model}…`);
     const out = await r.run(whole, C.READ_SCHEMAS.whole);
     return { ...C.storyFromWhole(text, out.json, out.model), mode: 'whole', calls: 1, model: out.model };
   } finally { r.close(); }
+}
+// split: one call finds the beats, a second labels them; each call has a smaller job than reading everything at once
+async function readSplit(text, r, progress) {
+  progress(`Finding the beats with ${r.model}…`);
+  const b = await r.run(C.READ_PROMPTS.bounds(text), C.READ_SCHEMAS.bounds);
+  const { scenes, dropped } = C.anchorScenes(text, (b.json && b.json.beats) || []);
+  if (!scenes.length) return { story: null, dropped: { beats: dropped, quotes: 0 }, mode: 'split', calls: 1, model: b.model };
+  progress(`Labelling ${scenes.length} beats with ${r.model}…`);
+  const out = await r.run(C.READ_PROMPTS.beatLabels(C.beatTexts(text, scenes)), C.READ_SCHEMAS.beatLabels), res = C.storyFromSplit(text, scenes, out.json, out.model);
+  return { ...res, dropped: { ...res.dropped, beats: res.dropped.beats + dropped }, mode: 'split', calls: 2, model: out.model };
 }
 async function readInParts(text, r, progress) {
   const empty = C.READ_PROMPTS.scenes('', 1, 1), room = r.maxInput - await r.measure(empty.system + '\n' + empty.user);
@@ -1119,8 +1145,12 @@ async function readInParts(text, r, progress) {
   const out = await r.run(lp, C.READ_SCHEMAS.labels), res = C.storyFromLabels(text, scenes, out.json, out.model);
   return { ...res, dropped: { ...res.dropped, beats: res.dropped.beats + dropped }, mode: 'two-pass', calls: chunks.length + 1, model: out.model };
 }
+// how each rung reads a story that fits in one call: 'whole' (one call does everything) or 'split' (beats, then labels)
+const READ_DEFAULT = { machine: 'whole', device: 'whole', provider: 'whole' };
+const strategyFor = (a, id) => a.strategy || READ_DEFAULT[id] || 'whole';
 let readProgress = () => { /* the dialog replaces this while it is open */ };
-function readError(words, id) {
+function readError(words, id, strategy) {
+  if (strategy !== undefined && !['whole', 'split'].includes(strategy)) return fail('invalid', `no strategy ${strategy}`, 'Use "whole" or "split".');
   if (words < 50) return fail('invalid', `${words} words is too short to have a structure.`, 'Pass the story itself, at least 50 words.');
   if (!READERS[id]) return fail('invalid', `no rung ${id}`, `Use one of: ${LD.ORDER.join(', ')}.`);
   if (app.reading) return fail('busy', 'A read is already running.', 'Wait for it to finish, then call read.get.');
@@ -1128,10 +1158,10 @@ function readError(words, id) {
 }
 async function runRead(a) {
   const text = String(a.text || ''), words = C.wordCount(text), id = a.rung || (await readerStatus(false)).rung;
-  const bad = readError(words, id); if (bad) return bad;
+  const bad = readError(words, id, a.strategy); if (bad) return bad;
   app.reading = true; const t0 = performance.now();
   try {
-    const r = await readText(text, READERS[id], (m) => readProgress(m));
+    const r = await readText(text, READERS[id], (m) => readProgress(m), strategyFor(a, id));
     if (!r.story) return fail('nothing_found', 'None of the model\'s beat quotes matched the text.', 'Check the text is the story itself, then try again or try the other reader.', { dropped: r.dropped });
     const v = C.validate(r.story);
     if (!v.ok) return fail('internal', 'The proposal failed schema sandhi:1.', 'Report it with the journal; the story is unchanged.', { errors: v.errors.slice(0, 10) });
@@ -1284,8 +1314,8 @@ const TOOLS = [
       if (key) { rcfg.provider = id; rcfg.rung = 'provider'; saveCfg(); }
       return ok({ provider: id, key: key ? await LD.fingerprint(key) : null });
     } },
-  { name: 'read.run', description: "Read a story (prose) with the chosen rung and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline.",
-    inputSchema: { type: 'object', properties: { text: { type: 'string' }, rung: { enum: ['machine', 'device', 'provider'] } }, required: ['text'] },
+  { name: 'read.run', description: "Read a story (prose) with the chosen rung and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline. strategy: \"whole\" (one call reads and labels) or \"split\" (one call finds the beats, a second labels them); each rung has a default.",
+    inputSchema: { type: 'object', properties: { text: { type: 'string' }, rung: { enum: ['machine', 'device', 'provider'] }, strategy: { enum: ['whole', 'split'] } }, required: ['text'] },
     handler: async (a) => runRead(a) },
   { name: 'read.get', description: 'The staged proposal: the proposed story (schema sandhi:1) and the read report.', inputSchema: NONE,
     handler: async () => (app.proposal ? ok(C.clone(app.proposal)) : fail('no_proposal', 'nothing is staged', 'Call read.run first.')) },
@@ -1699,7 +1729,7 @@ function renderProposal() {
   if (!p) { box.innerHTML = ''; return; }
   const r = p.report, drop = r.dropped.beats + r.dropped.quotes;
   const arc = C.ARCS.find(x => x.id === r.arc);
-  box.innerHTML = `<p class="sum"><b>${r.beats} beats, ${r.threads} threads</b> from ${r.words} words, read by ${esc(r.model)} (${r.mode === 'whole' ? 'whole story' : `${r.calls - 1} parts, then the outline`}).${arc ? ` Closest shape: ${esc(arc.name)}.` : ''}${drop ? ` ${drop} quote${drop > 1 ? 's' : ''} did not match the text and ${drop > 1 ? 'were' : 'was'} dropped.` : ''}</p>
+  box.innerHTML = `<p class="sum"><b>${r.beats} beats, ${r.threads} threads</b> from ${r.words} words, read by ${esc(r.model)} (${r.mode === 'split' ? 'beats first, then labels' : r.mode === 'whole' ? 'whole story' : `${r.calls - 1} parts, then the outline`}).${arc ? ` Closest shape: ${esc(arc.name)}.` : ''}${drop ? ` ${drop} quote${drop > 1 ? 's' : ''} did not match the text and ${drop > 1 ? 'were' : 'was'} dropped.` : ''}</p>
     <ol>${p.story.beats.map(b => `<li><b>${esc(b.label || C.spineName(b.spine))}</b>${b.label && b.label !== C.spineName(b.spine) ? ' · ' + esc(C.spineName(b.spine)) : ''} · fortune ${fmtF(b.fortune)}${b.marks.length ? ' · ' + b.marks.map(m => (m === 'low' ? 'low point' : m)).join(', ') : ''} — ${esc(snip(b.text, 80))}</li>`).join('')}</ol>`;
 }
 async function openReader() { $('#read-progress').textContent = ''; renderProposal(); await renderReader(false); if (!reader.open) reader.showModal(); $('#read-text').focus(); }

@@ -151,6 +151,15 @@ const labelsJson = { title: 'The whistle', beats: seed.beats.map((b, k) => ({ sc
   threads: seed.threads.map(t => ({ label: t.label, plant_scene: idx[t.plant] + 1, payoff_scenes: t.payoffs.map(b => idx[b] + 1) })) };
 const two = plain(C.storyFromLabels(prose, anchored.scenes, labelsJson, 'fixture').story);
 check('read.two_pass.same_as_whole', isDeepStrictEqual(two.beats, ws.beats) && isDeepStrictEqual(two.threads.map(t => [t.plant, t.payoffs]), ws.threads.map(t => [t.plant, t.payoffs])), 'differs');
+// split: the bounds call anchors the beats, the labels call labels them by number; same story as the whole read
+const bounds = C.anchorScenes(prose, wholeJson.beats.map(b => ({ start: b.start })));
+const texts = plain(C.beatTexts(prose, bounds.scenes));
+check('read.split.beat_texts', texts.length === 10 && texts.every((t, i) => t === S0.beats[i].text) && bounds.dropped === 1, { n: texts.length, dropped: bounds.dropped });
+const splitJson = { title: 'The whistle', beats: S0.beats.map((b, k) => ({ beat: k + 1, ...labelsOf(b) })),
+  threads: S0.threads.map(t => ({ label: t.label, plant_beat: idx[t.plant] + 1, payoff_beats: t.payoffs.map(b => idx[b] + 1) })) };
+const split = plain(C.storyFromSplit(prose, bounds.scenes, splitJson, 'fixture').story);
+check('read.split.same_as_whole', isDeepStrictEqual(split.beats, ws.beats) && isDeepStrictEqual(split.threads.map(t => [t.plant, t.payoffs]), ws.threads.map(t => [t.plant, t.payoffs])), 'differs');
+check('read.split.prompts', C.READ_PROMPTS.bounds('x').system.length < C.READ_PROMPTS.whole('x').system.length / 3 && C.READ_PROMPTS.beatLabels(['a', 'b']).user.includes('Beat 2:\nb'), 'prompt shape');
 // schemas: every object closes additionalProperties and requires all its keys (structured-output rules)
 const closed = (o) => !o || typeof o !== 'object' || ((o.type !== 'object' || (o.additionalProperties === false && isDeepStrictEqual([...o.required].toSorted(), Object.keys(o.properties).toSorted()))) && Object.values(o).every(closed));
 check('read.schemas_closed', Object.values(plain(C.READ_SCHEMAS)).every(closed), 'open object in a schema');

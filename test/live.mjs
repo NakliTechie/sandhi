@@ -53,14 +53,29 @@ function score(story) {
   };
 }
 
+const strategy = arg('strategy', 'whole');
+// the page's split strategy: one call finds the beats, a second labels them
+async function readSplit() {
+  const b = await call(C.READ_PROMPTS.bounds(prose), C.READ_SCHEMAS.bounds);
+  if (b.parsed.error) throw new Error(`bounds reply: ${b.parsed.error}`);
+  const an = plain(C.anchorScenes(prose, b.parsed.json.beats || []));
+  if (!an.scenes.length) throw new Error('no beat quote matched the text');
+  const l = await call(C.READ_PROMPTS.beatLabels(plain(C.beatTexts(prose, an.scenes))), C.READ_SCHEMAS.beatLabels);
+  if (l.parsed.error) throw new Error(`labels reply: ${l.parsed.error}`);
+  const built = plain(C.storyFromSplit(prose, an.scenes, l.parsed.json, l.parsed.model || model));
+  return { r: { mode: l.mode }, built: { ...built, dropped: { ...built.dropped, beats: built.dropped.beats + an.dropped } } };
+}
+async function readWhole() {
+  const r = await call(C.READ_PROMPTS.whole(prose), C.READ_SCHEMAS.whole);
+  if (r.parsed.error) throw new Error(`reply: ${r.parsed.error}`);
+  return { r, built: plain(C.storyFromWhole(prose, r.parsed.json, r.parsed.model || model)) };
+}
 const t0 = Date.now();
 let receipt;
 try {
-  const r = await call(C.READ_PROMPTS.whole(prose), C.READ_SCHEMAS.whole);
-  if (r.parsed.error) throw new Error(`reply: ${r.parsed.error}`);
-  const built = plain(C.storyFromWhole(prose, r.parsed.json, r.parsed.model || model));
+  const { r, built } = strategy === 'split' ? await readSplit() : await readWhole();
   if (!built.story) throw new Error('no beat quote matched the text');
-  receipt = { gate: 'live', base, model, reasoning, json_mode: r.mode, ms: Date.now() - t0, dropped: built.dropped, valid: C.validate(built.story).ok, score: score(built.story),
+  receipt = { gate: 'live', base, model, reasoning, strategy, json_mode: r.mode, ms: Date.now() - t0, dropped: built.dropped, valid: C.validate(built.story).ok, score: score(built.story),
     beats: built.story.beats.map((b, i) => `${i + 1} ${b.spine}/${b.joint || '-'} f${b.fortune}${b.marks.length ? ' ' + b.marks.join('+') : ''} | ${b.text.slice(0, 50)}`) };
 } catch (e) { receipt = { gate: 'live', base, model, ms: Date.now() - t0, error: String(e.message || e) }; }
 mkdirSync(new URL('./receipts/', import.meta.url), { recursive: true });

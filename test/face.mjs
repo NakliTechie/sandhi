@@ -164,6 +164,8 @@ const fakeNano = ({ FIX, windowTokens }) => {
   window.__nanoCalls = [];
   const answer = (user) => {
     if (user.startsWith('Mark the structure')) return FIX.whole;
+    if (user.startsWith('Split this story')) return { beats: FIX.beats.map(b => ({ start: b.start })) };
+    if (user.startsWith('Here is a story split into numbered beats')) { const n = (user.match(/^Beat \d+:/gm) || []).length; return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ beat: k + 1, ...b.labels })), threads: FIX.threads.map(t => ({ label: t.label, plant_beat: t.plant_scene, payoff_beats: t.payoff_scenes })) }; }
     if (user.startsWith('This is part')) { const part = user.slice(user.indexOf(':\n', user.lastIndexOf('PART ')) + 2); return { scenes: FIX.beats.filter(b => part.includes(b.start)).map(b => ({ start: b.start, summary: b.summary, fortune: b.fortune, introduces: [], uses: [] })) }; }
     const n = (user.match(/^Scene \d+/gm) || []).length;
     return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ scene: k + 1, ...b.labels })), threads: FIX.threads };
@@ -188,6 +190,12 @@ async function readPage(opts) {
   check('read.nano_ready', st.data.device === 'ready' && st.data.rung === 'device' && /stays on this device/.test(st.data.where), st.data);
   const r = await call('read.run', { text: prose });
   check('read.nano_whole', r.ok && r.data.mode === 'whole' && r.data.calls === 1 && r.data.beats === 10 && r.data.threads === 6 && r.data.model === 'gemini-nano' && r.data.arc === 'hole' && r.data.dropped.beats === 0, r);
+  const sp = await call('read.run', { text: prose, strategy: 'split' });
+  const spStory = (await call('read.get', {})).data.story;
+  check('read.nano_split', sp.ok && sp.data.mode === 'split' && sp.data.calls === 2 && sp.data.beats === 10 && sp.data.threads === 6 && spStory.beats.every((b, i) => b.text === SEED.beats[i].text && LK.every(k => JSON.stringify(b[k]) === JSON.stringify(SEED.beats[i][k]))), sp.data || sp);
+  const badStrategy = await call('read.run', { text: prose, strategy: 'twice' });
+  check('read.strategy_closed', badStrategy.class === 'invalid', badStrategy);
+  await call('read.run', { text: prose });   // back to a whole-story proposal for the steps below
   const before = (await call('story.get', {})).data.story;
   const refused = await call('read.accept', {});
   check('read.accept_person_only', refused.class === 'person_only' && JSON.stringify((await call('story.get', {})).data.story) === JSON.stringify(before), refused);
