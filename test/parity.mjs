@@ -17,7 +17,7 @@ const calls = new Set([...src.matchAll(/(?:bus\.dispatch|\bui)\('([a-z.]+)'/g)].
 const ternary = [...src.matchAll(/\bui\(e\.shiftKey \? '([a-z.]+)' : '([a-z.]+)'/g)].flatMap(m => [m[1], m[2]]);
 for (const t of ternary) calls.add(t);
 const CLASSES = new Set(['ok', 'invalid', 'not_found', 'stack_empty', 'io_error', 'unknown_tool', 'internal', 'person_only', 'busy',
-  'no_reader', 'reader_error', 'key_rejected', 'rate_limited', 'refused', 'too_long', 'nothing_found', 'no_proposal']);
+  'no_reader', 'reader_error', 'key_rejected', 'rate_limited', 'refused', 'too_long', 'nothing_found', 'no_proposal', 'cancelled']);
 const used = new Set([...src.matchAll(/(?:fail|readerFail)\('([a-z_]+)'/g)].map(m => m[1]));
 // person-only tools exist in the manifest and are refused on every door but the page (SPEC §0)
 for (const n of ['read.accept', 'reader.key']) if (!new RegExp(`name: '${n.replace('.', '\\.')}'[^\\n]*\\n?[^\\n]*personOnly: true`).test(app)) findings.push(`${n}: not marked personOnly`);

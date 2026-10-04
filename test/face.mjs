@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 29 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
+check('face.manifest', man.length === 30 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -86,6 +86,7 @@ const story = (await call('story.get', {})).data.story;
 check('face.undo_story_new', story.title === 'The whistle' && story.beats.length === 10, story.title);
 
 const [dl] = await Promise.all([page.waitForEvent('download'), call('story.save', {})]);
+check('face.save_says_download_started', (await page.textContent('#savestate')) === 'Download started', await page.textContent('#savestate'));
 const saved = JSON.parse(readFileSync(await dl.path(), 'utf8'));
 check('face.save_file', dl.suggestedFilename() === 'the-whistle.sandhi.json' && JSON.stringify(saved) === JSON.stringify(story), dl.suggestedFilename());
 await call('story.new', {});
@@ -120,7 +121,7 @@ for (let k = 0; k < 8; k++) {
   tourTitles.push(await page.evaluate(() => document.querySelector('.tour-layer h2') && document.querySelector('.tour-layer h2').textContent));
   if (k < 7) await page.keyboard.press('ArrowRight');
 }
-const spot = await page.evaluate(() => { const box = document.querySelector('.tour-spot').getBoundingClientRect(); return box.width > 20 && box.height > 20; });
+const spot = await page.waitForFunction(() => { const box = document.querySelector('.tour-spot').getBoundingClientRect(); return box.width > 20 && box.height > 20; }, null, { timeout: 2000 }).then(() => true, () => false);   // placed on the next frame
 await page.keyboard.press('Escape');
 const tourGone = await page.evaluate(() => !document.querySelector('.tour-layer') && !document.querySelector('#splash').open);
 check('tour.eight_steps_then_escape', tourTitles[0] === 'The shape of the story' && tourTitles[7] === 'Your story, your file' && new Set(tourTitles).size === 8 && spot && tourGone, { tourTitles, spot, tourGone });
@@ -160,7 +161,7 @@ const labelsP = P.labels(FIX.beats.map(b => ({ summary: b.summary, fortune: b.fo
 const twoPassInput = Math.max(tok(labelsP.system + '\n' + labelsP.user), tok(emptyScenes.system + '\n' + emptyScenes.user) + 420) + 40;
 check('read.fixture_forces_two_pass', twoPassInput < tok(whole.system + '\n' + whole.user), { twoPassInput, whole: tok(whole.system + '\n' + whole.user) });
 // the stand-in: Chrome's LanguageModel surface, answering whole / scenes / labels prompts from the fixture
-const fakeNano = ({ FIX, windowTokens }) => {
+const fakeNano = ({ FIX, windowTokens, hang }) => {
   window.__nanoCalls = [];
   const answer = (user) => {
     if (user.startsWith('Mark the structure')) return FIX.whole;
@@ -171,17 +172,22 @@ const fakeNano = ({ FIX, windowTokens }) => {
     return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ scene: k + 1, ...b.labels })), threads: FIX.threads };
   };
   const session = (init) => ({ contextWindow: windowTokens, measureContextUsage: async (t) => Math.ceil(t.length / 4),
-    prompt: async (user, opts) => { window.__nanoCalls.push({ kind: user.slice(0, 12), system: !!(init && init.initialPrompts), schema: !!(opts && opts.responseConstraint) }); return JSON.stringify(answer(user)); }, destroy() {} });
+    prompt: async (user, opts) => {
+      window.__nanoCalls.push({ kind: user.slice(0, 12), system: !!(init && init.initialPrompts), schema: !!(opts && opts.responseConstraint), signal: !!(opts && opts.signal) });
+      if (hang) return new Promise((_, no) => { opts.signal.addEventListener('abort', () => no(new DOMException('stopped', 'AbortError'))); });   // answers only to Stop
+      return JSON.stringify(answer(user));
+    }, destroy() {} });
   window.LanguageModel = { availability: async () => 'available', create: async (init) => session(init) };
 };
 async function readPage(opts) {
   const ctx2 = await browser.newContext(opts && opts.ctx);
-  if (opts && opts.nano) await ctx2.addInitScript(fakeNano, { FIX, windowTokens: opts.nano });
+  if (opts && opts.nano) await ctx2.addInitScript(fakeNano, { FIX, windowTokens: opts.nano, hang: !!opts.hang });
   else await ctx2.addInitScript(() => { delete window.LanguageModel; });   // a browser without Gemini Nano
   await ctx2.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } });
   const p = await ctx2.newPage(); const errs = [];
   p.on('pageerror', e => errs.push(String(e)));
   await p.goto(base); await p.evaluate(() => window.sandhi.ready);
+  if (opts && opts.nano) await p.evaluate(() => window.sandhi.tools['reader.select']({ rung: 'device' }));   // nothing reads until the writer chooses
   return { ctx2, p, errs, call: (n, a) => p.evaluate(([x, y]) => window.sandhi.tools[x](y), [n, a]) };
 }
 { // whole story on Nano, then the writer accepts it in the page
@@ -224,6 +230,24 @@ async function readPage(opts) {
   check('read.nano_window_too_small', r.class === 'no_reader' && /1000 tokens/.test(r.message) && /provider/.test(r.next), r);
   await ctx2.close();
 }
+{ // Stop: a read whose model never answers ends at once when stopped, by the agent face and by the button
+  const { ctx2, p, errs, call } = await readPage({ nano: 6144, hang: true });
+  await p.evaluate((text) => { window.__pending = window.sandhi.tools['read.run']({ text }); }, prose);
+  await p.waitForFunction(() => window.__nanoCalls.length === 1);
+  const busy = (await call('status', {})).data.read.reading;
+  const t0 = Date.now(); const c = await call('read.cancel', {}); const r = await p.evaluate(() => window.__pending);
+  const after = (await call('status', {})).data.read;
+  check('read.cancel_stops', busy && c.ok && c.data.stopped && r.class === 'cancelled' && Date.now() - t0 < 2000 && !after.reading && after.proposal === null && (await p.evaluate(() => window.__nanoCalls.every(x => x.signal))), { busy, c: c.data, r: r.class, after });
+  await p.click('[data-ui="read-open"]'); await p.fill('#read-text', prose);
+  await p.click('#read-actions [data-ui="read-run"]');
+  await p.waitForFunction(() => !document.querySelector('#read-stop').hidden);
+  await p.click('#read-stop');
+  await p.waitForFunction(() => /The read was stopped/.test(document.querySelector('#read-progress').textContent));
+  const buttons = await p.evaluate(() => ({ stop: document.querySelector('#read-stop').hidden, run: document.querySelector('#read-actions [data-ui="read-run"]').hidden }));
+  check('read.stop_button', buttons.stop && !buttons.run, buttons);
+  check('read.stop_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 { // a window too small for the whole story: parts, then the outline
   const { ctx2, p, errs, call } = await readPage({ nano: twoPassInput + 1600 });
   const r = await call('read.run', { text: prose });
@@ -250,8 +274,9 @@ async function readPage(opts) {
     if (body.response_format && body.response_format.type === 'json_schema') return route.fulfill({ status: 400, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: { message: 'response_format json_schema is not supported for this model' } }) });
     return route.fulfill(reply({ model: 'alpha/model', choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'Here it is:\n```json\n' + JSON.stringify(FIX.whole) + '\n```' } }] }));
   });
+  const unchosen = (await call('reader.status', {})).data;
   const none = await call('read.run', { text: prose });
-  check('ladder.no_reader_without_any_rung', none.class === 'no_reader' && !!none.next, none);
+  check('ladder.no_reader_until_chosen', unchosen.rung === null && unchosen.where === 'no reader chosen yet' && none.class === 'no_reader' && /Choose who reads it/.test(none.next), { rung: unchosen.rung, none });
   // Anthropic: choose the rung and provider in the page, paste the key (person-only), read
   await p.click('[data-ui="read-open"]');
   await p.check('#reader input[value="provider"]');
@@ -334,8 +359,13 @@ async function readPage(opts) {
   await p.check('#reader input[value="machine"]');
   await p.click('[data-ui="read-probe"]');
   await p.waitForFunction(() => /Ollama found, 1 model/.test(document.querySelector('#machine-state').textContent));
+  const noModel = await call('read.run', { text: prose });
+  await p.waitForFunction(() => document.querySelectorAll('#machine-models option').length === 1);   // the probe fills the model list
+  await p.fill('#machine-model', 'llama3.2'); await p.locator('#machine-model').blur();
+  await p.waitForFunction(() => /Ollama on this machine/.test(document.querySelector('#read-privacy').textContent));
   const privacy = await p.textContent('#read-privacy');
   const r = await call('read.run', { text: prose });
+  check('ladder.machine_model_must_be_chosen', noModel.class === 'no_reader' && /No model is chosen/.test(noModel.message), noModel);
   check('ladder.machine_not_probed_at_load', unprobed.machine.checked === false && unprobed.machine.server === null, unprobed.machine);
   check('ladder.machine_read', r.ok && r.data.reader === 'machine' && r.data.model === 'llama3.2' && r.data.beats === 10 && sent.length >= 1 && !sent[0].headers.authorization && /Ollama on this machine: the story stays on your machine/.test(privacy), { r, privacy });
   check('ladder.machine_no_errors', errs.length === 0, errs);

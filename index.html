@@ -325,7 +325,7 @@ footer code{font-size:11.5px}
   <p id="read-privacy"></p>
   <div id="read-progress" role="status"></div>
   <div id="read-result"></div>
-  <div class="sp-actions" id="read-actions"><button class="btn primary" data-ui="read-run" type="button">Read it</button><button class="btn primary" data-ui="read-accept" type="button" hidden>Use this structure</button><button class="btn" data-cmd="read.discard" type="button" hidden>Discard</button><button class="btn" data-ui="read-close" type="button">Close</button></div>
+  <div class="sp-actions" id="read-actions"><button class="btn primary" data-ui="read-run" type="button">Read it</button><button class="btn" data-cmd="read.cancel" id="read-stop" type="button" hidden>Stop</button><button class="btn primary" data-ui="read-accept" type="button" hidden>Use this structure</button><button class="btn" data-cmd="read.discard" type="button" hidden>Discard</button><button class="btn" data-ui="read-close" type="button">Close</button></div>
 </dialog>
 <div id="toast" role="status"></div>
 
@@ -896,6 +896,9 @@ const LD = globalThis.SandhiLadder, RKEY = 'sandhi:reader';
 const rcfg = (() => { const d = { rung: null, provider: 'openrouter', server: null, models: {}, base: '' }; try { return { ...d, ...JSON.parse(store.get(RKEY) || '{}') }; } catch { return d; } })();
 const saveCfg = () => store.set(RKEY, JSON.stringify(rcfg));
 const readerFail = (cls, message, next) => Object.assign(new Error(message), { cls, next });
+let readAbort = null;   // the running read's AbortController; read.cancel aborts it
+const readSignal = () => (readAbort ? readAbort.signal : undefined);
+const stopped = () => { if (readAbort && readAbort.signal.aborted) throw readerFail('cancelled', 'The read was stopped.', 'Read it again when you are ready.'); };
 const hostOf = (u) => { try { return new URL(u).host; } catch { return String(u); } };
 // key vault: IndexedDB on this machine, one key per provider; the page and the agent face see fingerprints only (Draft's byok.mjs)
 const vault = {
@@ -926,7 +929,7 @@ const nano = {
   async open(progress) {
     if ((await nano.state()) === 'absent') throw readerFail('no_reader', 'Gemini Nano is not available in this browser.', 'Use desktop Chrome 138 or later, or another rung: a local model server or your provider.');
     let base;
-    try { base = await globalThis.LanguageModel.create({ ...LM_OPTS, monitor(m) { m.addEventListener('downloadprogress', e => progress(`Downloading Gemini Nano… ${Math.round(e.loaded * 100)}%`)); } }); }
+    try { base = await globalThis.LanguageModel.create({ ...LM_OPTS, signal: readSignal(), monitor(m) { m.addEventListener('downloadprogress', e => progress(`Downloading Gemini Nano… ${Math.round(e.loaded * 100)}%`)); } }); }
     catch (e) { throw readerFail('no_reader', `Gemini Nano did not start (${e.message}).`, 'Click Read it in the page once: the first download needs a click. Or use another rung.'); }
     const window = base.contextWindow || base.inputQuota || 6144, f = base.measureContextUsage || base.measureInputUsage || base.countPromptTokens;
     if (window - 1600 < 1200) { base.destroy(); throw readerFail('no_reader', `Gemini Nano in this browser holds ${window} tokens, too few for the reading instructions.`, 'Use a local model server or your provider.'); }
@@ -935,10 +938,11 @@ const nano = {
   }
 };
 async function nanoRun({ system, user }, schema) {
-  const s = await globalThis.LanguageModel.create({ ...LM_OPTS, initialPrompts: [{ role: 'system', content: system }] });
+  stopped();
+  const s = await globalThis.LanguageModel.create({ ...LM_OPTS, signal: readSignal(), initialPrompts: [{ role: 'system', content: system }] });
   let text;
-  try { text = await s.prompt(user, { responseConstraint: schema, omitResponseConstraintInput: true }); }
-  catch (e) { throw e.name === 'QuotaExceededError' ? readerFail('too_long', 'That part is too long for Gemini Nano.', 'Use another rung, or read a shorter part.') : readerFail('reader_error', `Gemini Nano failed: ${e.message}`, 'Try again, or use another rung.'); }
+  try { text = await s.prompt(user, { responseConstraint: schema, omitResponseConstraintInput: true, signal: readSignal() }); }
+  catch (e) { stopped(); throw e.name === 'QuotaExceededError' ? readerFail('too_long', 'That part is too long for Gemini Nano.', 'Use another rung, or read a shorter part.') : readerFail('reader_error', `Gemini Nano failed: ${e.message}`, 'Try again, or use another rung.'); }
   finally { s.destroy(); }
   const json = LD.extractJson(text);
   return parsed(json ? { json } : { error: 'not_json' }, 'gemini-nano');
@@ -979,8 +983,9 @@ const machineReader = {
     const f = machine.found;
     if (!f && machine.access === 'denied') throw readerFail('no_reader', 'Chrome blocks this site from your local network.', 'Allow it: the site icon in the address bar, Site settings, Local network access, Allow. Then look again.');
     if (!f) throw readerFail('no_reader', 'No model server answered on this machine.', `Start Ollama (${LD.SERVERS.ollama.cors}) or LM Studio (${LD.SERVERS.lmstudio.cors}), allow local network access if Chrome asks, then look again.`);
-    const model = rcfg.models[f.id] || f.models[0];
-    if (!model) throw readerFail('no_reader', `${LD.SERVERS[f.id].label} has no model loaded.`, 'Pull or load a model, then try again.');
+    const model = rcfg.models[f.id];
+    if (!f.models.length) throw readerFail('no_reader', `${LD.SERVERS[f.id].label} has no model loaded.`, 'Pull or load a model, then try again.');
+    if (!model) throw readerFail('no_reader', `No model is chosen for ${LD.SERVERS[f.id].label}.`, 'Load models and pick one in the model field (reader.select with model).');
     return { model, maxInput: 3000, charsPerToken: 4, measure: async (t) => Math.ceil(t.length / 4), run: (p, schema) => openaiCall(LD.SERVERS[f.id].base, null, model, p, schema, LOCAL_EXTRA), close() { /* nothing held open */ } };
   }
 };
@@ -1003,8 +1008,9 @@ const providerReader = {
 };
 async function post(url, headers, body) {
   let res;
-  try { res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) }); }
-  catch (e) { throw readerFail('reader_error', `Could not reach ${hostOf(url)} (${e.message}).`, 'Check the connection and the address. A local server must allow this site.'); }
+  stopped();
+  try { res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: readSignal() }); }
+  catch (e) { stopped(); throw readerFail('reader_error', `Could not reach ${hostOf(url)} (${e.message}).`, 'Check the connection and the address. A local server must allow this site.'); }
   return { status: res.status, out: await res.json().catch(() => ({})) };
 }
 // providers word their errors differently: { error: { message } }, { error: "..." }, { message }, { detail }
@@ -1073,13 +1079,14 @@ async function keyPrints() {
 function machineInfo() {
   const f = machine.found;
   if (!f) return { checked: machine.checked, access: machine.access, server: null, models: 0, model: null };
-  return { checked: machine.checked, access: machine.access, server: f.id, models: f.models.length, model: rcfg.models[f.id] || f.models[0] || null };
+  return { checked: machine.checked, access: machine.access, server: f.id, models: f.models.length, model: rcfg.models[f.id] || null };
 }
 async function readerStatus(probe) {
   const prints = await keyPrints(), t = await providerTarget();
   const lad = await LD.detectLadder({ probeMachine: probe ? probeMachine : async () => (machine.found ? machine.found.id : null), nanoState: () => nano.state(), hasKey: async () => !!prints[t.id] });
-  const rung = rcfg.rung || lad.ready || lad.best || 'device';
-  return { rung, ladder: lad.rungs, ready: lad.ready, local: LD.rungIsLocal(rung), where: LD.rungLabel(rung, { server: machine.found && machine.found.id, provider: t.id }),
+  // nothing reads until the writer chooses: the ladder only suggests (Nano reads below the floor; history 2026-10-04)
+  const rung = rcfg.rung || null;
+  return { rung, suggested: lad.ready || lad.best, ladder: lad.rungs, ready: lad.ready, local: rung ? LD.rungIsLocal(rung) : true, where: rung ? LD.rungLabel(rung, { server: machine.found && machine.found.id, provider: t.id }) : 'no reader chosen yet',
     machine: machineInfo(),
     device: lad.device, provider: { id: t.id, label: t.p.label, kind: t.p.kind, base: t.base, model: t.model || null, key: prints[t.id] || null },
     keys: Object.entries(prints).map(([provider, fp]) => ({ provider, fingerprint: fp })) };
@@ -1133,6 +1140,7 @@ async function readInParts(text, r, progress) {
   if (room < 300) throw readerFail('too_long', `${r.model} has no room left for the story after the instructions.`, 'Choose Claude with your key.');
   const chunks = C.chunkText(text, Math.floor(room * r.charsPerToken * 0.85)), all = [];
   for (let i = 0; i < chunks.length; i++) {
+    stopped();
     progress(`Reading part ${i + 1} of ${chunks.length} with ${r.model}…`);
     const out = await r.run(C.READ_PROMPTS.scenes(text.slice(chunks[i].start, chunks[i].end), i + 1, chunks.length), C.READ_SCHEMAS.scenes);
     all.push(...((out.json && out.json.scenes) || []));
@@ -1150,6 +1158,7 @@ const READ_DEFAULT = { machine: 'whole', device: 'whole', provider: 'whole' };
 const strategyFor = (a, id) => a.strategy || READ_DEFAULT[id] || 'whole';
 let readProgress = () => { /* the dialog replaces this while it is open */ };
 function readError(words, id, strategy) {
+  if (!id) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Read a story (reader.select with a rung), or pass rung.');
   if (strategy !== undefined && !['whole', 'split'].includes(strategy)) return fail('invalid', `no strategy ${strategy}`, 'Use "whole" or "split".');
   if (words < 50) return fail('invalid', `${words} words is too short to have a structure.`, 'Pass the story itself, at least 50 words.');
   if (!READERS[id]) return fail('invalid', `no rung ${id}`, `Use one of: ${LD.ORDER.join(', ')}.`);
@@ -1157,9 +1166,9 @@ function readError(words, id, strategy) {
   return null;
 }
 async function runRead(a) {
-  const text = String(a.text || ''), words = C.wordCount(text), id = a.rung || (await readerStatus(false)).rung;
+  const text = String(a.text || ''), words = C.wordCount(text), id = a.rung || rcfg.rung;
   const bad = readError(words, id, a.strategy); if (bad) return bad;
-  app.reading = true; const t0 = performance.now();
+  app.reading = true; readAbort = new AbortController(); const t0 = performance.now();
   try {
     const r = await readText(text, READERS[id], (m) => readProgress(m), strategyFor(a, id));
     if (!r.story) return fail('nothing_found', 'None of the model\'s beat quotes matched the text.', 'Check the text is the story itself, then try again or try the other reader.', { dropped: r.dropped });
@@ -1168,8 +1177,10 @@ async function runRead(a) {
     const a2 = C.arcMatch(r.story);
     app.proposal = { story: r.story, report: { reader: id, where: LD.rungLabel(id, { server: machine.found && machine.found.id, provider: rcfg.provider }), model: r.model, mode: r.mode, calls: r.calls, words, beats: r.story.beats.length, threads: r.story.threads.length, dropped: r.dropped, arc: a2.best, ms: Math.round(performance.now() - t0) } };
     return ok(app.proposal.report);
-  } catch (e) { return e.cls ? fail(e.cls, e.message, e.next) : fail('reader_error', String(e && e.message || e), 'Try again, or try the other reader.'); }
-  finally { app.reading = false; }
+  } catch (e) {
+    if (readAbort.signal.aborted) return fail('cancelled', 'The read was stopped.', 'Read it again when you are ready.');
+    return e.cls ? fail(e.cls, e.message, e.next) : fail('reader_error', String(e && e.message || e), 'Try again, or try another reader.');
+  } finally { app.reading = false; readAbort = null; }
 }
 
 // ---- the manifest: every UI command is one of these (SPEC §0). handler(args, door) -> envelope
@@ -1202,7 +1213,7 @@ const TOOLS = [
         const el = document.createElement('a'); el.href = url; el.download = filename; document.body.appendChild(el); el.click(); el.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
       } catch (e) { return fail('io_error', String(e && e.message || e), 'Call story.get and write the JSON yourself.'); }
-      app.dirty = false; persist();
+      app.dirty = false; app.savedNote = 'Download started'; persist();
       return ok({ filename, bytes: new TextEncoder().encode(text).length });
     } },
   { name: 'beat.add', description: 'Insert a beat after the beat with id `after` (default: at the end). Returns the new id and position.', mutating: true,
@@ -1325,6 +1336,8 @@ const TOOLS = [
       const r = commit(C.clone(app.proposal.story), null); if (r) return r;
       const report = app.proposal.report; app.proposal = null; return ok(report);
     } },
+  { name: 'read.cancel', description: 'Stop the read that is running. Its model call is aborted; nothing is staged.', inputSchema: NONE,
+    handler: async () => { if (!readAbort) return ok({ stopped: false }); readAbort.abort(); return ok({ stopped: true }); } },
   { name: 'read.discard', description: 'Drop the staged proposal. The story is unchanged.', inputSchema: NONE,
     handler: async () => { const had = !!app.proposal; app.proposal = null; return ok({ discarded: had }); } }
 ];
@@ -1402,7 +1415,8 @@ function renderHeader() {
   document.title = (S().title ? S().title + ' · ' : '') + 'sandhi';
 }
 function renderSaveState() {
-  $('#savestate').textContent = app.dirty ? 'Kept in this browser · not saved to a file' : 'Saved';
+  $('#savestate').textContent = app.dirty ? 'Kept in this browser · not saved to a file' : app.savedNote || 'Saved';
+  if (app.dirty) app.savedNote = null;
   $('#undo').disabled = !app.undo.length; $('#redo').disabled = !app.redo.length;
 }
 
@@ -1703,7 +1717,7 @@ new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width); if (w &
 // ---- the read dialog: paste, choose a rung on the ladder, read, review, then use or discard (read.accept is person-only)
 const reader = $('#reader');
 $('#provider').innerHTML = Object.entries(LD.PROVIDERS).map(([id, x]) => `<option value="${id}">${esc(x.label)}</option>`).join('');
-const NANO_TEXT = { ready: 'ready · fast, but missed the turn in our test', download: 'downloads once, about 22 GB free disk', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
+const NANO_TEXT = { ready: 'ready · a preview: fast, but in our tests it missed the story’s turn', download: 'downloads once, about 22 GB free disk', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
 function machineText(m) {
   if (!m.checked) return 'not looked for yet';
   if (m.access === 'denied') return 'Chrome blocks local network access for this site (Site settings → Local network access)';
@@ -1719,7 +1733,8 @@ async function renderReader(probe) {
   $('#provider').value = st.provider.id; $('#provider-base').hidden = st.provider.id !== 'custom';
   $('#key-forget').hidden = !st.provider.key;
   for (const [id, v] of [['#provider-base', st.provider.base], ['#provider-model', st.provider.model || ''], ['#machine-model', st.machine.model || '']]) if (document.activeElement !== $(id)) $(id).value = v;
-  $('#read-privacy').textContent = st.local ? `Read by ${st.where}.` : `Read by ${st.where}, billed to your account.`;
+  const hint = { machine: 'a model server on this machine', device: 'Gemini Nano', provider: 'your provider' }[st.suggested];
+  $('#read-privacy').textContent = !st.rung ? `Choose who reads it.${hint ? ` Available here: ${hint}.` : ''}` : st.local ? `Read by ${st.where}.` : `Read by ${st.where}, billed to your account.`;
 }
 function fillModels(listId, models) { $(listId).innerHTML = models.map(m => `<option value="${esc(m)}">`).join(''); }
 function renderProposal() {
@@ -1748,8 +1763,16 @@ reader.addEventListener('change', async (e) => {
   const fn = READER_CHANGES[e.target.name === 'rung' ? 'rung' : e.target.id];
   if (fn) { await fn(e.target); renderReader(false); }
 });
+async function lookForServer() {
+  readProgress('Looking for Ollama or LM Studio on 127.0.0.1… If Chrome asks to let this site reach your local network, choose Allow.');
+  await ui('reader.status', { probe: true });
+  const m = machine.found ? await ui('reader.models', {}) : null;   // fill the model list so the writer can pick one
+  if (m && m.ok) fillModels('#machine-models', m.data.models);
+  readProgress(machine.found && !rcfg.models[machine.found.id] ? 'Pick a model in the model field.' : '');
+  return renderReader(false);
+}
 async function onReaderTool(kind) {
-  if (kind === 'read-probe') { readProgress('Looking for Ollama or LM Studio on 127.0.0.1… If Chrome asks to let this site reach your local network, choose Allow.'); await ui('reader.status', { probe: true }); readProgress(''); return renderReader(false); }
+  if (kind === 'read-probe') return lookForServer();
   if (kind === 'read-forget-key') { await ui('reader.key', { provider: $('#provider').value, key: '' }); return renderReader(false); }
   if (kind !== 'read-models') return null;
   readProgress('Loading models…');
@@ -1764,7 +1787,9 @@ async function onReadControl(kind, e) {
   if (kind === 'read-file') return $('#read-file').click();
   if (kind === 'read-run') {
     $('#read-result').innerHTML = ''; readProgress('Starting…');
+    const run = $('#read-actions [data-ui="read-run"]'); run.hidden = true; $('#read-stop').hidden = false;
     const r = await ui('read.run', { text: $('#read-text').value });
+    run.hidden = false; $('#read-stop').hidden = true;
     readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal(); return renderReader(false);
   }
   if (kind === 'read-accept' && e.isTrusted) {   // person-only: a real click, never a scripted one
