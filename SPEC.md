@@ -107,6 +107,8 @@ Readers follow the house AI ladder (Edge-First doctrine; ported from Draft's `si
 
 **Staged, then accepted.** `read.run` stages a proposal (`read.get` shows it) and changes nothing. `read.accept` (person-only) commits it, undoable. Beats carry `by: model` and `model: <id>`; changing any label of a beat makes it `by: writer` (or `by: agent` when an agent changes it).
 
+**Write mode (Batch C, 2026-10-06).** The chosen reader asks and proposes; the writer writes (history Decisions, "Write mode, from the prior-art pass"). `write.questions {beat}` returns 2–4 questions, each tied to a principle id. `write.options {beat}` returns the obvious option, shown struck through as set aside, and 3–5 one-line situations, each with joint, fortune, principle and why; the prompt asks for different joints and at least one down-turn. `write.joints` judges each joint the writer labelled *therefore* or *but*: `holds`, `slack` or `unsure`, with a reason and a question; verdicts on other beats are dropped. Results live in `app.suggest` (`write.get`), one at a time, never in the story; `write.dismiss` or a new ask drops them, and no tool writes an option into a beat. The prompt carries title, logline, belief, every beat's labels and text, and the threads; when it does not fit the reader's window, beats away from the asked one shrink to 40 words, then 15, then labels only, and past that the ask is refused `too_long`. Each ask holds the read lock and stops with `read.cancel`. Tested with a stand-in reader (`face.mjs` write.*); not yet measured with a real model.
+
 ## §4 Gates
 
 | Gate | Command | Bar |

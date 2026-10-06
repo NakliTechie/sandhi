@@ -163,6 +163,15 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 #checks li .nx{display:block;color:var(--muted);font-size:12.5px}
 #checks li .at{color:var(--accent-ink);background:var(--accent-bg);border-radius:999px;padding:0 7px;font-size:11px;margin-right:4px}
 #checks .clean{font-size:13px;color:var(--muted);margin:0}
+.ask{margin:6px 0 0;font-size:12.5px}
+.sg{border-left:2px solid var(--accent);padding:4px 0 4px 12px;margin:10px 0 4px;font-size:13.5px;line-height:1.5}
+.sg-h{font-size:12px;color:var(--muted);margin:0 0 6px}
+.sg ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.sg .nx{display:block;color:var(--muted);font-size:12.5px}
+.sg-tag{font-size:11px;color:var(--accent-ink);background:var(--accent-bg);border-radius:999px;padding:0 7px;margin-right:4px}
+.sg-obvious{margin:0 0 6px}
+.sg-actions{margin:8px 0 0;display:flex;gap:10px;align-items:center}
+.sg-wait{font-size:13px;color:var(--muted);margin:8px 0 0}
 #threads li{display:flex;flex-direction:column;gap:4px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 #threads li:last-child{border-bottom:none;padding-bottom:0}
 .tline{display:flex;align-items:flex-start;gap:6px}
@@ -721,6 +730,58 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     labels: (scenes) => ({ system: GUIDE, user: `Here is a whole story as numbered scene summaries. Label every scene as one beat ("scene" = its number). Choose the turn and the low point for the story as a whole. Link threads: for each thing planted in one scene and used in later scenes, give plant_scene and payoff_scenes.\n\n${scenes.map(sceneLine).join('\n')}` })
   };
 
+
+  // ---- write mode (Batch C): the model asks and proposes; the writer writes. Nothing here enters the story.
+  // From the prior-art pass (history 2026-10-06): questions first; options one line each, the obvious one named and set
+  // aside (Coats, rule 12), the rest spread across joints and fortune with at least one down-turn (LLM stories drift
+  // positive and slack, arXiv 2407.13248); the joint judge asks, it never relabels.
+  const WRITE_GUIDE = [
+    'You help a writer with the structure of their own story. You never write or rewrite the story\'s prose; the writer writes it. You ask, and you propose situations in a line, never sentences of the story.',
+    'The 13 principles (use their ids): ' + PRINCIPLES.map(x => `${x.id} = ${x.name}: ${x.line}`).join(' '),
+    'Story Spine stages: ' + SPINE.map(x => `${x.id} = "${x.name}"`).join('; ') + '.',
+    'joint = how a beat follows the one before: therefore (because of it), but (despite it), and-then (it merely follows). fortune = how things stand for the hero at that beat, from -5 (worst) to 5 (best).',
+    'Stories written with models drift positive and slack. Push toward cost, doubt and reversal; prefer what the writer has planted over anything new.'
+  ].join('\n');
+  const WRITE_SCHEMAS = {
+    questions: obj({ questions: { type: 'array', items: obj({ principle: { type: 'string' }, question: { type: 'string' } }) } }),
+    options: obj({ obvious: { type: 'string' }, options: { type: 'array', items: obj({ text: { type: 'string' }, joint: { type: 'string' }, fortune: { type: 'integer' }, principle: { type: 'string' }, why: { type: 'string' } }) } }),
+    joints: obj({ joints: { type: 'array', items: obj({ beat: { type: 'integer' }, verdict: { type: 'string' }, reason: { type: 'string' }, question: { type: 'string' } }) } })
+  };
+  const words = (t, n) => { const w = String(t || '').split(/\s+/).filter(Boolean); return w.length > n ? w.slice(0, n).join(' ') + ' …' : w.join(' '); };
+  // The story as the model sees it. detail 0 = every beat's full text; 1 = full text near the asked beat, 40 words elsewhere;
+  // 2 = 15 words elsewhere; 3 = labels only elsewhere. The page asks for less detail until the prompt fits the reader's window.
+  function storyBrief(s, at, detail) {
+    const head = [`Title: ${s.title || '(untitled)'}`, s.logline ? `Who wants what: ${s.logline}` : '', s.belief ? `Why the writer tells it: ${s.belief}` : ''].filter(Boolean);
+    const lines = s.beats.map((b, i) => {
+      const near = at < 0 ? detail === 0 : Math.abs(i - at) <= 1;
+      const text = detail === 0 || near ? String(b.text || '') : detail === 1 ? words(b.text, 40) : detail === 2 ? words(b.text, 15) : '';
+      const lab = [b.spine, b.joint ? `joint ${b.joint}` : '', `fortune ${b.fortune}`, b.tags.length ? `principles ${b.tags.join(', ')}` : 'no principles tagged', b.marks.length ? b.marks.join(', ') : ''].filter(Boolean).join('; ');
+      return `Beat ${i + 1}${i === at ? ' (THE BEAT ASKED ABOUT)' : ''} [${lab}]: ${text.trim() || '(empty: not written yet)'}`;
+    });
+    const ix = new Map(s.beats.map((b, i) => [b.id, i + 1]));
+    const threads = s.threads.map(t => `Thread "${t.label}": planted in beat ${ix.get(t.plant) || '?'}, pays off in ${t.payoffs.map(x => ix.get(x)).filter(Boolean).join(', ') || 'no beat yet'}.`);
+    return [...head, '', ...lines, ...(threads.length ? ['', ...threads] : [])].join('\n');
+  }
+  const WRITE_PROMPTS = {
+    questions: (brief, n) => ({ system: WRITE_GUIDE, user: `Ask the writer 2 to 4 questions about beat ${n}. Each comes from one principle this beat does least for, and asks about something the writer has not decided yet. Questions only: suggest nothing. Each question at most 25 words; "principle" is its principle id.\n\nTHE STORY SO FAR:\n${brief}` }),
+    options: (brief, n) => ({ system: WRITE_GUIDE, user: `Beat ${n}: what could happen here? First, "obvious" = the most obvious thing that could happen, in one line; it is set aside. Then 3 to 5 other options, none of them the obvious one. Each option is a situation in one line of at most 25 words, not prose. Give each its "joint" to the beat before, its "fortune" at this beat, the "principle" id it serves, and "why" in at most 20 words. Spread them: use different joints, and make at least one an option where things get worse.\n\nTHE STORY SO FAR:\n${brief}` }),
+    joints: (brief) => ({ system: WRITE_GUIDE, user: `For every beat that the writer joined to the beat before with "therefore" or "but", judge the joint: "holds" if it reads that way, "slack" if "and then" fits better, "unsure" otherwise. Give the beat number, the verdict, the "reason" in at most 20 words, and one "question" to the writer in at most 20 words. Judge only the joints the writer labelled.\n\nTHE STORY:\n${brief}` })
+  };
+  const VERDICTS = new Set(['holds', 'slack', 'unsure']);
+  const line = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  function coerceQuestions(json) {
+    return rows(json && json.questions).map(q => ({ principle: pick(q.principle, PIDS), question: line(q.question, 300) })).filter(q => q.question).slice(0, 6);
+  }
+  function coerceOptions(json) {
+    const opts = rows(json && json.options).map(o => { const f = Math.round(Number(o.fortune)); return { text: line(o.text, 300), joint: pick(o.joint, JOINT_SET), fortune: Number.isFinite(f) ? Math.max(-5, Math.min(5, f)) : null, principle: pick(o.principle, PIDS), why: line(o.why, 200) }; });
+    return { obvious: line(json && json.obvious, 300), options: opts.filter(o => o.text).slice(0, 6) };
+  }
+  function coerceJoints(json, s) {
+    const seen = new Set();
+    return rows(json && json.joints).map(j => ({ at: Math.round(Number(j.beat)), verdict: pick(j.verdict, VERDICTS) || 'unsure', reason: line(j.reason, 200), question: line(j.question, 200) }))
+      .filter(j => Number.isInteger(j.at) && j.at >= 2 && j.at <= s.beats.length && ['therefore', 'but'].includes(s.beats[j.at - 1].joint) && !seen.has(j.at) && seen.add(j.at))
+      .map(j => ({ ...j, beat: s.beats[j.at - 1].id, joint: s.beats[j.at - 1].joint }));
+  }
   const FOLD = { '‘': "'", '’': "'", '‚': "'", '‛': "'", '′': "'", '‹': "'", '›': "'", '“': '"', '”': '"', '„': '"', '‟': '"', '″': '"', '«': '"', '»': '"',
     '‐': '-', '‑': '-', '‒': '-', '–': '-', '—': '-', '―': '-', '−': '-', '…': '...' };
   const INVISIBLE = /[\u00ad\u200b-\u200d\u2060\ufeff]/;
@@ -856,7 +917,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 
   root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
     LIMITS, seed: () => clone(SEED), validate, blankStory, storyFromSpine, newBeat, nextId, checks, arcMatch, coverage, clone, wordCount, spineName,
-    READ_SCHEMAS, READ_PROMPTS, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
+    READ_SCHEMAS, READ_PROMPTS, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
 })(globalThis);
 </script>
 
@@ -1006,7 +1067,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch { /* storage unavailable: nothing was kept */ } }
 };
-const app = { story: null, undo: [], redo: [], dirty: false, kept: true, focus: 'all', last: null, coalesce: null, coalesceAt: 0, coalesceStart: 0, journal: [], open: new Set(), proposal: null, reading: false };
+const app = { story: null, undo: [], redo: [], dirty: false, kept: true, focus: 'all', last: null, coalesce: null, coalesceAt: 0, coalesceStart: 0, journal: [], open: new Set(), proposal: null, reading: false, suggest: null };
 const ok = (data) => ({ ok: true, class: 'ok', data: data || {} });
 const fail = (cls, message, next, data) => ({ ok: false, class: cls, message, next, ...(data ? { data } : {}) });
 const S = () => app.story;
@@ -1425,6 +1486,57 @@ async function runRead(a, door) {
   } finally { app.reading = false; readAbort = null; }
 }
 
+// ---- write mode: the chosen reader asks questions, proposes options for a beat, or judges the writer's joints. The result
+// is held beside the story (app.suggest), never written into it; a new ask replaces it, and Close drops it.
+let suggestSeq = 0;
+// the reader is always the one the writer chose (rcfg.rung): an agent cannot pick the provider here (decision L2)
+function writeError(kind, a) {
+  const id = rcfg.rung, s = S();
+  if (!id) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Import: your provider with your key, or another reader (reader.select).');
+  if (app.reading) return fail('busy', 'A model is already working.', 'Wait for it to finish, or stop it (read.cancel).');
+  if (kind === 'joints') {
+    if (!s.beats.some(b => b.joint === 'therefore' || b.joint === 'but')) return fail('invalid', 'No beat is joined to the one before by "therefore" or "but".', 'Label the joints first: open "Label this beat" and set the joint.');
+    return null;
+  }
+  if (typeof a.beat !== 'string' || !s.beats.some(b => b.id === a.beat)) return fail('not_found', `no beat ${a.beat}`, 'Use a beat id from story.get.');
+  return null;
+}
+// one call to the chosen reader, with as much of the story as fits its window
+async function askReader(kind, s, at) {
+  const r = await READERS[rcfg.rung].open(() => { /* a download shows in the read dialog; here the panel says it is asking */ });
+  try {
+    for (const detail of [0, 1, 2, 3]) {
+      const pr = C.WRITE_PROMPTS[kind](C.storyBrief(s, at, detail), at + 1);
+      if (await r.measure(pr.system + '\n' + pr.user) <= r.maxInput) return await r.run(pr, C.WRITE_SCHEMAS[kind]);
+    }
+    throw readerFail('too_long', `The story is too long for ${r.label || r.model} to see at once, even in outline.`, 'Choose your provider with your key, or a model server with a longer window.');
+  } finally { r.close(); }
+}
+// the reader's answer, kept to the shape and the closed sets; null when it holds nothing to show
+function writeItems(kind, json, s) {
+  if (kind === 'joints') return { joints: C.coerceJoints(json, s) };
+  const items = kind === 'questions' ? { questions: C.coerceQuestions(json) } : C.coerceOptions(json);
+  return (items.questions || items.options).length ? items : null;
+}
+async function runWrite(kind, a) {
+  const bad = writeError(kind, a); if (bad) return bad;
+  const s = C.clone(S()), at = kind === 'joints' ? -1 : s.beats.findIndex(b => b.id === a.beat), seq = ++suggestSeq;
+  app.reading = true; readAbort = new AbortController();
+  app.suggest = { id: seq, kind, beat: a.beat || null, pending: true }; renderSuggest();
+  try {
+    const out = await whileLocked(() => askReader(kind, s, at));
+    stopped();
+    const items = writeItems(kind, out.json, s);
+    if (!items) { app.suggest = null; return fail('nothing_found', `${out.model} returned no ${kind}.`, 'Ask again, or try another reader.'); }
+    app.suggest = { id: seq, kind, beat: a.beat || null, model: out.model, ...items };
+    return ok(C.clone(app.suggest));
+  } catch (e) {
+    app.suggest = null;
+    if (readAbort.signal.aborted) return fail('cancelled', 'Stopped. Nothing was kept.', 'Ask again when you are ready.');
+    return e.cls ? fail(e.cls, e.message, e.next) : fail('reader_error', String(e && e.message || e), 'Try again, or try another reader.');
+  } finally { app.reading = false; readAbort = null; renderSuggest(); }
+}
+
 // ---- the manifest: every UI command is one of these (SPEC §0). handler(args, door) -> envelope
 const TOOLS = [
   { name: 'status', description: 'One read of the whole situation: title, counts, check counts by class, closest arc, unsaved state, undo depth, last call. Start here.', inputSchema: NONE,
@@ -1594,6 +1706,18 @@ const TOOLS = [
       if (key) { rcfg.provider = id; rcfg.rung = 'provider'; saveCfg(); }
       return ok({ provider: id, key: key ? await LD.fingerprint(key) : null });
     } },
+  { name: 'write.questions', description: "Ask the chosen reader 2 to 4 questions about one beat, each from a principle the beat does least for. Questions only; nothing enters the story. The result replaces any earlier suggestion (write.get). It uses the reader the writer chose.", spends: true,
+    inputSchema: { type: 'object', properties: { beat: { type: 'string', description: 'beat id' } }, required: ['beat'] },
+    handler: async (a) => runWrite('questions', a) },
+  { name: 'write.options', description: "Ask the chosen reader what could happen at one beat: the obvious option, named and set aside, then 3 to 5 others, each one line with its joint, fortune, principle and why; at least one where things get worse. Proposals only: nothing enters the story, and there is no tool that writes an option into a beat; the writer writes. It uses the reader the writer chose.", spends: true,
+    inputSchema: { type: 'object', properties: { beat: { type: 'string', description: 'beat id' } }, required: ['beat'] },
+    handler: async (a) => runWrite('options', a) },
+  { name: 'write.joints', description: "Ask the chosen reader to judge every joint the writer labelled therefore or but: holds, slack (and then fits better) or unsure, with a reason and a question. Advice only; no joint is relabelled. It uses the reader the writer chose.", spends: true, inputSchema: NONE,
+    handler: async (a) => runWrite('joints', a) },
+  { name: 'write.get', description: 'The current suggestion (questions, options or joint verdicts), or no_proposal.', inputSchema: NONE,
+    handler: async () => (app.suggest && !app.suggest.pending ? ok(C.clone(app.suggest)) : fail('no_proposal', 'nothing is suggested', 'Call write.questions, write.options or write.joints first.')) },
+  { name: 'write.dismiss', description: 'Drop the current suggestion. Nothing was kept from it.', inputSchema: NONE,
+    handler: async () => { const had = !!app.suggest && !app.suggest.pending; if (had) app.suggest = null; return ok({ dismissed: had }); } },
   { name: 'read.run', description: "Read a story (prose) with the chosen rung and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline; Gemini Nano cannot read in parts and refuses them (too_long) before any model call. strategy: \"whole\" (one call reads and labels) or \"split\" (one call finds the beats, a second labels them). Spends: on the provider rung the story goes to the writer's provider, billed to the writer, so an agent may use that rung only when the writer chose it.", spends: true,
     inputSchema: { type: 'object', properties: { text: { type: 'string' }, rung: { enum: ['machine', 'device', 'provider'] }, strategy: { enum: ['whole', 'split'] } }, required: ['text'] },
     handler: async (a, door) => runRead(a, door) },
@@ -1694,6 +1818,7 @@ const patchKeys = (args) => (args.patch ? Object.keys(args.patch) : []);
 const AFTER = {
   'view.focus': (args, door) => { renderAll(); if (door === 'ui' && args.principle !== 'all') $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
   'read.discard': () => renderProposal(),
+  'write.questions': () => renderSuggest(), 'write.options': () => renderSuggest(), 'write.joints': () => renderSuggest(), 'write.dismiss': () => renderSuggest(),
   'story.update': () => { renderHeader(); renderViews(); },
   'story.save': () => renderSaveState(),
   'thread.update': (args) => (patchKeys(args).every(k => k === 'label') ? (renderViews(), patchCards()) : renderAll()),
@@ -1870,6 +1995,8 @@ function beatCard(b, i, s) {
       </div></details>
     </div>
     <textarea class="btext" data-beat="${id}" data-field="text" rows="3" aria-label="Text of beat ${P}" placeholder="What happens">${esc(b.text)}</textarea>
+    <div class="ask"><button class="link" type="button" data-ui="ask-q" data-id="${id}">Ask about this beat</button></div>
+    <div class="suggest" data-sg="${id}" aria-live="polite">${suggestHtml(id)}</div>
     ${labelHtml(b, s, P)}
   </article>`;
 }
@@ -1908,11 +2035,41 @@ function checkItem(c) {
   const msg = c.group ? `Beats ${c.group.map(x => x.at).join(', ')}.` : c.message;
   return `<li><button class="check" type="button" data-goto="${c.beat || ''}"${LABEL_CHECKS.has(c.class) ? ' data-label="1"' : ''} title="${esc(c.class)}">${at}<b>${esc(CHECK_NAMES[c.class])}.</b> ${esc(msg)}<span class="nx">${esc(c.next)}</span></button></li>`;
 }
+// the suggestion panel: inside the beat it is about, or (joint verdicts) under the checks
+const pname = (pid) => { const x = C.PRINCIPLES.find(p => p.id === pid); return x ? x.name : ''; };
+const signed = (n) => (n > 0 ? `+${n}` : String(n));
+function suggestHtml(id) {
+  const g = app.suggest;
+  if (!g || g.beat !== id || g.kind === 'joints') return '';
+  if (g.pending) return `<p class="sg-wait">Asking ${esc(readerName())}… <button class="link" type="button" data-cmd="read.cancel">Stop</button></p>`;
+  const close = `<button class="link" type="button" data-cmd="write.dismiss">Close</button>`;
+  if (g.kind === 'questions') return `<div class="sg"><p class="sg-h">Questions from ${esc(g.model)}, for you to answer in your own words</p><ul>${g.questions.map(q => `<li>${esc(q.question)}${q.principle ? ` <span class="faint">· ${esc(pname(q.principle))}</span>` : ''}</li>`).join('')}</ul>
+    <p class="sg-actions"><button class="btn" type="button" data-ui="ask-o" data-id="${id}">What could happen here?</button> ${close}</p></div>`;
+  return `<div class="sg"><p class="sg-h">Options from ${esc(g.model)}: situations to weigh, not text to use. Write the beat yourself.</p>
+    ${g.obvious ? `<p class="sg-obvious"><span class="faint">The obvious one, set aside:</span> <s>${esc(g.obvious)}</s></p>` : ''}
+    <ul>${g.options.map(o => `<li><span class="sg-tag">${esc(o.joint || '—')}${o.fortune === null ? '' : ` · fortune ${esc(signed(o.fortune))}`}${o.principle ? ` · ${esc(pname(o.principle))}` : ''}</span> ${esc(o.text)}${o.why ? `<span class="nx">${esc(o.why)}</span>` : ''}</li>`).join('')}</ul>
+    <p class="sg-actions"><button class="btn" type="button" data-ui="ask-o" data-id="${id}">Ask again</button> ${close}</p></div>`;
+}
+function judgeHtml() {
+  const g = app.suggest;
+  if (!g || g.kind !== 'joints') return '';
+  if (g.pending) return `<p class="sg-wait">Asking ${esc(readerName())} about your joints… <button class="link" type="button" data-cmd="read.cancel">Stop</button></p>`;
+  const W = { holds: 'Holds', slack: 'Reads as “and then”', unsure: 'Unsure' };
+  return `<div class="sg"><p class="sg-h">${esc(g.model)} on your joints: advice, not a relabel</p><ul>${g.joints.map(j => `<li><button class="check" type="button" data-goto="${j.beat}"><span class="at">beat ${j.at}</span><b>${esc(j.joint)}: ${esc(W[j.verdict])}.</b> ${esc(j.reason)}${j.question ? `<span class="nx">${esc(j.question)}</span>` : ''}</button></li>`).join('') || '<li class="faint">No verdicts came back.</li>'}</ul>
+    <p class="sg-actions"><button class="link" type="button" data-cmd="write.dismiss">Close</button></p></div>`;
+}
+const readerName = () => (rcfg.rung === 'device' ? 'Gemini Nano' : rcfg.rung === 'machine' ? (rcfg.models[(machine.found && machine.found.id) || rcfg.server || 'ollama'] || 'the model server') : (rcfg.models[rcfg.provider] || (LD.PROVIDERS[rcfg.provider] || {}).label || 'your provider'));
+function renderSuggest() {
+  for (const el of document.querySelectorAll('[data-sg]')) el.innerHTML = suggestHtml(el.dataset.sg);
+  renderChecks();
+}
 function renderChecks() {
   const list = C.checks(S()), box = $('#checks div');
   $('#checks-h').textContent = list.length ? `Checks · ${list.length}` : 'Checks';
   box.innerHTML = list.length ? `<ul>${groupChecks(list).map(checkItem).join('')}</ul>`
     : `<p class="clean">Nothing to flag in ${S().beats.length} beats and ${S().threads.length} plants.</p>`;
+  const labelled = S().beats.some(b => b.joint === 'therefore' || b.joint === 'but');
+  box.insertAdjacentHTML('beforeend', judgeHtml() || (labelled ? '<p class="ask"><button class="link" type="button" data-ui="ask-joints">Ask the model about your joints</button></p>' : ''));
 }
 function renderThreads() {
   const s = S(), beatOpts = (cur, none) => `<option value="">${none}</option>` + s.beats.map((b, i) => `<option value="${b.id}"${b.id === cur ? ' selected' : ''}>beat ${i + 1}</option>`).join('');
@@ -1987,7 +2144,8 @@ document.addEventListener('change', (e) => {
   delete d.dirty;
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
-const UI_ACTIONS = { help: () => openSplash(false), tour: () => startTour(), 'splash-close': () => splash.close(), open: () => $('#file').click(), wizard: () => openWizard(),
+const UI_ACTIONS = { 'ask-q': (u) => ui('write.questions', { beat: u.dataset.id }), 'ask-o': (u) => ui('write.options', { beat: u.dataset.id }), 'ask-joints': () => ui('write.joints', {}),
+  help: () => openSplash(false), tour: () => startTour(), 'splash-close': () => splash.close(), open: () => $('#file').click(), wizard: () => openWizard(),
   'wiz-next': () => wizardMove(1), 'wiz-back': () => wizardMove(-1), 'wiz-skip': () => wizardMove(1), 'wiz-more': () => wizardMore(),
   'wiz-finish': () => { wiz.values[wiz.i] = $('#wiz-text').value; wizardFinish(); }, 'wiz-restart': () => { wizardReset(); wizardStep(); },
   'wiz-blank': () => wizardBlank(), recent: (u) => { const x = recentList()[+u.dataset.k]; if (x) ui('story.load', { story: x.story }).then(r => { if (r.ok) toast(`Brought back "${x.title}".`, 'Undo returns the story you had open.'); }); } };

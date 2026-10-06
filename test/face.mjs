@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 34 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
+check('face.manifest', man.length === 39 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -201,6 +201,10 @@ const twoPassInput = Math.max(tok(labelsP.system + '\n' + labelsP.user), tok(emp
 check('read.fixture_forces_two_pass', twoPassInput < tok(whole.system + '\n' + whole.user), { twoPassInput, whole: tok(whole.system + '\n' + whole.user) });
 // the stand-ins answer whole / split / scenes / labels prompts from the fixture; Nano runs it in the page, LM Studio in Node
 const answerFor = (FIX, user) => {
+  // write mode: questions, options for a beat, joint verdicts
+  if (user.startsWith('Ask the writer')) return { questions: [{ principle: 'stakes', question: 'What does Tavi lose if the boats never come?' }, { principle: 'nonsense', question: 'Ignored: no such principle.' }, { principle: 'earn', question: 'Who gets him out: luck or his own choice?' }] };
+  if (/^Beat \d+: what could happen here/.test(user)) return { obvious: 'Tavi rings the bell and saves everyone.', options: [{ text: 'The bell cracks and Tavi must whistle from the rock.', joint: 'but', fortune: -3, principle: 'stakes', why: 'Raises the cost.' }, { text: 'Oren is too ill to climb, so Tavi goes alone.', joint: 'therefore', fortune: -1, principle: 'earn', why: 'His choice.' }, { text: '', joint: 'but', fortune: 0, principle: 'care', why: 'dropped: no text' }, { text: 'The fog lifts on its own.', joint: 'sideways', fortune: 9, principle: 'luck', why: 'Coerced.' }] };
+  if (user.startsWith('For every beat that the writer joined')) { const n = (user.match(/^Beat \d+/gm) || []).length; return { joints: [{ beat: 5, verdict: 'slack', reason: 'It follows; nothing causes it.', question: 'What makes the fog come now?' }, { beat: 1, verdict: 'holds', reason: 'Beat 1 has no joint.', question: '' }, { beat: 3, verdict: 'slack', reason: 'Beat 3 has no labelled joint.', question: '' }, { beat: n + 3, verdict: 'holds', reason: 'Out of range.', question: '' }, { beat: 6, verdict: 'HOLDS', reason: 'Because of the storm.', question: 'Fine.' }] }; }
   if (user.startsWith('Mark the structure')) return FIX.whole;
   if (user.startsWith('Split this story')) return { beats: FIX.beats.map(b => ({ start: b.start })) };
   if (user.startsWith('Here is a story split into numbered beats')) { const n = (user.match(/^Beat \d+:/gm) || []).length; return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ beat: k + 1, ...b.labels })), threads: FIX.threads.map(t => ({ label: t.label, plant_beat: t.plant_scene, payoff_beats: t.payoff_scenes })) }; }
@@ -231,6 +235,50 @@ async function readPage(opts) {
   await p.goto(base); await p.evaluate(() => window.sandhi.ready);
   if (opts && opts.nano) await p.evaluate(() => window.sandhi.tools['reader.select']({ rung: 'device' }));   // nothing reads until the writer chooses
   return { ctx2, p, errs, call: (n, a) => p.evaluate(([x, y]) => window.sandhi.tools[x](y), [n, a]) };
+}
+{ // write mode (Batch C): questions, then options for a beat, then joint verdicts; nothing enters the story
+  const { ctx2, p, errs, call } = await readPage({ nano: 6144 });
+  const before = JSON.stringify((await call('story.get', {})).data.story);
+  const sb = (await call('story.get', {})).data.story, b3 = sb.beats[2].id;
+  await p.click(`#beat-${b3} [data-ui="ask-q"]`);
+  await p.waitForFunction((id) => /Questions from gemini-nano/.test(document.querySelector(`[data-sg="${id}"]`).textContent), b3);
+  const qPanel = await p.textContent(`[data-sg="${b3}"]`), q = (await call('write.get', {})).data;
+  check('write.questions', q.kind === 'questions' && q.beat === b3 && q.questions.length === 3 && q.questions[1].principle === null && /What does Tavi lose/.test(qPanel) && /Make it hard/.test(qPanel) && /What could happen here/.test(qPanel), { q, qPanel: qPanel.slice(0, 160) });
+  await p.click(`[data-sg="${b3}"] [data-ui="ask-o"]`);
+  await p.waitForFunction((id) => /Options from gemini-nano/.test(document.querySelector(`[data-sg="${id}"]`).textContent), b3);
+  const oPanel = await p.textContent(`[data-sg="${b3}"]`), o = (await call('write.get', {})).data;
+  const writes = await p.evaluate((id) => document.querySelectorAll(`[data-sg="${id}"] button`).length && [...document.querySelectorAll(`[data-sg="${id}"] button`)].map(x => x.textContent.trim()), b3);
+  check('write.options_proposals_only', o.kind === 'options' && o.options.length === 3 && o.obvious.startsWith('Tavi rings') && o.options[2].joint === null && o.options[2].fortune === 5 && o.options[2].principle === null
+    && /set aside/.test(oPanel) && /Write the beat yourself/.test(oPanel) && JSON.stringify(writes) === JSON.stringify(['Ask again', 'Close']) && JSON.stringify((await call('story.get', {})).data.story) === before, { o, writes });
+  // the prompt carries the story's structure and marks the asked beat
+  const prompt = await p.evaluate(() => window.SandhiCore.WRITE_PROMPTS.options(window.SandhiCore.storyBrief(window.sandhi && window.SandhiCore.seed(), 2, 0), 3).user);
+  check('write.prompt_marks_beat', /Beat 3 \(THE BEAT ASKED ABOUT\)/.test(prompt) && /obvious/.test(prompt) && /things get worse/.test(prompt) && /Thread "/.test(prompt), prompt.slice(0, 120));
+  await p.click(`[data-sg="${b3}"] [data-cmd="write.dismiss"]`);
+  const closed = (await p.textContent(`[data-sg="${b3}"]`)).trim() === '' && (await call('write.get', {})).class === 'no_proposal';
+  check('write.dismiss', closed, closed);
+  await p.click('#checks [data-ui="ask-joints"]');
+  await p.waitForFunction(() => /on your joints/.test(document.querySelector('#checks').textContent));
+  const j = (await call('write.get', {})).data, jText = await p.textContent('#checks');
+  const sj = (await call('story.get', {})).data.story;
+  check('write.joints_advise', j.kind === 'joints' && JSON.stringify(j.joints.map(x => [x.at, x.joint, x.verdict])) === JSON.stringify([[5, 'but', 'slack'], [6, 'therefore', 'holds']]) && /Reads as “and then”/.test(jText) && /advice, not a relabel/.test(jText) && JSON.stringify(sj) === before, { j, n: sj.beats.length });
+  const badBeat = await call('write.options', { beat: 'nope' });
+  check('write.unknown_beat', badBeat.class === 'not_found', badBeat);
+  check('write.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // write mode with no reader chosen says so; Stop ends an ask and keeps nothing
+  const none = await readPage({});
+  const sb = (await none.call('story.get', {})).data.story;
+  const r = await none.call('write.questions', { beat: sb.beats[0].id });
+  check('write.needs_reader', r.class === 'no_reader' && /Import/.test(r.next), r);
+  await none.ctx2.close();
+  const { ctx2, p, call } = await readPage({ nano: 6144, hang: true });
+  await p.evaluate((id) => { window.__w = window.sandhi.tools['write.options']({ beat: id }); }, sb.beats[0].id);
+  await p.waitForFunction(() => window.__nanoCalls.length === 1);
+  const waiting = await p.textContent(`[data-sg="${sb.beats[0].id}"]`);
+  await call('read.cancel', {}); const w = await p.evaluate(() => window.__w);
+  check('write.stop', /Asking Gemini Nano/.test(waiting) && w.class === 'cancelled' && (await call('write.get', {})).class === 'no_proposal' && (await p.textContent(`[data-sg="${sb.beats[0].id}"]`)).trim() === '', { waiting, w: w.class });
+  await ctx2.close();
 }
 { // whole story on Nano, then the writer accepts it in the page
   const { ctx2, p, errs, call } = await readPage({ nano: 6144 });
@@ -342,7 +390,7 @@ async function readPage(opts) {
   const names = await p5.evaluate(() => window.__mc.map(t => t.name));
   const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
   const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
-  check('door.model_context', names.length === 32 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  check('door.model_context', names.length === 37 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
   await ctx5.close();
 }
 { // a page opened as a file stores no key: every local file shares its storage
