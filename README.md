@@ -32,7 +32,7 @@ Nothing to install, no account. Your story autosaves in this browser, and **Save
 
 You can feel the middle of your story sag, but not where. The advice says every scene should turn, what you plant should pay off, the hero should earn the ending. Your draft is too close to see whether it does.
 
-sandhi lays the story on its spine and shows its joints. Each beat has a fortune, a phase in three traditions (Story Spine, the Nāṭyaśāstra's five stages, kishōtenketsu), the word that joins it to the last (*therefore*, *but*, or a slack *and then*), and what it plants or pays off. The thirteen principles come from [How stories work](https://assets.chiragpatnaik.com/how-stories-work), which also shows where the masters disagree. *Sandhi* is the Nāṭyaśāstra's word for those joints.
+sandhi lays the story on its spine and shows its joints. Each beat has a fortune, a phase in three traditions (Story Spine, the Nāṭyaśāstra's five stages, kishōtenketsu), the word that joins it to the last (*therefore*, *but*, or a slack *and then*), and what it plants or pays off. The thirteen principles come from [How stories work](https://assets.chiragpatnaik.com/how-stories-work), which also shows where the masters disagree; **More → How stories work** lists them with their sources and the beats of your story that serve each. *Sandhi* is the Nāṭyaśāstra's word for those joints.
 
 ## Import a story, and let the AI you choose read it
 
@@ -56,7 +56,7 @@ node cli-read.mjs score <reply> <name> --story gift-of-the-magi   # score a mode
 node page-read.mjs --model qwen3.5:4b --story to-build-a-fire     # the real page reads with a local model
 ```
 
-Agents: `window.sandhi` exposes 49 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading or a plot proposal, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
+Agents: `window.sandhi` exposes 50 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading or a plot proposal, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
 
 ## Verify it yourself
 

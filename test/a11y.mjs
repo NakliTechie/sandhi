@@ -1,4 +1,4 @@
-// Accessibility gate: axe-core on the page's five faces (main, splash, New-story wizard, read dialog, a tour step), light and dark.
+// Accessibility gate: axe-core on the page's six faces (main, splash, New-story wizard, read dialog, the learn dialog, a tour step), light and dark.
 //   node test/a11y.mjs
 // Fails on any serious or critical violation; prints moderate and minor ones as notes. axe checks what a machine can
 // (contrast, names, roles, labels); it does not replace a person using a screen reader.
@@ -19,6 +19,7 @@ const views = {
   splash: async (p) => { await p.keyboard.press('?'); await p.waitForFunction(() => document.querySelector('#splash').open); },
   wizard: async (p) => { await p.click('[data-ui="wizard"]'); await p.waitForFunction(() => document.querySelector('#wizard').open); await p.click('#wiz-next'); },
   reader: async (p) => { await p.click('[data-ui="read-open"]'); await p.check('#reader input[value="provider"]'); },
+  learn: async (p) => { await p.evaluate(() => window.sandhi.ready); await p.click('.storymenu summary'); await p.click('[data-ui="learn"]'); await p.waitForFunction(() => document.querySelector('#learn').open); },
   tour: async (p) => { await p.evaluate(() => window.sandhi.ready); await p.keyboard.press('?'); await p.click('#splash [data-ui="tour"]'); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(100); }
 };
 const found = [];

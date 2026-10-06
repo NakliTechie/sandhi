@@ -240,6 +240,13 @@ table.matrix{border-collapse:collapse}
 #panel textarea{width:100%;min-height:6em;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:6px 8px;font:14px/1.6 var(--serif);field-sizing:content}
 
 /* splash + tour (Slate's first-run pattern) */
+#learn{border:1px solid var(--line-strong);border-radius:14px;background:var(--card);color:var(--ink);padding:24px 26px 18px;width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 32px)}
+#learn h2{font-size:22px;font-weight:500;margin:0 0 4px}
+.learn-list{padding-left:22px;display:flex;flex-direction:column;gap:12px;font-size:14px}
+.learn-list b{font-weight:500}
+.learn-list .why{color:var(--muted);display:block}
+.learn-list .meta{font-size:12px;color:var(--faint)}
+.learn-arcs{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;font-size:13px}
 #splash{border:1px solid var(--line-strong);border-radius:14px;background:var(--card);color:var(--ink);padding:28px 28px 22px;width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 32px)}
 #splash::backdrop{background:rgba(28,26,22,.42)}
 #splash .sp-mark{width:40px;height:40px;margin-bottom:10px}
@@ -329,6 +336,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     <details class="menu storymenu"><summary class="btn">More</summary><div>
       <button data-ui="open" type="button">Open a .sandhi.json file…</button>
       <button data-cmd="story.demo" type="button">Load the example, The whistle</button>
+      <button data-ui="learn" type="button">How stories work: the 13 principles</button>
       <p class="mlab" id="recent-h">Recent stories</p>
       <div id="recent" class="recent" aria-labelledby="recent-h"></div>
     </div></details>
@@ -388,6 +396,14 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   <span>Your story stays in this browser and in the files you save. A model runs only when you ask it to read: a model server on your machine, Gemini Nano in Chrome, or your own provider and key. The checks compare labels.</span>
   <span>Agent face: <code>window.sandhi</code> · <a href="https://assets.chiragpatnaik.com/how-stories-work">How stories work</a> · <a href="https://naklitechie.com">NakliTechie</a></span>
 </footer>
+<dialog id="learn" aria-labelledby="learn-h">
+  <h2 id="learn-h">How stories work</h2>
+  <p class="faint">Thirteen principles, the traditions behind each, and the six shapes a story's fortune can take. The checks and the readers use these words. From <a href="https://assets.chiragpatnaik.com/how-stories-work" target="_blank" rel="noopener">How stories work</a>, which shows them on a worked story.</p>
+  <ol id="learn-list" class="learn-list"></ol>
+  <h3 class="lab">Six shapes (Reagan et al. 2016)</h3><ul id="learn-arcs" class="learn-arcs"></ul>
+  <h3 class="lab">Sources</h3><p id="learn-src" class="faint"></p>
+  <div class="sp-actions"><button class="btn" type="button" data-ui="learn-close">Close</button></div>
+</dialog>
 <dialog id="splash" aria-labelledby="splash-h">
   <svg class="sp-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 25 L16 12 L28 25" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="12" r="4.5" fill="var(--ink)"/></svg>
   <h2 id="splash-h">sandhi</h2>
@@ -1993,6 +2009,8 @@ const TOOLS = [
       if (key) { rcfg.provider = id; rcfg.rung = 'provider'; saveCfg(); }
       return ok({ provider: id, key: key ? await LD.fingerprint(key) : null });
     } },
+  { name: 'learn.get', description: 'How stories work: the 13 principles (line, what each source says and who pushes back, the beats of this story that serve it), the six fortune shapes, and the sources. principle narrows it to one.', inputSchema: { type: 'object', properties: { principle: { type: 'string' } } },
+    handler: async (a) => (a.principle !== undefined && !C.PRINCIPLES.some(p => p.id === a.principle) ? fail('invalid', `no principle ${a.principle}`, `Use one of: ${C.PRINCIPLES.map(p => p.id).join(', ')}.`) : ok(learnData(a.principle))) },
   { name: 'write.questions', description: "Ask the chosen reader 2 to 4 questions about one beat, each from a principle the beat does least for. Questions only; nothing enters the story. The result replaces any earlier suggestion (write.get). It uses the reader the writer chose.", spends: true,
     inputSchema: { type: 'object', properties: { beat: { type: 'string', description: 'beat id' } }, required: ['beat'] },
     handler: async (a) => runWrite('questions', a) },
@@ -2484,6 +2502,18 @@ function placeHtml(unplaced) {
   }
   return unplaced ? '<p class="ask"><button class="link" type="button" data-ui="ask-place">Ask the model where they fit</button></p>' : '';
 }
+// the principles as a reader of the story meets them: the line, who says it (and who pushes back), the beats that serve it here
+function learnData(pid) {
+  const s = S(), cov = new Map(C.coverage(s).map(c => [c.id, c.beats]));
+  const one = (p) => ({ id: p.id, name: p.name, line: p.line, sources: C.SOURCES.filter(x => p.src[x.id]).map(x => ({ name: x.name, says: p.src[x.id], pushesBack: (p.dissent || []).includes(x.id) })), beats: cov.get(p.id) || [] });
+  return { principles: C.PRINCIPLES.filter(p => !pid || p.id === pid).map(one), arcs: C.ARCS.map(a => ({ id: a.id, name: a.name, shape: a.d })), sources: C.SOURCES.map(x => ({ name: x.name, when: x.when })) };
+}
+function renderLearn() {
+  const d = learnData();
+  $('#learn-list').innerHTML = d.principles.map(p => `<li><b>${esc(p.name)}</b> <span class="why">${esc(p.line)}</span><span class="meta">${p.sources.length} source${p.sources.length > 1 ? 's' : ''}${p.sources.some(x => x.pushesBack) ? ', one pushes back' : ''} · ${p.beats.length ? `in your story: beat${p.beats.length > 1 ? 's' : ''} ${p.beats.join(', ')}` : 'no beat in your story serves it yet'} · <button class="link" type="button" data-ui="learn-focus" data-id="${p.id}">Focus</button></span></li>`).join('');
+  $('#learn-arcs').innerHTML = d.arcs.map(a => `<li><b>${esc(a.name)}</b>: ${esc(a.shape)}</li>`).join('');
+  $('#learn-src').textContent = d.sources.map(x => `${x.name} (${x.when})`).join(' · ');
+}
 function renderCoverage() {
   const s = S(), cov = C.coverage(s), n = s.beats.length;
   let h = `<thead><tr><th scope="col"><span class="sr-only">Principle</span></th>${s.beats.map((b, i) => `<th scope="col"><span class="sr-only">Beat </span>${i + 1}</th>`).join('')}<th scope="col"><span class="sr-only">Beats tagged</span></th></tr></thead><tbody>`;
@@ -2554,7 +2584,8 @@ document.addEventListener('change', (e) => {
   delete d.dirty;
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
-const UI_ACTIONS = { 'chapter-toggle': (u) => { const n = u.dataset.name; if (app.shut.has(n)) app.shut.delete(n); else app.shut.add(n); renderBeats(); },
+const UI_ACTIONS = { learn: () => { renderLearn(); $('#learn').showModal(); }, 'learn-close': () => $('#learn').close(), 'learn-focus': (u) => { $('#learn').close(); ui('view.focus', { principle: u.dataset.id }).then(() => $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' })); },
+  'chapter-toggle': (u) => { const n = u.dataset.name; if (app.shut.has(n)) app.shut.delete(n); else app.shut.add(n); renderBeats(); },
   'ask-interview': () => ui('write.interview', {}), 'ask-depth': (u) => ui('write.depth', { beat: u.dataset.id }), 'iv-beat': () => landAnswer('beat'), 'iv-tidbit': () => landAnswer('tidbit'), 'iv-note': () => landAnswer('note'),
   'plot-apply': (u, e) => { if (e && e.isTrusted) ui('write.apply', { id: +u.dataset.id }).then(r => { if (r.ok) toast(`Applied ${r.data.changes} change${r.data.changes > 1 ? 's' : ''}.`, 'Undo reverses them. New beats are empty: write them.'); }); },
   'sketch-start': () => { sketching = true; renderSketchBar(); }, 'sketch-cancel': () => { sketching = false; renderChart(); }, 'sketch-clear': () => ui('story.sketch', { points: [] }), 'ask-shape': () => ui('write.shape', {}), 'ask-place': () => ui('write.place', {}),

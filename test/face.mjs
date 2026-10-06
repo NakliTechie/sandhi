@@ -58,7 +58,7 @@ check('splash.cold_load_shows_it', samples.every(s => s.splash), samples.map(s =
 
   const man = await page.evaluate(() => window.sandhi.manifest);
   const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-  check('face.manifest', man.length === 49 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key', 'write.apply']), { n: man.length, personOnly });
+  check('face.manifest', man.length === 50 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key', 'write.apply']), { n: man.length, personOnly });
   let st = await call('status', {});
   check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -379,6 +379,19 @@ async function readPage(opts) {
   check('chapters.no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // the learn dialog (Batch G): the 13 principles with their sources and this story's beats; Focus opens one; learn.get for agents
+  const { ctx2, p, errs, call } = await readPage({});
+  await p.click('.storymenu summary'); await p.click('[data-ui="learn"]');
+  await p.waitForFunction(() => document.querySelector('#learn').open);
+  const items = await p.$$eval('#learn-list li', l => l.map(x => x.textContent));
+  await p.click('#learn-list [data-ui="learn-focus"][data-id="earn"]');
+  await p.waitForFunction(() => !document.querySelector('#learn').open && /Earn the ending/.test(document.querySelector('#panel').textContent));
+  const one = await call('learn.get', { principle: 'earn' }), bad = await call('learn.get', { principle: 'nope' }), all = await call('learn.get', {});
+  check('learn.dialog_and_tool', items.length === 13 && items.every(t => /source/.test(t)) && /in your story: beat/.test(items.join(' ')) && one.ok && one.data.principles.length === 1 && one.data.principles[0].sources.length >= 2
+    && bad.class === 'invalid' && all.data.principles.length === 13 && all.data.arcs.length === 6, { n: items.length, one: one.data && one.data.principles[0].name, bad: bad.class });
+  check('learn.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 { // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
   const { ctx2, p, errs, call } = await readPage({});
   const t0 = (await call('story.get', {})).data.story.threads[0];
@@ -543,7 +556,7 @@ async function readPage(opts) {
   const names = await p5.evaluate(() => window.__mc.map(t => t.name));
   const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
   const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
-  check('door.model_context', names.length === 46 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  check('door.model_context', names.length === 47 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
   await ctx5.close();
 }
 { // a page opened as a file stores no key: every local file shares its storage
