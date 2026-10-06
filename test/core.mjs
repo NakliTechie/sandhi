@@ -274,6 +274,21 @@ check('read.schemas_closed', Object.values(plain(C.READ_SCHEMAS)).every(closed),
   const extra = mut(t => { t.tidbits = [{ id: 'k1', text: 'x', note: '', placed: [], where: 'beat 2' }]; });
   check('tidbits.validated', C.validate(ok1).ok && !C.validate(ghost).ok && !C.validate(dupe).ok && !C.validate(extra).ok && C.validate(plain(C.seed())).ok, [C.validate(ghost).errors, C.validate(dupe).errors]);
 }
+// plot proposals (Batch D): inserts and relabels only; inserts keep their order; the result validates
+{
+  const s0 = plain(C.seed());
+  const ch = plain(C.coercePlot({ changes: [
+    { op: 'insert', beat: 6, stage: 'because', joint: 'but', fortune: -4, label: 'Ama\'s boat loses its mast.', why: 'w' },
+    { op: 'insert', beat: 6, stage: 'because', joint: 'therefore', fortune: -5, label: 'Tavi sees the mast go.', why: 'w' },
+    { op: 'insert', beat: 0, stage: 'once', joint: '', fortune: 0, label: 'A storm warning.', why: 'w' },
+    { op: 'relabel', beat: 7, stage: '', joint: 'but', fortune: s0.beats[6].fortune, label: '', why: 'w' },
+    { op: 'relabel', beat: 8, stage: s0.beats[7].spine, joint: s0.beats[7].joint, fortune: s0.beats[7].fortune, label: '', why: 'no change' },
+    { op: 'delete', beat: 2, why: 'not an op' }, { op: 'insert', beat: 99, label: 'x', why: '' }, { op: 'insert', beat: 3, label: '', why: 'no label' } ] }, s0));
+  const n = plain(C.applyPlot(s0, ch, 'm'));
+  const at = (lab) => n.beats.findIndex(b => b.label === lab);
+  check('plot.coerce_apply', ch.length === 4 && C.validate(n).ok && n.beats.length === s0.beats.length + 3 && at('A storm warning.') === 0 && at('Tavi sees the mast go.') === at('Ama\'s boat loses its mast.') + 1
+    && n.beats[at('Ama\'s boat loses its mast.') - 1].id === s0.beats[5].id && n.beats.find(b => b.id === s0.beats[6].id).joint === 'but' && n.beats[0].text === '' && n.beats[0].by === 'model', { ch, labels: n.beats.map(b => b.label) });
+}
 check('write.schemas_closed', Object.values(plain(C.WRITE_SCHEMAS)).every(closed), 'open object in a write schema');
 // the sketch (TaleBrush): 25 values from -5 to 5; a drawn path resamples to them; beats 2 or more away are the misses
 {

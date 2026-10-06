@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 45 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
+check('face.manifest', man.length === 47 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key', 'write.apply']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -205,6 +205,7 @@ const answerFor = (FIX, user) => {
   const rows = [
     [() => user.startsWith('Ask the writer'), () => { return { questions: [{ principle: 'stakes', question: 'What does Tavi lose if the boats never come?' }, { principle: 'nonsense', question: 'Ignored: no such principle.' }, { principle: 'earn', question: 'Who gets him out: luck or his own choice?' }] }; }],
     [() => /^Beat \d+: what could happen here/.test(user), () => { return { obvious: 'Tavi rings the bell and saves everyone.', options: [{ text: 'The bell cracks and Tavi must whistle from the rock.', joint: 'but', fortune: -3, principle: 'stakes', why: 'Raises the cost.' }, { text: 'Oren is too ill to climb, so Tavi goes alone.', joint: 'therefore', fortune: -1, principle: 'earn', why: 'His choice.' }, { text: '', joint: 'but', fortune: 0, principle: 'care', why: 'dropped: no text' }, { text: 'The fog lifts on its own.', joint: 'sideways', fortune: 9, principle: 'luck', why: 'Coerced.' }, { text: 'Named, not id.', joint: 'but', fortune: -1, principle: 'Make it hard', why: 'A name maps to its id.' }, { text: 'A list of ids.', joint: 'therefore', fortune: -2, principle: 'nonsense, plant, two', why: 'The first valid id is kept.' }] }; }],
+    [() => user.startsWith('The writer wants to add this plot element'), () => ({ changes: [{ op: 'insert', beat: 6, stage: 'because', joint: 'but', fortune: -4, label: 'Ama\'s boat loses its mast.', why: 'The element forces it.' }, { op: 'relabel', beat: 7, stage: '', joint: 'but', fortune: -5, label: '', why: 'Now despite the mast.' }, { op: 'remove', beat: 2, stage: '', joint: '', fortune: 0, label: '', why: 'Not an op.' }] })],
     [() => user.startsWith('The writer keeps tidbits'), () => { const n = (user.match(/^Tidbit \d+:/gm) || []).length; return { placements: [{ tidbit: 1, beat: 2, as: 'Character', how: 'Oren keeps the bell rope greased with fish fat.', why: 'Shows his care.' }, { tidbit: n + 1, beat: 1, as: 'beat', how: 'Out of range.', why: '' }, { tidbit: 2, beat: 99, as: 'setting', how: 'No such beat.', why: '' }, { tidbit: 1, beat: 3, as: 'beat', how: 'A second placement for the same tidbit is dropped.', why: '' }] }; }],
     [() => user.startsWith('The writer sketched'), () => { const ats = [...user.matchAll(/^Beat (\d+): fortune/gm)].map(m => +m[1]); return { moves: [...ats.map(n => ({ beat: n, text: `A turn that moves beat ${n} toward the sketch.`, why: 'Follows the shape.' })), { beat: 99, text: 'Out of range.', why: '' }] }; }],
     [() => user.startsWith('For every beat that the writer joined'), () => { const n = (user.match(/^Beat \d+/gm) || []).length; return { joints: [{ beat: 5, verdict: 'slack', reason: 'It follows; nothing causes it.', question: 'What makes the fog come now?' }, { beat: 1, verdict: 'holds', reason: 'Beat 1 has no joint.', question: '' }, { beat: 3, verdict: 'slack', reason: 'Beat 3 has no labelled joint.', question: '' }, { beat: n + 3, verdict: 'holds', reason: 'Out of range.', question: '' }, { beat: 6, verdict: 'HOLDS', reason: 'Because of the storm.', question: 'Fine.' }] }; }],
@@ -289,6 +290,26 @@ async function readPage(opts) {
   check('tidbits.ledger', k.text.startsWith('Meat') && JSON.stringify(placed) === JSON.stringify([b4]) && unplaced.length === 0 && JSON.stringify(restored) === JSON.stringify([b4])
     && ag.ok && empty.class === 'invalid' && ghost.class === 'invalid' && unknown.class === 'invalid' && rm.ok && missing.class === 'not_found', { placed, unplaced, restored, empty: empty.class, ghost: ghost.class });
   check('tidbits.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // plot elements (Batch D): the reader proposes structural changes as a diff; only the writer's real click applies them
+  const { ctx2, p, errs, call } = await readPage({ nano: 6144 });
+  const before = (await call('story.get', {})).data.story;
+  await p.fill('#plot-add input', "Ama's boat loses its mast in the fog."); await p.click('#plot-add button');
+  await p.waitForFunction(() => /changes to weigh/.test(document.querySelector('#plot-sg').textContent));
+  const g = (await call('write.get', {})).data, panel = await p.textContent('#plot-sg');
+  const agent = await call('write.apply', { id: g.id });
+  await p.evaluate(() => document.querySelector('[data-ui="plot-apply"]').click());   // a scripted click is not the writer's
+  await p.waitForTimeout(200);
+  const still = (await call('story.get', {})).data.story;
+  if (await p.locator('[data-ui="plot-apply"]').count()) { await p.click('[data-ui="plot-apply"]'); await p.waitForFunction(() => document.querySelector('#plot-sg').textContent.trim() === ''); }
+  const after = (await call('story.get', {})).data.story, nb = after.beats.find(b => b.label === "Ama's boat loses its mast.");
+  await call('undo', {});
+  const undone = (await call('story.get', {})).data.story;
+  check('write.plot_diff', g.kind === 'plot' && g.changes.length === 2 && /new beat after 6/.test(panel) && /empty, for you to write/.test(panel) && /joint therefore → but/.test(panel), { g, panel: panel.slice(0, 200) });
+  check('write.apply_person_only', agent.class === 'person_only' && JSON.stringify(still) === JSON.stringify(before) && after.beats.length === before.beats.length + 1 && nb && nb.text === '' && nb.by === 'model'
+    && after.beats[after.beats.indexOf(nb) - 1].id === before.beats[5].id && after.beats.find(b => b.id === before.beats[6].id).joint === 'but' && JSON.stringify(undone) === JSON.stringify(before), { agent: agent.class, n: after.beats.length });
+  check('write.plot_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
 { // tidbit placement (Batch D): the reader proposes a beat for each unplaced tidbit; the writer places it with one click
@@ -472,7 +493,7 @@ async function readPage(opts) {
   const names = await p5.evaluate(() => window.__mc.map(t => t.name));
   const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
   const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
-  check('door.model_context', names.length === 43 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  check('door.model_context', names.length === 44 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
   await ctx5.close();
 }
 { // a page opened as a file stores no key: every local file shares its storage
