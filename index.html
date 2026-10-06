@@ -780,6 +780,8 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
       introduces: { type: 'array', items: { type: 'string' } }, uses: { type: 'array', items: { type: 'string' } } }) } }),
     labels: obj({ title: { type: 'string' }, beats: { type: 'array', items: obj({ scene: { type: 'integer' }, ...LABEL_PROPS }) },
       threads: { type: 'array', items: obj({ label: { type: 'string' }, plant_scene: { type: 'integer' }, payoff_scenes: { type: 'array', items: { type: 'integer' } } }) } }),
+    // a novel, chapter by chapter: one summary per chapter, then the labels call over every chapter summary
+    chapter: obj({ summary: { type: 'string' }, fortune: { type: 'integer' }, introduces: { type: 'array', items: { type: 'string' } }, uses: { type: 'array', items: { type: 'string' } } }),
     // the split strategy: one call finds where the beats start, a second labels the numbered beats (the writer's own text)
     bounds: obj({ beats: { type: 'array', items: obj({ start: { type: 'string' } }) } }),
     beatLabels: obj({ title: { type: 'string' }, beats: { type: 'array', items: obj({ beat: { type: 'integer' }, ...LABEL_PROPS }) },
@@ -804,6 +806,8 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     beatLabels: (texts) => ({ system: GUIDE, user: `Here is a story split into numbered beats. Label every beat ("beat" = its number). Mark at most one turn and one low point, for the story as a whole. Link threads: for each thing planted in one beat and used in later beats, give plant_beat and payoff_beats.\n\n${texts.map((t, k) => `Beat ${k + 1}:\n${t}`).join('\n\n')}` }),
     whole: (text) => ({ system: GUIDE, user: `Mark the structure of this story. Split it into beats in story order, usually 6 to 14. For each beat, "start" is the beat's first 6 to 12 words, copied exactly. For each thread, "plant" and every "payoffs" entry are exact quotes of 6 to 12 words.\n\nSTORY:\n${text}` }),
     scenes: (chunk, i, n) => ({ system: GUIDE, user: `This is part ${i} of ${n} of a story. Split this part into scenes in order. For each scene: "start" = its first 6 to 12 words, copied exactly; "summary" = what happens, at most 30 words; "fortune" as defined; "introduces" = short names of things planted here that may matter later; "uses" = short names of earlier things that matter here.\n\nPART ${i}:\n${chunk}` }),
+    chapter: (chunk, i, n) => ({ system: GUIDE, user: `This is chapter ${i} of ${n} of a novel. Summarise it as one beat of the whole book: "summary" = what happens and what changes, at most 60 words; "fortune" as defined, at the chapter's end; "introduces" = short names of things planted here that may matter later; "uses" = short names of earlier things that matter here.\n\nCHAPTER ${i}:\n${chunk}` }),
+    chapterFromScenes: (scenes, i, n) => ({ system: GUIDE, user: `Chapter ${i} of ${n} of a novel, as its scenes in order. Summarise the chapter as one beat of the whole book: "summary" at most 60 words; "fortune" at the chapter's end; "introduces" and "uses" as short names, merged from the scenes.\n\n${scenes.map(sceneLine).join('\n')}` }),
     labels: (scenes) => ({ system: GUIDE, user: `Here is a whole story as numbered scene summaries. Label every scene as one beat ("scene" = its number). Choose the turn and the low point for the story as a whole. Link threads: for each thing planted in one scene and used in later scenes, give plant_scene and payoff_scenes.\n\n${scenes.map(sceneLine).join('\n')}` })
   };
 
@@ -1038,6 +1042,18 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     });
     return { story: anchors.length ? assemble(text, anchors, threads, model, j.title) : null, dropped };
   }
+  // A manuscript's chapters: lines that read as chapter headings ("Chapter 3", "CHAPTER XII. The Storm", "Book Two", a lone
+  // roman numeral), each after a blank line or the start. Three or more, or null; text before the first joins the first.
+  const NUMWORD = '(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last)(?:-[a-z]+)?';
+  const HEADING = new RegExp(`(?:^|\\n[ \\t]*\\n)[ \\t]*((?:chapter|book|part)[ \\t]+(?:[0-9]+|[ivxlcdm]+|${NUMWORD})\\b[^\\n]{0,80}|[ivxlcdm]{1,7}\\.?)[ \\t]*(?=\\n)`, 'gi');
+  function splitChapters(text) {
+    const starts = [];
+    for (const m of String(text).matchAll(HEADING)) starts.push(m.index + m[0].indexOf(m[1]));
+    if (starts.length < 3) return null;
+    return starts.map((at, k) => ({ start: k ? at : 0, end: k + 1 < starts.length ? starts[k + 1] : text.length, title: text.slice(at, text.indexOf('\n', at) < 0 ? text.length : text.indexOf('\n', at)).trim().slice(0, 80) }));
+  }
+  // a chapter summary as the labels call expects a scene: anchored at the chapter's start
+  const chapterScene = (ch, json) => ({ pos: ch.start, summary: String((json && json.summary) || ch.title).slice(0, 400), fortune: coerceLabels(json || {}).fortune, introduces: arr(json && json.introduces).map(String), uses: arr(json && json.uses).map(String) });
   // pass 1 output (scenes from every chunk, in order) -> anchored scenes; unanchored scenes are dropped before pass 2 numbers them
   function anchorScenes(text, scenes) {
     const folded = foldText(text), out = [], list = rows(scenes);
@@ -1068,7 +1084,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 
   root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
     LIMITS, seed: () => clone(SEED), validate, blankStory, storyFromSpine, newBeat, nextId, checks, arcMatch, coverage, clone, wordCount, spineName,
-    READ_SCHEMAS, READ_PROMPTS, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, coerceShape, coercePlace, coercePlot, applyPlot, weakPlaces, coerceInterview, coerceDepth, SKETCH_N, sketchAt, sketchMisses, sketchFrom, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
+    READ_SCHEMAS, READ_PROMPTS, splitChapters, chapterScene, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, coerceShape, coercePlace, coercePlot, applyPlot, weakPlaces, coerceInterview, coerceDepth, SKETCH_N, sketchAt, sketchMisses, sketchFrom, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
 })(globalThis);
 </script>
 
@@ -1552,7 +1568,8 @@ async function readText(text, reader, progress, strategy) {
     const whole = C.READ_PROMPTS.whole(text);
     if (await r.measure(whole.system + '\n' + whole.user) > r.maxInput) {
       if (r.parts === false) throw partsRefused(text, whole, r);
-      return await readInParts(text, r, progress);
+      const chapters = C.splitChapters(text);
+      return chapters ? await readChapters(text, chapters, r, progress) : await readInParts(text, r, progress);
     }
     if (strategy === 'split') {   // the labelling call carries the whole text again, plus a header per beat
       const lp = C.READ_PROMPTS.beatLabels([text]);
@@ -1583,6 +1600,59 @@ async function readSplit(text, r, progress) {
   progress(`Labelling ${scenes.length} beats with ${r.model}…`);
   const out = await r.run(lp, C.READ_SCHEMAS.beatLabels), res = C.storyFromSplit(text, scenes, out.json, out.model);
   return { ...res, dropped: { ...res.dropped, beats: res.dropped.beats + dropped }, mode: 'split', calls: 2, model: out.model };
+}
+// A long read keeps each chapter's summary in this browser as it lands (IndexedDB "sandhi-reads"), keyed by the text's
+// SHA-256 and the model, so a read that is stopped, fails or loses its tab resumes where it was. Cleared when the read ends.
+const readCache = {
+  db: () => new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') { reject(new Error('IndexedDB unavailable')); return; }
+    const q = indexedDB.open('sandhi-reads', 1);
+    q.onupgradeneeded = () => q.result.createObjectStore('parts', { keyPath: 'key' });
+    q.onsuccess = () => resolve(q.result); q.onerror = () => reject(q.error);
+  }),
+  async tx(mode, fn) {
+    const db = await readCache.db();
+    try { return await new Promise((resolve, reject) => { const t = db.transaction('parts', mode), r = fn(t.objectStore('parts')); t.oncomplete = () => resolve(r && r.result); t.onerror = () => reject(t.error); }); }
+    finally { db.close(); }
+  },
+  get: (key) => readCache.tx('readonly', st => st.get(key)).then(r => (r ? r.value : null)).catch(() => null),
+  set: (key, value) => readCache.tx('readwrite', st => st.put({ key, value })).catch(() => { /* not kept: the read still runs, it just cannot resume */ }),
+  clear: (prefix) => readCache.tx('readwrite', st => st.delete(IDBKeyRange.bound(prefix, prefix + '￿'))).catch(() => { /* nothing to clear */ })
+};
+async function textKey(text, model) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  return `${Array.from(d.slice(0, 12), x => x.toString(16).padStart(2, '0')).join('')}|${model}|`;
+}
+// one chapter's summary: the chapter whole when it fits, else its scenes by parts and then a summary of the scenes
+async function chapterSummary(text, ch, i, n, r, progress) {
+  const body = text.slice(ch.start, ch.end), p = C.READ_PROMPTS.chapter(body, i, n);
+  if (await r.measure(p.system + '\n' + p.user) <= r.maxInput) { progress(`Reading chapter ${i} of ${n} with ${r.model}…`); return { json: (await r.run(p, C.READ_SCHEMAS.chapter)).json, calls: 1 }; }
+  const empty = C.READ_PROMPTS.scenes('', 1, 1), room = r.maxInput - await r.measure(empty.system + '\n' + empty.user);
+  const chunks = C.chunkText(body, Math.floor(room * r.charsPerToken * 0.85)), all = [];
+  for (let k = 0; k < chunks.length; k++) {
+    stopped(); progress(`Reading chapter ${i} of ${n}, part ${k + 1} of ${chunks.length}, with ${r.model}…`);
+    all.push(...(((await r.run(C.READ_PROMPTS.scenes(body.slice(chunks[k].start, chunks[k].end), k + 1, chunks.length), C.READ_SCHEMAS.scenes)).json || {}).scenes || []));
+  }
+  const { scenes } = C.anchorScenes(body, all);
+  return { json: (await r.run(C.READ_PROMPTS.chapterFromScenes(scenes, i, n), C.READ_SCHEMAS.chapter)).json, calls: chunks.length + 1 };
+}
+// a novel: a summary per chapter (kept as it lands), then one labels call over the chapters; each chapter becomes one beat
+async function readChapters(text, chapters, r, progress) {
+  const key = await textKey(text, r.model), scenes = [];
+  let calls = 0, resumed = 0;
+  for (let i = 0; i < chapters.length; i++) {
+    stopped();
+    let json = await readCache.get(key + i);
+    if (json) resumed++;
+    else { const got = await chapterSummary(text, chapters[i], i + 1, chapters.length, r, progress); json = got.json || {}; calls += got.calls; await readCache.set(key + i, json); }
+    scenes.push(C.chapterScene(chapters[i], json));
+  }
+  const lp = C.READ_PROMPTS.labels(scenes);
+  if (await r.measure(lp.system + '\n' + lp.user) > r.maxInput) throw readerFail('too_long', `An outline of ${chapters.length} chapters is too long for ${r.model} to read at once.`, 'Choose your provider with your key, or a model with a longer window. The chapters read so far are kept: read again to resume.');
+  progress(`Reading the whole book in outline: ${chapters.length} chapters…`);
+  const out = await r.run(lp, C.READ_SCHEMAS.labels), res = C.storyFromLabels(text, scenes, out.json, out.model);
+  await readCache.clear(key);
+  return { ...res, mode: 'chapters', calls: calls + 1, chapters: chapters.length, resumed, model: out.model };
 }
 async function readInParts(text, r, progress) {
   const empty = C.READ_PROMPTS.scenes('', 1, 1), room = r.maxInput - await r.measure(empty.system + '\n' + empty.user);
@@ -1619,6 +1689,10 @@ function readError(words, id, strategy, door) {
 // name of its own so that reads in two tabs never wait on each other. The lock ends when the read does.
 const whileLocked = (fn) => (globalThis.navigator && navigator.locks ? navigator.locks.request(`sandhi-read-${crypto.randomUUID()}`, () => fn()) : fn());
 let proposalSeq = 0;   // each staged proposal has an id, so the writer accepts the one the dialog shows
+// what a staged reading reports: who read it, how, and what came back
+function readReport(r, id, words, a2, t0) {
+  return { proposal: proposalSeq, reader: id, where: LD.rungLabel(id, { server: machine.found && machine.found.id, provider: rcfg.provider }), model: r.model, mode: r.mode, calls: r.calls, ...(r.chapters ? { chapters: r.chapters, resumed: r.resumed } : {}), words, beats: r.story.beats.length, threads: r.story.threads.length, dropped: r.dropped, arc: a2.best, ms: Math.round(performance.now() - t0) };
+}
 async function runRead(a, door) {
   const text = String(a.text || ''), words = C.wordCount(text), id = a.rung || rcfg.rung;
   const bad = readError(words, id, a.strategy, door); if (bad) return bad;
@@ -1630,7 +1704,7 @@ async function runRead(a, door) {
     const v = C.validate(r.story);
     if (!v.ok) return fail('internal', 'The proposal failed schema sandhi:1.', 'Report it with the journal; the story is unchanged.', { errors: v.errors.slice(0, 10) });
     const a2 = C.arcMatch(r.story);
-    app.proposal = { id: ++proposalSeq, story: r.story, report: { proposal: proposalSeq, reader: id, where: LD.rungLabel(id, { server: machine.found && machine.found.id, provider: rcfg.provider }), model: r.model, mode: r.mode, calls: r.calls, words, beats: r.story.beats.length, threads: r.story.threads.length, dropped: r.dropped, arc: a2.best, ms: Math.round(performance.now() - t0) } };
+    app.proposal = { id: ++proposalSeq, story: r.story, report: readReport(r, id, words, a2, t0) };
     return ok(app.proposal.report);
   } catch (e) {
     if (readAbort.signal.aborted) return fail('cancelled', 'The read was stopped.', 'Read it again when you are ready.');
@@ -1938,7 +2012,7 @@ const TOOLS = [
     handler: async () => (app.suggest && !app.suggest.pending ? ok(C.clone(app.suggest)) : fail('no_proposal', 'nothing is suggested', 'Call write.questions, write.options or write.joints first.')) },
   { name: 'write.dismiss', description: 'Drop the current suggestion. Nothing was kept from it.', inputSchema: NONE,
     handler: async () => { const had = !!app.suggest && !app.suggest.pending; if (had) app.suggest = null; return ok({ dismissed: had }); } },
-  { name: 'read.run', description: "Read a story (prose) with the chosen rung and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline; Gemini Nano cannot read in parts and refuses them (too_long) before any model call. strategy: \"whole\" (one call reads and labels) or \"split\" (one call finds the beats, a second labels them). Spends: on the provider rung the story goes to the writer's provider, billed to the writer, so an agent may use that rung only when the writer chose it.", spends: true,
+  { name: 'read.run', description: "Read a story (prose) with the chosen rung and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline; a manuscript with chapter headings is read a chapter at a time, one beat per chapter, and resumes where it stopped (report: chapters, resumed); Gemini Nano cannot read in parts and refuses them (too_long) before any model call. strategy: \"whole\" (one call reads and labels) or \"split\" (one call finds the beats, a second labels them). Spends: on the provider rung the story goes to the writer's provider, billed to the writer, so an agent may use that rung only when the writer chose it.", spends: true,
     inputSchema: { type: 'object', properties: { text: { type: 'string' }, rung: { enum: ['machine', 'device', 'provider'] }, strategy: { enum: ['whole', 'split'] } }, required: ['text'] },
     handler: async (a, door) => runRead(a, door) },
   { name: 'read.paragraphs', description: 'Stage prose split one beat per paragraph, with no model and every label left to the writer, as a proposal like a read (read.get shows it; the writer accepts it in the page). The story does not change.',

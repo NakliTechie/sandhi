@@ -211,6 +211,7 @@ const answerFor = (FIX, user) => {
     [() => user.startsWith('The writer keeps tidbits'), () => { const n = (user.match(/^Tidbit \d+:/gm) || []).length; return { placements: [{ tidbit: 1, beat: 2, as: 'Character', how: 'Oren keeps the bell rope greased with fish fat.', why: 'Shows his care.' }, { tidbit: n + 1, beat: 1, as: 'beat', how: 'Out of range.', why: '' }, { tidbit: 2, beat: 99, as: 'setting', how: 'No such beat.', why: '' }, { tidbit: 1, beat: 3, as: 'beat', how: 'A second placement for the same tidbit is dropped.', why: '' }] }; }],
     [() => user.startsWith('The writer sketched'), () => { const ats = [...user.matchAll(/^Beat (\d+): fortune/gm)].map(m => +m[1]); return { moves: [...ats.map(n => ({ beat: n, text: `A turn that moves beat ${n} toward the sketch.`, why: 'Follows the shape.' })), { beat: 99, text: 'Out of range.', why: '' }] }; }],
     [() => user.startsWith('For every beat that the writer joined'), () => { const n = (user.match(/^Beat \d+/gm) || []).length; return { joints: [{ beat: 5, verdict: 'slack', reason: 'It follows; nothing causes it.', question: 'What makes the fog come now?' }, { beat: 1, verdict: 'holds', reason: 'Beat 1 has no joint.', question: '' }, { beat: 3, verdict: 'slack', reason: 'Beat 3 has no labelled joint.', question: '' }, { beat: n + 3, verdict: 'holds', reason: 'Out of range.', question: '' }, { beat: 6, verdict: 'HOLDS', reason: 'Because of the storm.', question: 'Fine.' }] }; }],
+    [() => user.startsWith('This is chapter'), () => { const i = +user.match(/^This is chapter (\d+)/)[1]; return { summary: FIX.beats[i - 1].summary, fortune: FIX.beats[i - 1].fortune, introduces: [], uses: [] }; }],
     [() => user.startsWith('Mark the structure'), () => { return FIX.whole; }],
     [() => user.startsWith('Split this story'), () => { return { beats: FIX.beats.map(b => ({ start: b.start })) }; }],
     [() => user.startsWith('Here is a story split into numbered beats'), () => { const n = (user.match(/^Beat \d+:/gm) || []).length; return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ beat: k + 1, ...b.labels })), threads: FIX.threads.map(t => ({ label: t.label, plant_beat: t.plant_scene, payoff_beats: t.payoff_scenes })) }; }],
@@ -569,6 +570,35 @@ async function lmStudioPage(win) {
   check('read.two_pass', r.ok && r.data.mode === 'two-pass' && r.data.calls === kinds.length && kinds.length >= 3 && r.data.beats === 10 && story.beats.every((b, i) => b.text === longBeats[i]) && story.threads.length === 6, { report: r.data || r, calls: kinds.length });
   check('read.two_pass_no_errors', errs.length === 0, errs);
   await ctx2.close();
+}
+{ // a novel (Batch E): chapter by chapter, one beat per chapter; stopped mid-read, the next read resumes from the kept chapters
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+  const novel = ROMAN.map((r, i) => `CHAPTER ${r}\n\n${SEED.beats[i].text}${FILL}`).join('\n\n');
+  const page = await readPage({}), { p, call, errs } = page, chapterCalls = [];
+  let hangAt = 4;
+  const reply = (body) => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
+  await p.route('http://127.0.0.1:11434/**', (route) => route.abort());
+  await p.route('http://127.0.0.1:1234/**', async (route) => {
+    const q = route.request();
+    if (new URL(q.url()).pathname === '/api/v0/models') return route.fulfill(reply({ data: [{ id: 'stand-in', loaded_context_length: 8192 }] }));
+    if (q.method() === 'GET') return route.fulfill(reply({ object: 'list', data: [{ id: 'stand-in' }] }));
+    const user = JSON.parse(q.postData()).messages.at(-1).content;
+    if (user.startsWith('This is chapter')) { chapterCalls.push(+user.match(/^This is chapter (\d+)/)[1]); if (chapterCalls.length === hangAt) return new Promise(() => {}); }
+    return route.fulfill(reply({ model: 'stand-in', choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(answerFor(FIX, user)) } }] }));
+  });
+  await call('reader.select', { rung: 'machine', server: 'lmstudio', model: 'stand-in' });
+  await p.evaluate((text) => { window.__nr = window.sandhi.tools['read.run']({ text }); }, novel);
+  await p.waitForFunction(() => true); for (let k = 0; k < 100 && chapterCalls.length < 4; k++) await p.waitForTimeout(50);
+  await call('read.cancel', {}); const first = await p.evaluate(() => window.__nr);
+  const firstCalls = chapterCalls.length; hangAt = 0;
+  const second = await call('read.run', { text: novel });
+  const story = (await call('read.get', {})).data.story;
+  const left = await p.evaluate(() => new Promise(res => { const q = indexedDB.open('sandhi-reads', 1); q.onsuccess = () => { const c = q.result.transaction('parts').objectStore('parts').count(); c.onsuccess = () => res(c.result); }; q.onerror = () => res(-1); }));
+  check('read.novel_chapters_resume', first.class === 'cancelled' && firstCalls === 4 && second.ok && second.data.mode === 'chapters' && second.data.chapters === 8 && second.data.resumed === 3
+    && chapterCalls.slice(4).join() === '4,5,6,7,8' && story.beats.length === 8 && story.beats[0].text.startsWith('CHAPTER I') && story.beats[7].text.startsWith('CHAPTER VIII') && left === 0,
+    { first: first.class, firstCalls, second: second.data || second, calls: chapterCalls, beats: story && story.beats.length, left });
+  check('read.novel_no_errors', errs.length === 0, errs);
+  await page.ctx2.close();
 }
 { // Gemini Nano cannot read in parts (SPEC §5): a story that needs them is refused before any prompt, naming the readers that can
   const { ctx2, p, errs, call } = await readPage({ nano: twoPassInput + 1600 });

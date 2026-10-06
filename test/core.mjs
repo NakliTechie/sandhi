@@ -297,6 +297,12 @@ check('read.schemas_closed', Object.values(plain(C.READ_SCHEMAS)).every(closed),
   const iv = plain(C.coerceInterview({ place: 1, question: 'Q?', lands: 'note' }, st)), bad = C.coerceInterview({ place: 99, question: 'Q?' }, st);
   check('interview.coerce', iv.place.beat === 'b5' && iv.lands === 'note' && bad === null, iv);
 }
+// chapters (Batch E): headings after a blank line; 3 or more; prose that starts with 'Part of' is not a heading
+{
+  const t = 'Preface.\n\nCHAPTER I. The Fog\n\nOne.\n\nChapter Twenty-One\n\nTwo.\n\nPart of the reason she left.\n\nChapter 3: Late\n\nThree.\n\nIV.\n\nFour.';
+  const ch = plain(C.splitChapters(t));
+  check('chapters.split', ch.map(c => c.title).join('|') === 'CHAPTER I. The Fog|Chapter Twenty-One|Chapter 3: Late|IV.' && ch[0].start === 0 && ch.at(-1).end === t.length && ch.every((c, k) => !k || c.start === ch[k - 1].end) && C.splitChapters('a\n\nChapter 1\n\nb\n\nChapter 2\n\nc') === null, ch);
+}
 check('write.schemas_closed', Object.values(plain(C.WRITE_SCHEMAS)).every(closed), 'open object in a write schema');
 // the sketch (TaleBrush): 25 values from -5 to 5; a drawn path resamples to them; beats 2 or more away are the misses
 {
