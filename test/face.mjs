@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 41 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
+check('face.manifest', man.length === 44 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -267,6 +267,40 @@ async function readPage(opts) {
   check('write.no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // tidbits (Batch D): keep one from the panel, place it in a beat, a removed beat unplaces it, the agent door does the same
+  const { ctx2, p, errs, call } = await readPage({});
+  await p.fill('#tidbit-add input', 'Meat kept too long gets freezer burn.'); await p.click('#tidbit-add button');
+  await p.waitForFunction(() => /Tidbits · 1, 1 unplaced/.test(document.querySelector('#tidbits-h').textContent));
+  const k = (await call('story.get', {})).data.story.tidbits[0], b4 = (await call('story.get', {})).data.story.beats[3].id;
+  await p.selectOption(`#tidbits select[data-tidbit="${k.id}"]`, b4);
+  await p.waitForFunction(() => /in beat 4/.test(document.querySelector('#tidbits').textContent));
+  const placed = (await call('story.get', {})).data.story.tidbits[0].placed;
+  await call('beat.remove', { id: b4 });
+  const unplaced = (await call('story.get', {})).data.story.tidbits[0].placed;
+  await call('undo', {});
+  const restored = (await call('story.get', {})).data.story.tidbits[0].placed;
+  const ag = await call('tidbit.add', { text: 'A curious train stop.', note: 'Shimla line' }), empty = await call('tidbit.add', { text: '  ' });
+  const ghost = await call('tidbit.update', { id: ag.data.id, patch: { placed: ['nope'] } }), unknown = await call('tidbit.update', { id: ag.data.id, patch: { where: 'x' } });
+  const rm = await call('tidbit.remove', { id: ag.data.id }), missing = await call('tidbit.remove', { id: 'k99' });
+  check('tidbits.ledger', k.text.startsWith('Meat') && JSON.stringify(placed) === JSON.stringify([b4]) && unplaced.length === 0 && JSON.stringify(restored) === JSON.stringify([b4])
+    && ag.ok && empty.class === 'invalid' && ghost.class === 'invalid' && unknown.class === 'invalid' && rm.ok && missing.class === 'not_found', { placed, unplaced, restored, empty: empty.class, ghost: ghost.class });
+  check('tidbits.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
+  const { ctx2, p, errs, call } = await readPage({});
+  const t0 = (await call('story.get', {})).data.story.threads[0];
+  await call('thread.update', { id: t0.id, patch: { payoffs: [] } });
+  const flagged = (await call('checks', {})).data.items.some(c => c.class === 'plant_unpaid' && c.thread === t0.id);
+  await p.check(`#threads input[data-thread="${t0.id}"][data-tfield="open"]`);
+  await p.waitForFunction((id) => document.querySelector(`#threads input[data-thread="${id}"][data-tfield="open"]`).checked && !document.querySelector('#checks').textContent.includes('never pays off'), t0.id);
+  const after = (await call('story.get', {})).data.story.threads[0], dot = await p.getAttribute('#threads .tstate.left', 'title');
+  const agentOff = await call('thread.update', { id: t0.id, patch: { open: false } }), badType = await call('thread.update', { id: t0.id, patch: { open: 'yes' } });
+  const back = (await call('checks', {})).data.items.some(c => c.class === 'plant_unpaid' && c.thread === t0.id);
+  check('thread.left_open', flagged && after.open === true && dot === 'left open on purpose' && agentOff.ok && badType.class === 'invalid' && back, { flagged, open: after.open, dot, bad: badType.class, back });
+  check('thread.open_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 { // the fortune sketch (TaleBrush): draw on the chart; it is kept with the story, misses are ringed, the reader proposes moves
   const { ctx2, p, errs, call } = await readPage({ nano: 6144 });
   await p.click('[data-ui="sketch-start"]');
@@ -417,7 +451,7 @@ async function readPage(opts) {
   const names = await p5.evaluate(() => window.__mc.map(t => t.name));
   const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
   const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
-  check('door.model_context', names.length === 39 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  check('door.model_context', names.length === 42 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
   await ctx5.close();
 }
 { // a page opened as a file stores no key: every local file shares its storage

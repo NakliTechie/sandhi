@@ -259,6 +259,21 @@ check('ids.next_after_long_ids', /^[a-z0-9-]{1,40}$/.test(nid) && !longIds.some(
 // schemas: every object closes additionalProperties and requires all its keys (structured-output rules)
 const closed = (o) => !o || typeof o !== 'object' || ((o.type !== 'object' || (o.additionalProperties === false && isDeepStrictEqual([...o.required].toSorted(), Object.keys(o.properties).toSorted()))) && Object.values(o).every(closed));
 check('read.schemas_closed', Object.values(plain(C.READ_SCHEMAS)).every(closed), 'open object in a schema');
+// open threads (Batch D): a thread left open on purpose is not flagged; open must be a boolean
+{
+  const left = mut(t => { t.threads[0].payoffs = []; t.threads[0].open = true; });
+  const notLeft = mut(t => { t.threads[0].payoffs = []; });
+  const bad = mut(t => { t.threads[0].open = 'yes'; });
+  check('thread.open_silences_unpaid', C.validate(left).ok && !plain(C.checks(left)).some(c => c.class === 'plant_unpaid') && plain(C.checks(notLeft)).some(c => c.class === 'plant_unpaid') && !C.validate(bad).ok, C.validate(bad).errors);
+}
+// tidbits (Batch D): optional; each placed in distinct existing beats
+{
+  const ok1 = mut(t => { t.tidbits = [{ id: 'k1', text: 'Meat kept too long gets freezer burn.', note: '', placed: ['b2'] }, { id: 'k2', text: 'A curious train stop.', note: 'Shimla line', placed: [] }]; });
+  const ghost = mut(t => { t.tidbits = [{ id: 'k1', text: 'x', note: '', placed: ['b99'] }]; });
+  const dupe = mut(t => { t.tidbits = [{ id: 'k1', text: 'x', note: '', placed: [] }, { id: 'k1', text: 'y', note: '', placed: [] }]; });
+  const extra = mut(t => { t.tidbits = [{ id: 'k1', text: 'x', note: '', placed: [], where: 'beat 2' }]; });
+  check('tidbits.validated', C.validate(ok1).ok && !C.validate(ghost).ok && !C.validate(dupe).ok && !C.validate(extra).ok && C.validate(plain(C.seed())).ok, [C.validate(ghost).errors, C.validate(dupe).errors]);
+}
 check('write.schemas_closed', Object.values(plain(C.WRITE_SCHEMAS)).every(closed), 'open object in a write schema');
 // the sketch (TaleBrush): 25 values from -5 to 5; a drawn path resamples to them; beats 2 or more away are the misses
 {

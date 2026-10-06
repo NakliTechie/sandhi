@@ -188,11 +188,16 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 .tline .tstate{margin-top:5px}
 .tstate{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--accent)}
 .tstate.open{background:transparent;border:1.5px solid var(--accent)}
+.tstate.left{background:transparent;border:1.5px dashed var(--muted)}
+.tleft{display:inline-flex;gap:4px;align-items:center;margin-left:8px;font-size:12px;color:var(--muted)}
 .tmeta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:12px;color:var(--faint)}
 .x{border:none;background:transparent;color:var(--faint);font-size:12px;padding:0 4px}
 .x:hover{color:var(--ink)}
-#thread-add{display:flex;gap:6px;margin-top:12px}
-#thread-add input{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:4px 8px;font-size:13px}
+#thread-add,#tidbit-add{display:flex;gap:6px;margin-top:12px}
+#tidbits ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+#tidbits textarea{width:100%;border:0;background:transparent;font:13.5px/1.5 var(--serif);color:var(--ink);resize:vertical;padding:0}
+#tidbits .tmeta{font-size:12px;color:var(--muted)}
+#thread-add input,#tidbit-add input{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:4px 8px;font-size:13px}
 
 /* coverage */
 #coverage{margin-top:18px}
@@ -349,6 +354,9 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
       <section class="card" id="checks" aria-labelledby="checks-h"><h2 class="lab" id="checks-h">Checks</h2><div></div></section>
       <section class="card" id="threads" aria-labelledby="threads-h"><h2 class="lab" id="threads-h">Plants and payoffs</h2><ul></ul>
         <form id="thread-add"><input placeholder="Something planted: an object, a line, a habit" aria-label="New thread" maxlength="200"><button class="ghost" type="submit" disabled>Add</button></form>
+      </section>
+      <section class="card" id="tidbits" aria-labelledby="tidbits-h"><h2 class="lab" id="tidbits-h">Tidbits</h2><ul></ul>
+        <form id="tidbit-add"><input placeholder="Something you noticed in life: a curious stop, a habit, a smell" aria-label="New tidbit" maxlength="5000"><button class="ghost" type="submit" disabled>Keep</button></form>
       </section>
     </aside>
   </div>
@@ -537,12 +545,12 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   const SPINE_IDS = ids(SPINE), AV_IDS = ids(AVASTHA), KIS_IDS = ids(KIS);
   const JOINT_SET = new Set(JOINTS), MARK_SET = new Set(MARKS), DRIVER_SET = new Set(DRIVERS), BY_SET = new Set(['writer', 'model', 'agent']);
   const BEAT_KEYS = ['id', 'label', 'spine', 'joint', 'text', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis', 'drafts', 'by', 'model'];
-  const STORY_KEYS = ['sandhi', 'title', 'logline', 'belief', 'beats', 'threads', 'notes', 'sketch'];
+  const STORY_KEYS = ['sandhi', 'title', 'logline', 'belief', 'beats', 'threads', 'notes', 'sketch', 'tidbits'];
   // the writer's sketched fortune line (TaleBrush): SKETCH_N values from -5 to 5, evenly spaced from the first beat to the last
   const SKETCH_N = 25;
   const ID_RE = /^[a-z0-9-]{1,40}$/;
   // what one page can hold and draw: thread pickers list every beat, so beats × threads is the cost that grows
-  const LIMITS = { beats: 400, threads: 100, chars: 3000000 };
+  const LIMITS = { beats: 400, threads: 100, chars: 3000000, tidbits: 500 };
 
   const clone = o => JSON.parse(JSON.stringify(o));
   // words: spaces separate them, except in scripts written without spaces (Japanese, Chinese, Thai), where Intl finds them
@@ -593,11 +601,25 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   }
   function validateThread(v, t, p, beatIds, threadIds) {
     if (!v.obj(t, p)) return;
-    v.keys(t, ['id', 'label', 'plant', 'payoffs'], p); v.id(t.id, threadIds, `${p}.id`); v.str(t.label, `${p}.label`, 200);
+    v.keys(t, ['id', 'label', 'plant', 'payoffs', 'open'], p); v.id(t.id, threadIds, `${p}.id`); v.str(t.label, `${p}.label`, 200);
+    if (t.open !== undefined && typeof t.open !== 'boolean') v.e(`${p}.open`, 'must be true or false');
     if (t.plant !== null && !beatIds.has(t.plant)) v.e(`${p}.plant`, 'must be a beat id or null');
     if (!Array.isArray(t.payoffs)) { v.e(`${p}.payoffs`, 'must be an array'); return; }
     if (new Set(t.payoffs).size !== t.payoffs.length) v.e(`${p}.payoffs`, 'has duplicates');
     t.payoffs.forEach((b, k) => { if (!beatIds.has(b)) v.e(`${p}.payoffs[${k}]`, 'must be a beat id'); });
+  }
+  // tidbits (Batch D): real-life observations kept beside the story, unplaced until the writer weaves them into beats
+  function validateTidbits(v, list, beatIds) {
+    if (list === undefined) return;
+    if (!Array.isArray(list)) { v.e('tidbits', 'must be an array'); return; }
+    if (list.length > LIMITS.tidbits) { v.e('tidbits', `more than ${LIMITS.tidbits} tidbits`); return; }
+    const ids = new Set();
+    list.forEach((t, k) => {
+      const p = `tidbits[${k}]`;
+      if (!v.obj(t, p)) return;
+      v.keys(t, ['id', 'text', 'note', 'placed'], p); v.id(t.id, ids, `${p}.id`); v.str(t.text, `${p}.text`, 5000); v.str(t.note, `${p}.note`, 2000);
+      if (!Array.isArray(t.placed) || new Set(t.placed).size !== t.placed.length || !t.placed.every(b => beatIds.has(b))) v.e(`${p}.placed`, 'must be distinct beat ids');
+    });
   }
   function validateSketch(v, sk) {
     if (sk !== undefined && !(Array.isArray(sk) && sk.length === SKETCH_N && sk.every(x => typeof x === 'number' && x >= -5 && x <= 5))) v.e('sketch', `must be ${SKETCH_N} numbers from -5 to 5`);
@@ -617,7 +639,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     else if (s.threads.length > LIMITS.threads) v.e('threads', `more than ${LIMITS.threads} threads`);
     else s.threads.forEach((t, i) => validateThread(v, t, `threads[${i}]`, beatIds, threadIds));
     if (v.obj(s.notes, 'notes')) for (const [k, x] of Object.entries(s.notes)) { if (!PIDS.has(k)) v.e(`notes.${k}`, 'not a principle id'); v.str(x, `notes.${k}`, 5000); }
-    validateSketch(v, s.sketch);
+    validateSketch(v, s.sketch); validateTidbits(v, s.tidbits, beatIds);
     return { ok: v.errors.length === 0, errors: v.errors };
   }
 
@@ -693,6 +715,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     const first = pays[0], at = pays.length ? s.beats[first - 1].id : null;
     if (p === null && !pays.length) return add('thread_unused', null, null, t.id, `"${label}" is neither planted nor paid off.`, 'Attach it to beats, or remove it.');
     if (p === null) return add('payoff_unplanted', first, at, t.id, `"${label}" pays off in beat ${first} with nothing planted.`, 'Plant it in an earlier beat.');
+    if (!pays.length && t.open) return;   // left open on purpose: the writer's choice, listed in the threads panel, not a check
     if (!pays.length) return add('plant_unpaid', p, t.plant, t.id, `"${label}" is planted in beat ${p} and never pays off.`, 'Pay it off, or take it off the wall (Chekhov).');
     if (first > p) return;
     add('payoff_early', first, at, t.id, first === p ? `"${label}" is planted and paid off in the same beat, ${p}.` : `"${label}" pays off in beat ${first}, before its plant in beat ${p}.`, 'Move the plant earlier, or the payoff later.');
@@ -1164,7 +1187,7 @@ function commit(next, key) {
 const noBeat = (id) => fail('not_found', `no beat with id ${id}`, 'Call status or story.get for the current beat ids.');
 const noThread = (id) => fail('not_found', `no thread with id ${id}`, 'Call story.get for the current thread ids.');
 const BEAT_PATCH = new Set(['label', 'spine', 'joint', 'text', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis', 'drafts']);
-const THREAD_PATCH = new Set(['label', 'plant', 'payoffs']);
+const THREAD_PATCH = new Set(['label', 'plant', 'payoffs', 'open']), TIDBIT_PATCH = new Set(['text', 'note', 'placed']);
 const unknownKeys = (patch, allowed) => Object.keys(patch || {}).filter(k => !allowed.has(k));
 
 function statusData() {
@@ -1681,13 +1704,14 @@ const TOOLS = [
       if (Array.isArray(b.marks)) b.marks = C.MARKS.filter(m => b.marks.includes(m)).concat(b.marks.filter(m => !C.MARKS.includes(m)));
       return commit(n, `beat.update:${door}:${a.id}:${Object.keys(a.patch).toSorted().join(',')}`) || ok({ id: a.id, position: posOf(a.id) + 1 });
     } },
-  { name: 'beat.remove', description: 'Remove a beat. Threads that point at it lose that plant or payoff. Undo restores both.', mutating: true,
+  { name: 'beat.remove', description: 'Remove a beat. Threads that point at it lose that plant or payoff, and tidbits placed there are unplaced. Undo restores them.', mutating: true,
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
     handler: async (a) => {
       const n = C.clone(S()), i = n.beats.findIndex(b => b.id === a.id);
       if (i < 0) return noBeat(a.id);
       n.beats.splice(i, 1);
       for (const t of n.threads) { if (t.plant === a.id) t.plant = null; t.payoffs = t.payoffs.filter(x => x !== a.id); }
+      for (const t of n.tidbits || []) t.placed = t.placed.filter(x => x !== a.id);
       return commit(n, null) || ok({ beats: n.beats.length });
     } },
   { name: 'beat.move', description: 'Move a beat to a 1-based position.', mutating: true,
@@ -1699,6 +1723,32 @@ const TOOLS = [
       const [b] = n.beats.splice(i, 1); n.beats.splice(a.position - 1, 0, b);
       return commit(n, null) || ok({ id: a.id, position: a.position });
     } },
+  { name: 'tidbit.add', description: 'Keep a tidbit: a real-life observation that could give the story life (a curious train stop; meat kept too long gets freezer burn). It waits unplaced until the writer weaves it into beats. Undo removes it.', mutating: true,
+    inputSchema: { type: 'object', properties: { text: { type: 'string' }, note: { type: 'string' }, placed: { type: 'array', items: { type: 'string' } } }, required: ['text'] },
+    handler: async (a) => {
+      if (typeof a.text !== 'string' || !a.text.trim()) return fail('invalid', 'A tidbit needs its text.', 'Send text: what you noticed.');
+      const n = C.clone(S()), list = n.tidbits || (n.tidbits = []), id = C.nextId('k', list);
+      list.push({ id, text: a.text.trim(), note: typeof a.note === 'string' ? a.note : '', placed: Array.isArray(a.placed) ? a.placed : [] });
+      return commit(n, null) || ok({ id });
+    } },
+  { name: 'tidbit.update', description: "Change a tidbit's text, note, or the beats it is placed in (placed replaces whole; [] unplaces it).", mutating: true,
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, patch: { type: 'object', properties: { text: { type: 'string' }, note: { type: 'string' }, placed: { type: 'array', items: { type: 'string' } } } } }, required: ['id', 'patch'] },
+    handler: async (a, door) => {
+      const bad = unknownKeys(a.patch, TIDBIT_PATCH);
+      if (!a.patch || bad.length) return fail('invalid', bad.length ? `unknown tidbit field(s): ${bad.join(', ')}` : 'patch is required', 'Use only: text, note, placed.');
+      const n = C.clone(S()), t = (n.tidbits || []).find(x => x.id === a.id);
+      if (!t) return fail('not_found', `no tidbit ${a.id}`, 'Use a tidbit id from story.get.');
+      Object.assign(t, C.clone(a.patch));
+      return commit(n, `tidbit.update:${door}:${a.id}:${Object.keys(a.patch).toSorted().join(',')}`) || ok({ id: a.id });
+    } },
+  { name: 'tidbit.remove', description: 'Remove a tidbit. Undo restores it.', mutating: true,
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    handler: async (a) => {
+      const n = C.clone(S()), k = (n.tidbits || []).findIndex(x => x.id === a.id);
+      if (k < 0) return fail('not_found', `no tidbit ${a.id}`, 'Use a tidbit id from story.get.');
+      n.tidbits.splice(k, 1); if (!n.tidbits.length) delete n.tidbits;
+      return commit(n, null) || ok({ tidbits: (n.tidbits || []).length });
+    } },
   { name: 'thread.add', description: 'Add a plant-and-payoff thread (Chekhov\'s gun, the bīja): a label, the beat that plants it, the beats that pay it off.', mutating: true,
     inputSchema: { type: 'object', properties: { label: { type: 'string' }, plant: { type: ['string', 'null'] }, payoffs: { type: 'array', items: { type: 'string' } } }, required: ['label'] },
     handler: async (a) => {
@@ -1706,11 +1756,11 @@ const TOOLS = [
       n.threads.push({ id, label: a.label, plant: a.plant || null, payoffs: a.payoffs || [] });
       return commit(n, null) || ok({ id });
     } },
-  { name: 'thread.update', description: 'Change a thread\'s label, plant beat, or payoff beats (payoffs replace whole).', mutating: true,
-    inputSchema: { type: 'object', properties: { id: { type: 'string' }, patch: { type: 'object', properties: { label: { type: 'string' }, plant: { type: ['string', 'null'] }, payoffs: { type: 'array', items: { type: 'string' } } } } }, required: ['id', 'patch'] },
+  { name: 'thread.update', description: 'Change a thread\'s label, plant beat, payoff beats (payoffs replace whole), or open: true to leave it open on purpose (a planted thread with no payoff is then not flagged).', mutating: true,
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, patch: { type: 'object', properties: { label: { type: 'string' }, plant: { type: ['string', 'null'] }, payoffs: { type: 'array', items: { type: 'string' } }, open: { type: 'boolean' } } } }, required: ['id', 'patch'] },
     handler: async (a, door) => {
       const bad = unknownKeys(a.patch, THREAD_PATCH);
-      if (!a.patch || bad.length) return fail('invalid', bad.length ? `unknown thread field(s): ${bad.join(', ')}` : 'patch is required', 'Use only: label, plant, payoffs.');
+      if (!a.patch || bad.length) return fail('invalid', bad.length ? `unknown thread field(s): ${bad.join(', ')}` : 'patch is required', 'Use only: label, plant, payoffs, open.');
       const n = C.clone(S()), t = n.threads.find(x => x.id === a.id);
       if (!t) return noThread(a.id);
       Object.assign(t, C.clone(a.patch));
@@ -1927,7 +1977,7 @@ function restoreFocus(key, sel, fkey) {
   if (fkey) { const b = document.querySelector(`[data-focus="${fkey}"]`); if (b) b.focus({ preventScroll: true }); }
 }
 const focusKey = (x) => [x.dataset.beat, x.dataset.thread, x.dataset.note, x.dataset.sfield, x.dataset.field, x.dataset.tfield, x.dataset.k].join('|');
-function renderViews() { renderChart(); renderArc(); renderChecks(); renderThreads(); renderCoverage(); renderSaveState(); renderRecent(); }
+function renderViews() { renderChart(); renderArc(); renderChecks(); renderThreads(); renderTidbits(); renderCoverage(); renderSaveState(); renderRecent(); }
 
 function renderHeader() {
   for (const k of ['title', 'logline', 'belief']) { const el = $('#' + k); if (el !== document.activeElement || !el.dataset.dirty) el.value = S()[k]; }
@@ -2162,12 +2212,22 @@ function renderChecks() {
 function renderThreads() {
   const s = S(), beatOpts = (cur, none) => `<option value="">${none}</option>` + s.beats.map((b, i) => `<option value="${b.id}"${b.id === cur ? ' selected' : ''}>beat ${i + 1}</option>`).join('');
   $('#threads ul').innerHTML = s.threads.map(t => {
-    const complete = t.plant && t.payoffs.length;
+    const complete = t.plant && t.payoffs.length, left = !t.payoffs.length && t.open;
     const pays = t.payoffs.map(p => ({ p, i: posOf(p) })).toSorted((a, b) => a.i - b.i).map(({ p, i }) => `<button class="chip" data-cmd="thread.update" data-args="${attr({ id: t.id, patch: { payoffs: t.payoffs.filter(x => x !== p) } })}" title="Remove this payoff">beat ${i + 1} ×</button>`).join('');
     const addable = s.beats.filter(b => !t.payoffs.includes(b.id));
-    return `<li><div class="tline"><span class="tstate${complete ? '' : ' open'}" title="${complete ? 'planted and paid off' : 'open'}"></span><textarea data-thread="${t.id}" data-tfield="label" rows="1" aria-label="Thread label" maxlength="200">${esc(t.label)}</textarea><button class="x" data-cmd="thread.remove" data-args="${attr({ id: t.id })}" aria-label="Remove thread ${esc(t.label)}">remove</button></div>
-      <div class="tmeta">planted in <select class="sel" data-thread="${t.id}" data-tfield="plant" aria-label="Plant beat">${beatOpts(t.plant, 'nowhere')}</select> pays off in ${pays}${addable.length ? `<select class="addtag" data-thread="${t.id}" data-tfield="payoff-add" aria-label="Add a payoff beat"><option value="">+ beat</option>${addable.map(b => `<option value="${b.id}">beat ${posOf(b.id) + 1}</option>`).join('')}</select>` : ''}</div></li>`;
+    return `<li><div class="tline"><span class="tstate${complete ? '' : left ? ' left' : ' open'}" title="${complete ? 'planted and paid off' : left ? 'left open on purpose' : 'open'}"></span><textarea data-thread="${t.id}" data-tfield="label" rows="1" aria-label="Thread label" maxlength="200">${esc(t.label)}</textarea><button class="x" data-cmd="thread.remove" data-args="${attr({ id: t.id })}" aria-label="Remove thread ${esc(t.label)}">remove</button></div>
+      <div class="tmeta">planted in <select class="sel" data-thread="${t.id}" data-tfield="plant" aria-label="Plant beat">${beatOpts(t.plant, 'nowhere')}</select> pays off in ${pays}${addable.length ? `<select class="addtag" data-thread="${t.id}" data-tfield="payoff-add" aria-label="Add a payoff beat"><option value="">+ beat</option>${addable.map(b => `<option value="${b.id}">beat ${posOf(b.id) + 1}</option>`).join('')}</select>` : ''}${t.payoffs.length ? '' : `<label class="tleft"><input type="checkbox" data-thread="${t.id}" data-tfield="open"${t.open ? ' checked' : ''}> left open on purpose</label>`}</div></li>`;
   }).join('') || '<li class="faint">No threads yet. Name something the story plants: an object, a line, a habit.</li>';
+}
+function renderTidbits() {
+  const s = S(), list = s.tidbits || [], unplaced = list.filter(t => !t.placed.length).length;
+  $('#tidbits-h').textContent = list.length ? `Tidbits · ${list.length}${unplaced ? `, ${unplaced} unplaced` : ''}` : 'Tidbits';
+  $('#tidbits ul').innerHTML = list.map(t => {
+    const chips = t.placed.map(b => ({ b, i: posOf(b) })).filter(x => x.i >= 0).toSorted((a, b) => a.i - b.i).map(({ b, i }) => `<button class="chip" data-cmd="tidbit.update" data-args="${attr({ id: t.id, patch: { placed: t.placed.filter(x => x !== b) } })}" title="Take it out of beat ${i + 1}">beat ${i + 1} ×</button>`).join(' ');
+    const addable = s.beats.filter(b => !t.placed.includes(b.id));
+    return `<li><div class="tline"><textarea data-tidbit="${t.id}" data-kfield="text" rows="2" aria-label="Tidbit" maxlength="5000">${esc(t.text)}</textarea><button class="x" data-cmd="tidbit.remove" data-args="${attr({ id: t.id })}" aria-label="Remove tidbit">remove</button></div>
+      <div class="tmeta">${t.placed.length ? `in ${chips}` : 'not placed yet'} ${addable.length ? `<select class="addtag" data-tidbit="${t.id}" data-kfield="place" aria-label="Place this tidbit in a beat"><option value="">+ beat</option>${addable.map(b => `<option value="${b.id}">beat ${posOf(b.id) + 1}</option>`).join('')}</select>` : ''}</div></li>`;
+  }).join('') || '<li class="faint">Nothing kept yet. Note what you see in life; place it in a beat when it fits.</li>';
 }
 function renderCoverage() {
   const s = S(), cov = C.coverage(s), n = s.beats.length;
@@ -2214,11 +2274,17 @@ document.addEventListener('input', (e) => {
     later(el.dataset.beat + el.dataset.field, () => ui('beat.update', beatField(el)), 350);
   } else if (el.type === 'range' && el.dataset.beat) el.nextElementSibling.textContent = fmtF(+el.value);
 });
+function onTidbitChange(el) {
+  const t = (S().tidbits || []).find(x => x.id === el.dataset.tidbit); if (!t) return;
+  if (el.dataset.kfield === 'text' && el.value.trim() && el.value !== t.text) ui('tidbit.update', { id: t.id, patch: { text: el.value } });
+  else if (el.dataset.kfield === 'place' && el.value) ui('tidbit.update', { id: t.id, patch: { placed: [...t.placed, el.value] } });
+}
 function onThreadChange(el) {
   const t = S().threads.find(x => x.id === el.dataset.thread); if (!t) return;
   const f = el.dataset.tfield;
   if (f === 'label') ui('thread.update', { id: t.id, patch: { label: el.value } });
   else if (f === 'plant') ui('thread.update', { id: t.id, patch: { plant: el.value || null } });
+  else if (f === 'open') ui('thread.update', { id: t.id, patch: { open: el.checked } });
   else if (f === 'payoff-add' && el.value) ui('thread.update', { id: t.id, patch: { payoffs: [...t.payoffs, el.value] } });
 }
 document.addEventListener('change', (e) => {
@@ -2227,6 +2293,7 @@ document.addEventListener('change', (e) => {
   flushPending();
   if (d.beat) { if (d.field !== 'text' && d.field !== 'label') { const a = beatField(el); if (a) ui('beat.update', a); } }
   else if (d.thread) onThreadChange(el);
+  else if (d.tidbit) onTidbitChange(el);
   else if (d.note) ui('story.update', { notes: { [d.note]: el.value } });
   else if (d.sfield) ui('story.update', { [d.sfield]: el.value });
   delete d.dirty;
@@ -2261,6 +2328,8 @@ function openLabels(id) { const d = document.querySelector(`#beat-${CSS.escape(i
 document.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.more) { if (d.open) app.open.add(d.dataset.more); else app.open.delete(d.dataset.more); } }, true);
 $('#trad-all').checked = !!uiPrefs.traditions;
 $('#trad-all').addEventListener('change', (e) => { uiPrefs.traditions = e.target.checked; store.set(UIKEY, JSON.stringify(uiPrefs)); renderChart(); });
+$('#tidbit-add input').addEventListener('input', (e) => { $('#tidbit-add button').disabled = !e.target.value.trim(); });
+$('#tidbit-add').addEventListener('submit', (e) => { e.preventDefault(); const i = e.target.querySelector('input'), v = i.value.trim(); if (!v) return; ui('tidbit.add', { text: v }).then(r => { if (r.ok) { i.value = ''; $('#tidbit-add button').disabled = true; } }); });
 $('#thread-add input').addEventListener('input', (e) => { $('#thread-add button').disabled = !e.target.value.trim(); });
 $('#thread-add').addEventListener('submit', (e) => { e.preventDefault(); const i = e.target.querySelector('input'), v = i.value.trim(); if (!v) return; ui('thread.add', { label: v }).then(r => { if (r.ok) { i.value = ''; $('#thread-add button').disabled = true; } }); });
 function goBeat(id) { const el = document.getElementById('beat-' + id); if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); }

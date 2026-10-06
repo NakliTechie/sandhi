@@ -36,9 +36,10 @@ An agent driving sandhi is context-poor and may be killed mid-turn. The contract
 ## §1 Story schema `sandhi: 1`
 
 ```
-story   { sandhi: 1, title, logline, belief, beats: [beat], threads: [thread], notes: {principleId: text}, sketch? }
+story   { sandhi: 1, title, logline, belief, beats: [beat], threads: [thread], notes: {principleId: text}, sketch?, tidbits?: [tidbit] }
 beat    { id, label, spine, joint, text, fortune, tags, marks, driver, avastha, kis, drafts: [draft], by }
-thread  { id, label, plant: beatId|null, payoffs: [beatId] }
+thread  { id, label, plant: beatId|null, payoffs: [beatId], open?: bool }
+tidbit  { id, text, note, placed: [beatId] }
 draft   { n, text, note }
 ```
 
@@ -53,6 +54,8 @@ draft   { n, text, note }
 | `avastha` | `arambha` · `prayatna` · `praptyasha` · `niyatapti` · `phalagama` · `null` (Nāṭyaśāstra's five stages) |
 | `kis` | `ki` · `sho` · `ten` · `ketsu` · `null` (kishōtenketsu) |
 | `sketch` (optional) | 25 numbers from −5 to 5: the fortune line the writer sketched, evenly spaced from the first beat to the last (TaleBrush) |
+| `open` (thread, optional) | `true`: left open on purpose; a planted thread with no payoff is then not flagged `plant_unpaid` |
+| `tidbits` (optional) | real-life observations kept beside the story (up to 500), each placed in distinct beats or none; removing a beat unplaces them |
 | `by` | `writer` · `model` (with `model: <id>`, 1–200 characters) · `agent` (an agent's edit through `window.sandhi` or `navigator.modelContext`) |
 
 Unknown fields are rejected. Ids match `[a-z0-9-]{1,40}`. One story holds at most 400 beats, 100 threads and 3,000,000 characters of text (`LIMITS`): every thread picker lists every beat, so beats × threads is the drawing cost. Per-principle beat lists are derived from beat `tags`, never stored. In the explainer they matched the tags for all 13 principles (checked 2026-10-04).
