@@ -64,11 +64,12 @@ function scoreOne(st, story) {
   return { id: st.id, sentences: n, beats: story.beats.length, turn, low, arc: { gold: st.arc, want: ARC[st.arc], got: best, hit: best === ARC[st.arc] } };
 }
 // the position-only baseline: TP3 and TP4 guessed at their median place in the sample, a beat of one sentence
+const med = (a) => a.toSorted((x, y) => x - y)[Math.floor(a.length / 2)];
+const placeHit = (s, r, g) => { const at = Math.max(1, Math.round(r * s.sentences.length)), d = Math.abs(at - Math.round(g)); return { inside: d === 0, within3: d <= 3 }; };
+const share = (a, k) => Math.round(100 * a.filter(x => x[k]).length / a.length);
 function baseline(stories) {
-  const med = (a) => a.toSorted((x, y) => x - y)[Math.floor(a.length / 2)];
   const r3 = med(stories.map(s => s.tp.tp3 / s.sentences.length)), r4 = med(stories.map(s => s.tp.tp4 / s.sentences.length));
-  const hit = (s, r, g) => { const at = Math.max(1, Math.round(r * s.sentences.length)), d = Math.abs(at - Math.round(g)); return { inside: d === 0, within3: d <= 3 }; };
-  const t = stories.map(s => hit(s, r3, s.tp.tp3)), l = stories.map(s => hit(s, r4, s.tp.tp4)), pct = (a, k) => Math.round(100 * a.filter(x => x[k]).length / a.length);
+  const t = stories.map(s => placeHit(s, r3, s.tp.tp3)), l = stories.map(s => placeHit(s, r4, s.tp.tp4)), pct = share;
   return { turn_place: +r3.toFixed(2), low_place: +r4.toFixed(2), turn_exact: pct(t, 'inside'), turn_within3: pct(t, 'within3'), low_exact: pct(l, 'inside'), low_within3: pct(l, 'within3') };
 }
 const tally = (xs) => xs.reduce((m, x) => ({ ...m, [x || 'unmarked']: (m[x || 'unmarked'] || 0) + 1 }), {});
