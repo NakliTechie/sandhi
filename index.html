@@ -376,7 +376,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     <button class="btn primary" type="button" data-ui="wiz-next" id="wiz-next">Next</button>
     <button class="btn" type="button" data-ui="wiz-finish" id="wiz-finish">Finish now</button>
   </div>
-  <p class="wiz-alt"><button class="link" type="button" data-ui="wiz-blank">Start with an empty spine instead</button> · <button class="link" type="button" data-ui="wiz-restart">Start over</button> · Esc closes without changes; your answers wait here.</p>
+  <p class="wiz-alt"><button class="link" type="button" data-ui="wiz-blank">Start with an empty spine instead</button> · <button class="link" type="button" data-ui="wiz-restart">Start over</button> · Esc closes without changes; your answers wait here, even after a reload.</p>
 </dialog>
 
 <dialog id="reader" aria-labelledby="reader-h">
@@ -630,7 +630,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   function beatChecks(b, i, turnAt, add) {
     const P = i + 1, needs = i > 0 && !SETUP.has(b.spine);
     if (!b.text.trim()) return add('beat_empty', P, b.id, null, `Beat ${P} has no text.`, 'Write it, or remove the beat.');
-    if (!b.tags.length) add('beat_idle', P, b.id, null, `Beat ${P} serves none of the 13 principles.`, 'Tag what it does, or cut it: if a part can go without loss, it was never part of the whole (Aristotle).');
+    if (!b.tags.length) add('beat_idle', P, b.id, null, `Beat ${P} has no principle tagged yet.`, 'Open “Label this beat” and tag what it does. A beat that serves none may not belong: a part that can go without loss was never part of the whole (Aristotle).');
     if (needs && b.joint === null) add('joint_unlabelled', P, b.id, null, `Nothing joins beat ${P} to beat ${P - 1}.`, 'Pick therefore or but. If only "and then" fits, the beat is slack.');
     if (needs && b.joint === 'and-then') add('joint_slack', P, b.id, null, `Beat ${P} follows beat ${P - 1} with "and then".`, 'Find the therefore or the but, or merge the two beats (Parker & Stone).');
     if (turnAt >= 0 && i >= turnAt && b.driver === 'luck') add('ending_luck', P, b.id, null, `Luck drives beat ${P}, after the turn.`, "Let the hero's own choice get them out (Aristotle, Coats).");
@@ -1003,7 +1003,8 @@ const C = globalThis.SandhiCore, VERSION = '0.1.0';
 const KEY = 'sandhi:story', JKEY = 'sandhi:journal';
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } }
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* storage unavailable: nothing was kept */ } }
 };
 const app = { story: null, undo: [], redo: [], dirty: false, kept: true, focus: 'all', last: null, coalesce: null, coalesceAt: 0, coalesceStart: 0, journal: [], open: new Set(), proposal: null, reading: false };
 const ok = (data) => ({ ok: true, class: 'ok', data: data || {} });
@@ -1893,17 +1894,19 @@ function renderBeats() {
   $('#beats').innerHTML = s.beats.length ? s.beats.map((b, i) => beatCard(b, i, s)).join('') : '<p class="empty">No beats. Add one, or load The whistle.</p>';
 }
 
-const CHECK_NAMES = { beat_empty: 'Empty beat', beat_idle: 'Idle beat', joint_unlabelled: 'Unlabelled joint', joint_slack: 'Slack joint', plant_unpaid: 'Plant never fires', payoff_unplanted: 'Payoff without a plant', payoff_early: 'Payoff before its plant', low_not_lowest: 'Low point is not the lowest', thread_unused: 'Unused plant', ending_luck: 'Luck after the turn', no_turn: 'No turn marked', flat_fortune: 'Flat fortune' };
+const CHECK_NAMES = { beat_empty: 'Empty beat', beat_idle: 'No principle yet', joint_unlabelled: 'Unlabelled joint', joint_slack: 'Slack joint', plant_unpaid: 'Plant never fires', payoff_unplanted: 'Payoff without a plant', payoff_early: 'Payoff before its plant', low_not_lowest: 'Low point is not the lowest', thread_unused: 'Unused plant', ending_luck: 'Luck after the turn', no_turn: 'No turn marked', flat_fortune: 'Flat fortune' };
 // three or more checks of one kind read as one line naming the beats (UX review M1)
 function groupChecks(list) {
   const by = new Map();
   for (const c of list) { if (!by.has(c.class)) by.set(c.class, []); by.get(c.class).push(c); }
   return [...by.values()].flatMap(g => (g.length >= 3 && g.every(c => c.at) ? [{ ...g[0], group: g }] : g));
 }
+// checks about a missing label open that beat's labels, so the writer lands on the control the check asks for
+const LABEL_CHECKS = new Set(['beat_idle', 'joint_unlabelled']);
 function checkItem(c) {
   const at = c.group ? `<span class="at">${c.group.length} beats</span>` : c.at ? `<span class="at">beat ${c.at}</span>` : '';
   const msg = c.group ? `Beats ${c.group.map(x => x.at).join(', ')}.` : c.message;
-  return `<li><button class="check" type="button" data-goto="${c.beat || ''}" title="${esc(c.class)}">${at}<b>${esc(CHECK_NAMES[c.class])}.</b> ${esc(msg)}<span class="nx">${esc(c.next)}</span></button></li>`;
+  return `<li><button class="check" type="button" data-goto="${c.beat || ''}"${LABEL_CHECKS.has(c.class) ? ' data-label="1"' : ''} title="${esc(c.class)}">${at}<b>${esc(CHECK_NAMES[c.class])}.</b> ${esc(msg)}<span class="nx">${esc(c.next)}</span></button></li>`;
 }
 function renderChecks() {
   const list = C.checks(S()), box = $('#checks div');
@@ -2005,8 +2008,9 @@ document.addEventListener('click', (e) => {
   const u = e.target.closest('[data-ui]');
   if (u) { const m = u.closest('details.menu'); if (m) m.open = false; onUiControl(u, e); return; }
   const g = e.target.closest('[data-goto]');
-  if (g && g.dataset.goto) goBeat(g.dataset.goto);
+  if (g && g.dataset.goto) { if (g.dataset.label) openLabels(g.dataset.goto); goBeat(g.dataset.goto); }
 });
+function openLabels(id) { const d = document.querySelector(`#beat-${CSS.escape(id)} details.more`); if (d) { d.open = true; app.open.add(id); } }
 document.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.more) { if (d.open) app.open.add(d.dataset.more); else app.open.delete(d.dataset.more); } }, true);
 $('#trad-all').checked = !!uiPrefs.traditions;
 $('#trad-all').addEventListener('change', (e) => { uiPrefs.traditions = e.target.checked; store.set(UIKEY, JSON.stringify(uiPrefs)); renderChart(); });
@@ -2025,7 +2029,7 @@ const MAX_FILE = 12e6;
 const tooBig = (f) => { if (f.size <= MAX_FILE) return false; toast(`That file is ${Math.round(f.size / 1e6)} MB, more than a story this page can hold.`, 'Open a .sandhi.json file saved from sandhi, or one part of a long story.'); return true; };
 async function openText(text, name) {
   let story;
-  try { story = JSON.parse(text); } catch { toast(`"${name || 'That file'}" is not a sandhi story.`, 'Open a .sandhi.json file saved from sandhi; to bring in prose, use Read a story.'); return; }
+  try { story = JSON.parse(text); } catch { toast(`"${name || 'That file'}" is not a sandhi story.`, 'Open a .sandhi.json file saved from sandhi; to bring in prose, use Import.'); return; }
   const r = await ui('story.load', { story });
   if (r.ok) { app.dirty = false; persist(); renderSaveState(); toast(`Opened "${S().title || 'Untitled'}".`, 'Undo brings the previous story back.'); }
   else if (r.class === 'invalid') toast(`"${name || 'This file'}" is not a sandhi story. Nothing changed.`, 'Open a .sandhi.json file saved from sandhi.');
@@ -2268,16 +2272,30 @@ const WIZ = [
   { key: 'belief', h: 'Why are you telling it?', hint: 'The belief under the plot. Skip it for now if you do not know yet.', rows: 2 }
 ];
 const wiz = { steps: [], values: [], i: 0 };
-const wizardReset = () => { wiz.steps = WIZ.map(x => ({ ...x })); wiz.values = WIZ.map(() => ''); wiz.i = 0; };
+// unfinished answers are kept in this browser as they are typed, so a reload or a closed tab loses none (UX review 2026-10-06 H1)
+const WIZKEY = 'sandhi:wizard';
+const wizardSave = () => { if (wiz.steps.length) store.set(WIZKEY, JSON.stringify({ steps: wiz.steps.map(x => ({ key: x.key, n: x.n })), values: wiz.values, i: wiz.i })); };
+const wizardForget = () => store.del(WIZKEY);
+function wizardRestore() {
+  try {
+    const d = JSON.parse(store.get(WIZKEY) || 'null'), byKey = new Map(WIZ.map(x => [x.key, x]));
+    if (!d || !Array.isArray(d.steps) || !Array.isArray(d.values) || d.steps.length !== d.values.length || d.steps.length > 60) return false;
+    if (!d.steps.every(x => x && byKey.has(x.key)) || !d.values.every(v => typeof v === 'string' && v.length <= 20000)) return false;
+    wiz.steps = d.steps.map(x => ({ ...byKey.get(x.key), ...(Number.isInteger(x.n) ? { n: x.n } : {}) }));
+    wiz.values = d.values; wiz.i = Number.isInteger(d.i) ? Math.min(Math.max(d.i, 0), wiz.steps.length - 1) : 0;
+    return true;
+  } catch { return false; }
+}
+const wizardReset = () => { wiz.steps = WIZ.map(x => ({ ...x })); wiz.values = WIZ.map(() => ''); wiz.i = 0; wizardForget(); };
 // a wizard closed with Esc keeps its answers: the next New resumes where the writer left it ("Start over" clears it)
 function openWizard() {
   if (splash.open) splash.close();
   flushPending();
-  if (!wiz.steps.length) wizardReset();
+  if (!wiz.steps.length && !wizardRestore()) wizardReset();
   if (!wizard.open) wizard.showModal();
   wizardStep();
 }
-wizard.addEventListener('close', () => { if (wiz.steps.length) wiz.values[wiz.i] = $('#wiz-text').value; });
+wizard.addEventListener('close', () => { if (wiz.steps.length) { wiz.values[wiz.i] = $('#wiz-text').value; wizardSave(); } });
 // "Leave blank" is for an empty answer only, so it never erases what was typed
 const wizardSkipState = () => { $('#wiz-skip').disabled = !!$('#wiz-text').value.trim(); };
 function wizardStep() {
@@ -2290,7 +2308,7 @@ function wizardStep() {
   wizard.querySelector('[data-ui="wiz-back"]').disabled = wiz.i === 0;
   $('#wiz-next').textContent = wiz.i === wiz.steps.length - 1 ? 'Finish' : 'Next';
   $('#wiz-finish').hidden = wiz.i === wiz.steps.length - 1;
-  wizardSkipState(); t.focus();
+  wizardSkipState(); wizardSave(); t.focus();
 }
 function wizardMove(d) {
   wiz.values[wiz.i] = $('#wiz-text').value;
@@ -2317,14 +2335,14 @@ async function wizardFinish() {
 async function wizardBlank() {
   wiz.values[wiz.i] = $('#wiz-text').value;
   const r = await ui('story.start', { title: wizardAnswer('title'), logline: wizardAnswer('logline'), belief: wizardAnswer('belief') });
-  if (r.ok) { wiz.steps = []; wizard.close(); }
+  if (r.ok) { wiz.steps = []; wizardForget(); wizard.close(); }
 }
 // Enter moves on from every answer; Shift+Enter adds a line
 $('#wiz-text').addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.shiftKey) return;
   e.preventDefault(); e.stopPropagation(); wizardMove(1);
 });
-$('#wiz-text').addEventListener('input', wizardSkipState);
+$('#wiz-text').addEventListener('input', () => { wizardSkipState(); if (wiz.steps.length) { wiz.values[wiz.i] = $('#wiz-text').value; later('wizard', wizardSave, 300); } });
 
 // ---- splash and tour: first visit only; `?` brings both back (Slate's first-run pattern)
 const SEEN = 'sandhi:intro-seen';

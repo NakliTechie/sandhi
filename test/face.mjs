@@ -760,6 +760,34 @@ async function lmStudioPage(win) {
   check('ux.write_first_card', card.shown <= 5 && !card.open && /the turn/.test(card.summary) && card.name === 'The turn' && card.text, card);
   await ctx2.close();
 }
+{ // the second UX walk (2026-10-06): wizard answers survive a reload (H1); unlabelled beats are not "idle" (M1); file errors name Import (L1)
+  const { ctx2, p, call } = await readPage({});
+  await p.click('[data-ui="wizard"]'); await p.waitForFunction(() => document.querySelector('#wizard').open);
+  await p.keyboard.type('Survives a reload'); await p.keyboard.press('Enter');
+  await p.keyboard.type('A keeper who wants one more winter');                     // typed, never moved on from
+  await p.reload(); await p.evaluate(() => window.sandhi.ready);
+  await p.click('[data-ui="wizard"]'); await p.waitForFunction(() => document.querySelector('#wizard').open);
+  const back = { h: await p.textContent('#wiz-h'), text: await p.inputValue('#wiz-text') };
+  if (await p.isEnabled('[data-ui="wiz-back"]')) { await p.click('[data-ui="wiz-back"]'); back.title = await p.inputValue('#wiz-text'); await p.click('[data-ui="wiz-next"]'); }
+  for (let k = 0; k < 3; k++) { await p.fill('#wiz-text', `Line ${k + 1}.`); await p.click('#wiz-next'); }
+  await p.click('#wiz-finish'); await p.waitForFunction(() => !document.querySelector('#wizard').open);
+  const done = (await call('story.get', {})).data.story;
+  await p.reload(); await p.evaluate(() => window.sandhi.ready);
+  await p.click('[data-ui="wizard"]'); await p.waitForFunction(() => document.querySelector('#wizard').open);
+  const freshAfter = { h: await p.textContent('#wiz-h'), text: await p.inputValue('#wiz-text') };
+  await p.keyboard.press('Escape');
+  check('ux2.wizard_survives_reload', back.h === 'Who is it about, and what do they want?' && back.text === 'A keeper who wants one more winter' && back.title === 'Survives a reload'
+    && done.title === 'Survives a reload' && freshAfter.h === 'What is the story called?' && freshAfter.text === '', { back, title: done.title, freshAfter });
+  // the finished story's beats carry no principles: the checks say so and open the labels, and never say cut
+  const checksText = await p.textContent('#checks');
+  await p.click('#checks button.check[data-label]');
+  const opened = await p.evaluate(() => [...document.querySelectorAll('#beats details.more')].filter(d => d.open).length);
+  check('ux2.unlabelled_not_idle', /No principle yet/.test(checksText) && !/cut it|Idle beat/.test(checksText) && opened === 1, { opened, checksText: checksText.slice(0, 200) });
+  await p.evaluate(() => { const i = document.querySelector('#file'); const dt = new DataTransfer(); dt.items.add(new File(['not json'], 'notes.sandhi.json', { type: 'application/json' })); i.files = dt.files; i.dispatchEvent(new Event('change', { bubbles: true })); });
+  const toastText = await p.waitForFunction(() => /is not a sandhi story/.test(document.querySelector('#toast').textContent) && document.querySelector('#toast').textContent, null, { timeout: 2000 }).then(h => h.jsonValue(), () => '');
+  check('ux2.file_error_names_import', /use Import/.test(toastText) && !/Read a story/.test(toastText), toastText);
+  await ctx2.close();
+}
 { // the UX review's quick wins (plan/ux-review-2026-10-04.md): the wizard keeps answers; imports refuse non-text; notices; focus; Esc; errors surface
   const { ctx2, p, call } = await readPage({});
   await p.click('[data-ui="wizard"]'); await p.waitForFunction(() => document.querySelector('#wizard').open);
