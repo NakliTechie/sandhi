@@ -2817,7 +2817,7 @@ function renderProposal() {
 }
 async function openReader() { $('#read-progress').textContent = ''; await renderReader(false); renderProposal(); if (!reader.open) reader.showModal(); $('#read-text').focus(); }   // the proposal is drawn last, so a read that ended meanwhile shows
 readProgress = (m) => { $('#read-progress').textContent = m; };
-const countWords = () => { const n = C.wordCount($('#read-text').value); $('#read-count').textContent = n < 50 ? `${n} words · 50 needed` : `${n} words`; if (n >= 50 && /too short/.test($('#read-progress').textContent)) readProgress(''); };
+const countWords = () => { const n = C.wordCount($('#read-text').value); $('#read-count').textContent = n < 50 ? `${n} words · a model read needs 50` : `${n} words`; if (n >= 50 && /too short/.test($('#read-progress').textContent)) readProgress(''); };
 $('#read-text').addEventListener('input', countWords);
 $('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; const t = f && !tooBig(f) ? await textOf(f) : null; if (t !== null) { $('#read-text').value = t; countWords(); if (!t.trim()) readProgress(`"${f.name}" is empty. Open another file, or paste the story.`); } });
 const READER_CHANGES = {
