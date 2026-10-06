@@ -1119,7 +1119,9 @@ const nano = {
     const window = base.contextWindow || base.inputQuota || 6144, f = base.measureContextUsage || base.measureInputUsage || base.countPromptTokens;
     if (window - 1600 < 1200) { base.destroy(); throw readerFail('no_reader', `Gemini Nano in this browser is too small to read a story (it holds ${window} tokens).`, 'Use a model server on your machine, or your provider.'); }
     const measure = async (t) => { try { if (f) return await f.call(base, t); } catch { /* a character estimate below */ } return Math.ceil(t.length / 4); };
-    return { model: 'gemini-nano', maxInput: window - 1600, charsPerToken: 4, measure, run: nanoRun, close: () => base.destroy() };
+    // parts: false. Nano read To Build a Fire in parts, then failed at the outline in 2 of 2 reads after ~10 minutes (SPEC §5),
+    // so a story that does not fit one call is refused before Nano spends that time.
+    return { model: 'gemini-nano', label: 'Gemini Nano', parts: false, maxInput: window - 1600, charsPerToken: 4, measure, run: nanoRun, close: () => base.destroy() };
   }
 };
 async function nanoRun({ system, user }, schema) {
@@ -1334,15 +1336,27 @@ async function readText(text, reader, progress, strategy) {
   const r = await reader.open(progress);
   try {
     const whole = C.READ_PROMPTS.whole(text);
-    if (await r.measure(whole.system + '\n' + whole.user) > r.maxInput) return await readInParts(text, r, progress);
+    if (await r.measure(whole.system + '\n' + whole.user) > r.maxInput) {
+      if (r.parts === false) throw partsRefused(text, whole, r);
+      return await readInParts(text, r, progress);
+    }
     if (strategy === 'split') {   // the labelling call carries the whole text again, plus a header per beat
       const lp = C.READ_PROMPTS.beatLabels([text]);
-      return await r.measure(lp.system + '\n' + lp.user) > r.maxInput * 0.95 ? await readInParts(text, r, progress) : await readSplit(text, r, progress);
+      const fits = await r.measure(lp.system + '\n' + lp.user) <= r.maxInput * 0.95;
+      if (fits) return await readSplit(text, r, progress);
+      if (r.parts !== false) return await readInParts(text, r, progress);
+      // a reader that cannot read in parts still holds the story whole: read it whole
     }
     progress(`Reading the whole story with ${r.model}…`);
     const out = await r.run(whole, C.READ_SCHEMAS.whole);
     return { ...C.storyFromWhole(text, out.json, out.model), mode: 'whole', calls: 1, model: out.model };
   } finally { r.close(); }
+}
+// a reader that cannot read in parts, given a story that needs them: say how much it holds, and name the readers that can
+function partsRefused(text, whole, r) {
+  const words = C.wordCount(text), holds = Math.max(0, Math.floor((r.maxInput - (whole.system.length + whole.user.length - text.length) / r.charsPerToken) * r.charsPerToken / 6));
+  return readerFail('too_long', `This story is ${words.toLocaleString('en')} words. ${r.label} reads about ${holds.toLocaleString('en')} words at once, and cannot read a story in parts.`,
+    'Choose your provider with your key (DeepSeek read a 7,082-word story whole in 82 s), or a model server on this machine.');
 }
 // split: one call finds the beats, a second labels them; each call has a smaller job than reading everything at once
 async function readSplit(text, r, progress) {
@@ -1575,7 +1589,7 @@ const TOOLS = [
       if (key) { rcfg.provider = id; rcfg.rung = 'provider'; saveCfg(); }
       return ok({ provider: id, key: key ? await LD.fingerprint(key) : null });
     } },
-  { name: 'read.run', description: "Read a story (prose) with the chosen rung and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline. strategy: \"whole\" (one call reads and labels) or \"split\" (one call finds the beats, a second labels them). Spends: on the provider rung the story goes to the writer's provider, billed to the writer, so an agent may use that rung only when the writer chose it.", spends: true,
+  { name: 'read.run', description: "Read a story (prose) with the chosen rung and stage a proposed structure; the story does not change. Beats are the writer's own text cut at the model's exact quotes; quotes not found in the text are dropped. Long stories are read in parts, then as a whole outline; Gemini Nano cannot read in parts and refuses them (too_long) before any model call. strategy: \"whole\" (one call reads and labels) or \"split\" (one call finds the beats, a second labels them). Spends: on the provider rung the story goes to the writer's provider, billed to the writer, so an agent may use that rung only when the writer chose it.", spends: true,
     inputSchema: { type: 'object', properties: { text: { type: 'string' }, rung: { enum: ['machine', 'device', 'provider'] }, strategy: { enum: ['whole', 'split'] } }, required: ['text'] },
     handler: async (a, door) => runRead(a, door) },
   { name: 'read.paragraphs', description: 'Stage prose split one beat per paragraph, with no model and every label left to the writer, as a proposal like a read (read.get shows it; the writer accepts it in the page). The story does not change.',
@@ -2108,7 +2122,7 @@ $('#provider').innerHTML = Object.entries(LD.PROVIDERS).map(([id, x]) => `<optio
 const NANO_TEXT = { ready: 'ready · a preview, below the floor in our tests', download: 'needs about 22 GB free disk; Chrome downloads it once', downloading: 'downloading', absent: 'not in this browser (desktop Chrome 138+)' };
 // what the reader evals measured (SPEC §5), shown beside the chosen reader: the writer chooses knowing the floor (Edge-First honesty)
 const MEASURED = {
-  "gemini-nano": "Measured: Gemini Nano missed the turn in 8 of 8 reads of a 394-word story, and could not finish a 7,082-word one (2 of 2 reads failed after about 10 minutes).",
+  "gemini-nano": "Measured: Gemini Nano missed the turn in 8 of 8 reads of a 394-word story, and could not finish a 7,082-word one (2 of 2 reads failed after about 10 minutes). It now refuses a story too long to read in one call.",
   "qwen3.5:4b": "Measured: Qwen 3.5 4B on Ollama found the turn in 5 of 12 reads across four stories, and linked a planted thread in 1 of 12.",
   "qwen3.5:2b": "Measured: Qwen 3.5 2B on Ollama missed the turn in 4 of 4 reads it finished; 1 of 5 ran out of room to answer.",
   "deepseek-flash": "Measured: DeepSeek's deepseek-flash, reading in this page with the writer's key, found the turn in 5 of 5 stories and linked 8 of 9 labelled threads, with no quote dropped.",

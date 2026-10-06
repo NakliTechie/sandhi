@@ -199,17 +199,19 @@ const P = CORE.READ_PROMPTS, whole = P.whole(prose), emptyScenes = P.scenes('', 
 const labelsP = P.labels(FIX.beats.map(b => ({ summary: b.summary, fortune: b.fortune, introduces: [], uses: [] })));
 const twoPassInput = Math.max(tok(labelsP.system + '\n' + labelsP.user), tok(emptyScenes.system + '\n' + emptyScenes.user) + 420) + 40;
 check('read.fixture_forces_two_pass', twoPassInput < tok(whole.system + '\n' + whole.user), { twoPassInput, whole: tok(whole.system + '\n' + whole.user) });
-// the stand-in: Chrome's LanguageModel surface, answering whole / scenes / labels prompts from the fixture
-const fakeNano = ({ FIX, windowTokens, hang, late }) => {
+// the stand-ins answer whole / split / scenes / labels prompts from the fixture; Nano runs it in the page, LM Studio in Node
+const answerFor = (FIX, user) => {
+  if (user.startsWith('Mark the structure')) return FIX.whole;
+  if (user.startsWith('Split this story')) return { beats: FIX.beats.map(b => ({ start: b.start })) };
+  if (user.startsWith('Here is a story split into numbered beats')) { const n = (user.match(/^Beat \d+:/gm) || []).length; return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ beat: k + 1, ...b.labels })), threads: FIX.threads.map(t => ({ label: t.label, plant_beat: t.plant_scene, payoff_beats: t.payoff_scenes })) }; }
+  if (user.startsWith('This is part')) { const part = user.slice(user.indexOf(':\n', user.lastIndexOf('PART ')) + 2); return { scenes: FIX.beats.filter(b => part.includes(b.start)).map(b => ({ start: b.start, summary: b.summary, fortune: b.fortune, introduces: [], uses: [] })) }; }
+  const n = (user.match(/^Scene \d+/gm) || []).length;
+  return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ scene: k + 1, ...b.labels })), threads: FIX.threads };
+};
+// the stand-in: Chrome's LanguageModel surface
+const fakeNano = ({ FIX, windowTokens, hang, late }, answerFor) => {
   window.__nanoCalls = [];
-  const answer = (user) => {
-    if (user.startsWith('Mark the structure')) return FIX.whole;
-    if (user.startsWith('Split this story')) return { beats: FIX.beats.map(b => ({ start: b.start })) };
-    if (user.startsWith('Here is a story split into numbered beats')) { const n = (user.match(/^Beat \d+:/gm) || []).length; return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ beat: k + 1, ...b.labels })), threads: FIX.threads.map(t => ({ label: t.label, plant_beat: t.plant_scene, payoff_beats: t.payoff_scenes })) }; }
-    if (user.startsWith('This is part')) { const part = user.slice(user.indexOf(':\n', user.lastIndexOf('PART ')) + 2); return { scenes: FIX.beats.filter(b => part.includes(b.start)).map(b => ({ start: b.start, summary: b.summary, fortune: b.fortune, introduces: [], uses: [] })) }; }
-    const n = (user.match(/^Scene \d+/gm) || []).length;
-    return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ scene: k + 1, ...b.labels })), threads: FIX.threads };
-  };
+  const answer = (user) => answerFor(FIX, user);
   const session = (init) => ({ contextWindow: windowTokens, measureContextUsage: async (t) => Math.ceil(t.length / 4),
     prompt: async (user, opts) => {
       window.__nanoCalls.push({ kind: user.slice(0, 12), system: !!(init && init.initialPrompts), schema: !!(opts && opts.responseConstraint), signal: !!(opts && opts.signal) });
@@ -221,7 +223,7 @@ const fakeNano = ({ FIX, windowTokens, hang, late }) => {
 };
 async function readPage(opts) {
   const ctx2 = await browser.newContext(opts && opts.ctx);
-  if (opts && opts.nano) await ctx2.addInitScript(fakeNano, { FIX, windowTokens: opts.nano, hang: !!opts.hang, late: !!opts.late });
+  if (opts && opts.nano) await ctx2.addInitScript({ content: `(${fakeNano})(${JSON.stringify({ FIX, windowTokens: opts.nano, hang: !!opts.hang, late: !!opts.late })}, ${answerFor});` });
   else await ctx2.addInitScript(() => { delete window.LanguageModel; });   // a browser without Gemini Nano
   await ctx2.addInitScript(() => { try { localStorage.setItem('sandhi:intro-seen', '1'); } catch { /* fine */ } });
   const p = await ctx2.newPage(); const errs = [];
@@ -351,19 +353,52 @@ async function readPage(opts) {
   check('ladder.no_key_on_file_pages', told && keys6.length === 0, { told, keys6 });
   await ctx6.close();
 }
+// Past one call. Each beat of The whistle is padded so the story outgrows an 8,192-token LM Studio window (the smallest
+// the machine rung accepts); the fixture still finds every beat by its opening words.
+const FILL = ' The wind kept on over the snow and nobody spoke of it.'.repeat(40);
+const longBeats = SEED.beats.map(b => b.text + FILL), longProse = longBeats.join('\n\n'), longWhole = P.whole(longProse);
+check('read.long_fixture_outgrows_window', tok(longWhole.system + '\n' + longWhole.user) > 4096, tok(longWhole.system + '\n' + longWhole.user));
+// a stand-in LM Studio on 127.0.0.1:1234 that loaded its model with a `win`-token window; Ollama is not running
+async function lmStudioPage(win) {
+  const page = await readPage({}), kinds = [];
+  const reply = (body) => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
+  await page.p.route('http://127.0.0.1:11434/**', (route) => route.abort());
+  await page.p.route('http://127.0.0.1:1234/**', async (route) => {
+    const q = route.request();
+    if (new URL(q.url()).pathname === '/api/v0/models') return route.fulfill(reply({ data: [{ id: 'stand-in', loaded_context_length: win }] }));
+    if (q.method() === 'GET') return route.fulfill(reply({ object: 'list', data: [{ id: 'stand-in' }] }));
+    const user = JSON.parse(q.postData()).messages.at(-1).content; kinds.push(user.slice(0, 12));
+    return route.fulfill(reply({ model: 'stand-in', choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(answerFor(FIX, user)) } }] }));
+  });
+  await page.call('reader.select', { rung: 'machine', server: 'lmstudio', model: 'stand-in' });
+  return { ...page, kinds };
+}
 { // split on a story that only just fits whole: its labelling call would not fit, so it reads in parts (forward pass L10)
-  const { ctx2, call } = await readPage({ nano: tok(whole.system + '\n' + whole.user) + 1600 });
-  const r = await call('read.run', { text: prose, strategy: 'split' });
+  const { ctx2, call } = await lmStudioPage(tok(longWhole.system + '\n' + longWhole.user) + 4096);
+  const r = await call('read.run', { text: longProse, strategy: 'split' });
   check('read.split_too_long_reads_in_parts', r.ok && r.data.mode === 'two-pass', r.data || r);
   await ctx2.close();
 }
 { // a window too small for the whole story: parts, then the outline
-  const { ctx2, p, errs, call } = await readPage({ nano: twoPassInput + 1600 });
-  const r = await call('read.run', { text: prose });
-  const calls = await p.evaluate(() => window.__nanoCalls);
+  const { ctx2, errs, call, kinds } = await lmStudioPage(8192);
+  const r = await call('read.run', { text: longProse });
   const story = (await call('read.get', {})).data.story;
-  check('read.nano_two_pass', r.ok && r.data.mode === 'two-pass' && r.data.calls === calls.length && calls.length >= 3 && r.data.beats === 10 && story.beats.every((b, i) => b.text === SEED.beats[i].text) && story.threads.length === 6 && calls.every(c => c.system && c.schema), { report: r.data || r, calls: calls.length });
+  check('read.two_pass', r.ok && r.data.mode === 'two-pass' && r.data.calls === kinds.length && kinds.length >= 3 && r.data.beats === 10 && story.beats.every((b, i) => b.text === longBeats[i]) && story.threads.length === 6, { report: r.data || r, calls: kinds.length });
   check('read.two_pass_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // Gemini Nano cannot read in parts (SPEC §5): a story that needs them is refused before any prompt, naming the readers that can
+  const { ctx2, p, errs, call } = await readPage({ nano: twoPassInput + 1600 });
+  const before = (await call('status', {})).data.read;
+  const r = await call('read.run', { text: prose });
+  const calls = await p.evaluate(() => window.__nanoCalls.length), after = (await call('status', {})).data.read;
+  check('read.nano_refuses_parts', r.class === 'too_long' && calls === 0 && /cannot read a story in parts/.test(r.message) && /\d+ words at once/.test(r.message) && /provider/.test(r.next) && /model server/.test(r.next) && after.proposal === before.proposal && !after.reading, { r, calls });
+  // split, when the story fits whole but its labelling call would not: Nano reads it whole instead of in parts
+  const tight = await readPage({ nano: tok(whole.system + '\n' + whole.user) + 1600 });
+  const sp = await tight.call('read.run', { text: prose, strategy: 'split' });
+  check('read.nano_split_tight_reads_whole', sp.ok && sp.data.mode === 'whole' && sp.data.calls === 1, sp.data || sp);
+  await tight.ctx2.close();
+  check('read.nano_refuse_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
 { // the AI ladder, rung 3: your provider and key. Every call is intercepted; the key is a dummy test value and nothing leaves.
