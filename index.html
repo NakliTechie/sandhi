@@ -356,6 +356,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
         <form id="thread-add"><input placeholder="Something planted: an object, a line, a habit" aria-label="New thread" maxlength="200"><button class="ghost" type="submit" disabled>Add</button></form>
       </section>
       <section class="card" id="tidbits" aria-labelledby="tidbits-h"><h2 class="lab" id="tidbits-h">Tidbits</h2><ul></ul>
+        <div id="tidbit-sg" aria-live="polite"></div>
         <form id="tidbit-add"><input placeholder="Something you noticed in life: a curious stop, a habit, a smell" aria-label="New tidbit" maxlength="5000"><button class="ghost" type="submit" disabled>Keep</button></form>
       </section>
     </aside>
@@ -813,7 +814,8 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     questions: obj({ questions: { type: 'array', items: obj({ principle: { type: 'string' }, question: { type: 'string' } }) } }),
     options: obj({ obvious: { type: 'string' }, options: { type: 'array', items: obj({ text: { type: 'string' }, joint: { type: 'string' }, fortune: { type: 'integer' }, principle: { type: 'string' }, why: { type: 'string' } }) } }),
     joints: obj({ joints: { type: 'array', items: obj({ beat: { type: 'integer' }, verdict: { type: 'string' }, reason: { type: 'string' }, question: { type: 'string' } }) } }),
-    shape: obj({ moves: { type: 'array', items: obj({ beat: { type: 'integer' }, text: { type: 'string' }, why: { type: 'string' } }) } })
+    shape: obj({ moves: { type: 'array', items: obj({ beat: { type: 'integer' }, text: { type: 'string' }, why: { type: 'string' } }) } }),
+    place: obj({ placements: { type: 'array', items: obj({ tidbit: { type: 'integer' }, beat: { type: 'integer' }, as: { type: 'string' }, how: { type: 'string' }, why: { type: 'string' } }) } })
   };
   const words = (t, n) => { const w = String(t || '').split(/\s+/).filter(Boolean); return w.length > n ? w.slice(0, n).join(' ') + ' …' : w.join(' '); };
   // The story as the model sees it. detail 0 = every beat's full text; 1 = full text near the asked beat, 40 words elsewhere;
@@ -828,12 +830,14 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     });
     const ix = new Map(s.beats.map((b, i) => [b.id, i + 1]));
     const threads = s.threads.map(t => `Thread "${t.label}": planted in beat ${ix.get(t.plant) || '?'}, pays off in ${t.payoffs.map(x => ix.get(x)).filter(Boolean).join(', ') || 'no beat yet'}.`);
-    return [...head, '', ...lines, ...(threads.length ? ['', ...threads] : [])].join('\n');
+    const tid = (s.tidbits || []).map(t => `Tidbit (the writer's own observation): ${t.text}${t.placed.length ? ` — placed in beat ${t.placed.map(x => ix.get(x)).filter(Boolean).join(', ')}` : ' — not placed yet'}.`);
+    return [...head, '', ...lines, ...(threads.length ? ['', ...threads] : []), ...(tid.length ? ['', ...tid] : [])].join('\n');
   }
   const WRITE_PROMPTS = {
     questions: (brief, n) => ({ system: WRITE_GUIDE, user: `Ask the writer 2 to 4 questions about beat ${n}. Each comes from one principle this beat does least for, and asks about something the writer has not decided yet. Questions only: suggest nothing. Each question at most 25 words; "principle" is its principle id.\n\nTHE STORY SO FAR:\n${brief}` }),
     options: (brief, n) => ({ system: WRITE_GUIDE, user: `Beat ${n}: what could happen here? First, "obvious" = the most obvious thing that could happen, in one line; it is set aside. Then 3 to 5 other options, none of them the obvious one. Each option is a situation in one line of at most 25 words, in the present tense and in your own plain words, not prose and never the story's wording. Give each its "joint" to the beat before, its "fortune" at this beat, the one "principle" id it serves most (exactly one id), and "why" in at most 20 words. Spread them: use different joints and different fortunes, and make at least one an option where things get worse. If beat ${n} is already written, propose things other than what it says; do not restate it.\n\nTHE STORY SO FAR:\n${brief}` }),
     shape: (brief, n, s) => ({ system: WRITE_GUIDE, user: `The writer sketched the shape they want the story's fortune to follow. These beats sit far from it:\n${sketchMisses(s).map(m => `Beat ${m.at}: fortune ${m.fortune} now; the sketch wants ${m.target}.`).join('\n')}\n\nFor each of these beats, propose one situation, in one line of at most 25 words, in the present tense and in your own plain words, never the story's wording or voice, that would move the beat toward the sketch while keeping what the writer has planted. Give the beat number, the "text", and "why" in at most 20 words.\n\nTHE STORY:\n${brief}` }),
+    place: (brief, n, s) => ({ system: WRITE_GUIDE, user: `The writer keeps tidbits: things noticed in real life that could give the story life. Place each tidbit below in the one beat where it would do the most: give the tidbit number, the beat number, "as" (beat = it happens there, character = it shows who someone is, setting = it gives the place life), "how" it could live there in one line of at most 25 words in the present tense and your own plain words, never the story's wording, and "why" in at most 20 words. Skip a tidbit that fits nowhere.\n\nTIDBITS TO PLACE:\n${toPlace(s).map((t, k) => `Tidbit ${k + 1}: ${t.text}${t.note ? ` (the writer's note: ${t.note})` : ''}`).join('\n')}\n\nTHE STORY:\n${brief}` }),
     joints: (brief) => ({ system: WRITE_GUIDE, user: `For every beat that the writer joined to the beat before with "therefore" or "but", judge the joint: "holds" if it reads that way, "slack" if "and then" fits better, "unsure" otherwise. Give the beat number, the verdict, the "reason" in at most 20 words, and one "question" to the writer in at most 20 words. Judge only the joints the writer labelled.\n\nTHE STORY:\n${brief}` })
   };
   const VERDICTS = new Set(['holds', 'slack', 'unsure']);
@@ -850,6 +854,15 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   function coerceOptions(json) {
     const opts = rows(json && json.options).map(o => { const f = Math.round(Number(o.fortune)); return { text: line(o.text, 300), joint: pick(o.joint, JOINT_SET), fortune: Number.isFinite(f) ? Math.max(-5, Math.min(5, f)) : null, principle: principleId(o.principle), why: line(o.why, 200) }; });
     return { obvious: line(json && json.obvious, 300), options: opts.filter(o => o.text).slice(0, 6) };
+  }
+  // the tidbits a placement ask is about: the unplaced ones, in story order
+  const toPlace = (s) => (s.tidbits || []).filter(t => !t.placed.length);
+  const PLACE_AS = new Set(['beat', 'character', 'setting']);
+  function coercePlace(json, s) {
+    const list = toPlace(s), seen = new Set();
+    return rows(json && json.placements).map(x => ({ k: Math.round(Number(x.tidbit)), at: Math.round(Number(x.beat)), as: pick(x.as, PLACE_AS) || 'beat', how: line(x.how, 300), why: line(x.why, 200) }))
+      .filter(x => Number.isInteger(x.k) && x.k >= 1 && x.k <= list.length && Number.isInteger(x.at) && x.at >= 1 && x.at <= s.beats.length && x.how && !seen.has(x.k) && seen.add(x.k))
+      .map(x => ({ tidbit: list[x.k - 1].id, text: list[x.k - 1].text, beat: s.beats[x.at - 1].id, at: x.at, as: x.as, how: x.how, why: x.why }));
   }
   function coerceShape(json, s) {
     const want = new Map(sketchMisses(s).map(m => [m.at, m])), seen = new Set();
@@ -997,7 +1010,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 
   root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
     LIMITS, seed: () => clone(SEED), validate, blankStory, storyFromSpine, newBeat, nextId, checks, arcMatch, coverage, clone, wordCount, spineName,
-    READ_SCHEMAS, READ_PROMPTS, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, coerceShape, SKETCH_N, sketchAt, sketchMisses, sketchFrom, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
+    READ_SCHEMAS, READ_PROMPTS, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, coerceShape, coercePlace, SKETCH_N, sketchAt, sketchMisses, sketchFrom, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
 })(globalThis);
 </script>
 
@@ -1571,21 +1584,18 @@ async function runRead(a, door) {
 // is held beside the story (app.suggest), never written into it; a new ask replaces it, and Close drops it.
 let suggestSeq = 0;
 // the reader is always the one the writer chose (rcfg.rung): an agent cannot pick the provider here (decision L2)
+// what each kind of ask needs from the story before a model is called; null when it has it
+const WRITE_NEEDS = {
+  place: (s) => ((s.tidbits || []).some(t => !t.placed.length) ? null : fail('invalid', 'No tidbit is waiting to be placed.', 'Keep a tidbit first (tidbit.add), or unplace one.')),
+  shape: (s) => (!s.sketch ? fail('invalid', 'There is no sketch yet.', 'Sketch the shape you want on the fortune chart first (story.sketch).')
+    : !C.sketchMisses(s).length ? fail('invalid', 'Every beat already sits within 1 of your sketch.', 'Redraw the sketch, or move a beat\'s fortune.') : null),
+  joints: (s) => (s.beats.some(b => b.joint === 'therefore' || b.joint === 'but') ? null : fail('invalid', 'No beat is joined to the one before by "therefore" or "but".', 'Label the joints first: open "Label this beat" and set the joint.')),
+  beat: (s, a) => (typeof a.beat === 'string' && s.beats.some(b => b.id === a.beat) ? null : fail('not_found', `no beat ${a.beat}`, 'Use a beat id from story.get.'))
+};
 function writeError(kind, a) {
-  const id = rcfg.rung, s = S();
-  if (!id) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Import: your provider with your key, or another reader (reader.select).');
+  if (!rcfg.rung) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Import: your provider with your key, or another reader (reader.select).');
   if (app.reading) return fail('busy', 'A model is already working.', 'Wait for it to finish, or stop it (read.cancel).');
-  if (kind === 'shape') {
-    if (!s.sketch) return fail('invalid', 'There is no sketch yet.', 'Sketch the shape you want on the fortune chart first (story.sketch).');
-    if (!C.sketchMisses(s).length) return fail('invalid', 'Every beat already sits within 1 of your sketch.', 'Redraw the sketch, or move a beat\'s fortune.');
-    return null;
-  }
-  if (kind === 'joints') {
-    if (!s.beats.some(b => b.joint === 'therefore' || b.joint === 'but')) return fail('invalid', 'No beat is joined to the one before by "therefore" or "but".', 'Label the joints first: open "Label this beat" and set the joint.');
-    return null;
-  }
-  if (typeof a.beat !== 'string' || !s.beats.some(b => b.id === a.beat)) return fail('not_found', `no beat ${a.beat}`, 'Use a beat id from story.get.');
-  return null;
+  return (WRITE_NEEDS[kind] || WRITE_NEEDS.beat)(S(), a);
 }
 // one call to the chosen reader, with as much of the story as fits its window
 async function askReader(kind, s, at) {
@@ -1602,12 +1612,13 @@ async function askReader(kind, s, at) {
 function writeItems(kind, json, s) {
   if (kind === 'joints') return { joints: C.coerceJoints(json, s) };
   if (kind === 'shape') { const moves = C.coerceShape(json, s); return moves.length ? { moves } : null; }
+  if (kind === 'place') { const placements = C.coercePlace(json, s); return placements.length ? { placements } : null; }
   const items = kind === 'questions' ? { questions: C.coerceQuestions(json) } : C.coerceOptions(json);
   return (items.questions || items.options).length ? items : null;
 }
 async function runWrite(kind, a) {
   const bad = writeError(kind, a); if (bad) return bad;
-  const s = C.clone(S()), at = kind === 'joints' || kind === 'shape' ? -1 : s.beats.findIndex(b => b.id === a.beat), seq = ++suggestSeq;
+  const s = C.clone(S()), at = ['joints', 'shape', 'place'].includes(kind) ? -1 : s.beats.findIndex(b => b.id === a.beat), seq = ++suggestSeq;
   app.reading = true; readAbort = new AbortController();
   app.suggest = { id: seq, kind, beat: a.beat || null, pending: true }; renderSuggest();
   try {
@@ -1830,6 +1841,8 @@ const TOOLS = [
     handler: async (a) => runWrite('joints', a) },
   { name: 'write.shape', description: "Ask the chosen reader how to bring the beats that sit 2 or more from the writer's sketched fortune line toward it: one line per beat, with why. Proposals only; no fortune or text changes. Needs a sketch (story.sketch). It uses the reader the writer chose.", spends: true, inputSchema: NONE,
     handler: async (a) => runWrite('shape', a) },
+  { name: 'write.place', description: "Ask the chosen reader where each unplaced tidbit fits: a beat, whether it lives there as action, character or setting, how in one line, and why. Proposals only; placing one is tidbit.update {placed}. It uses the reader the writer chose.", spends: true, inputSchema: NONE,
+    handler: async (a) => runWrite('place', a) },
   { name: 'story.sketch', description: 'Set the shape the writer wants the fortune to follow: points [{t, v}] with t from 0 (the first beat) to 1 (the last) and v from -5 to 5, resampled to 25 values; an empty list clears it. The chart draws it under the fortune line and rings beats 2 or more from it. Undo reverses it.', mutating: true,
     inputSchema: { type: 'object', properties: { points: { type: 'array', items: { type: 'object', properties: { t: { type: 'number' }, v: { type: 'number' } }, required: ['t', 'v'] } } }, required: ['points'] },
     handler: async (a) => {
@@ -1943,7 +1956,7 @@ const patchKeys = (args) => (args.patch ? Object.keys(args.patch) : []);
 const AFTER = {
   'view.focus': (args, door) => { renderAll(); if (door === 'ui' && args.principle !== 'all') $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
   'read.discard': () => renderProposal(),
-  'write.questions': () => renderSuggest(), 'write.options': () => renderSuggest(), 'write.joints': () => renderSuggest(), 'write.shape': () => renderSuggest(), 'write.dismiss': () => renderSuggest(),
+  'write.questions': () => renderSuggest(), 'write.options': () => renderSuggest(), 'write.joints': () => renderSuggest(), 'write.shape': () => renderSuggest(), 'write.place': () => renderSuggest(), 'write.dismiss': () => renderSuggest(),
   'story.update': () => { renderHeader(); renderViews(); },
   'story.save': () => renderSaveState(),
   'thread.update': (args) => (patchKeys(args).every(k => k === 'label') ? (renderViews(), patchCards()) : renderAll()),
@@ -2199,7 +2212,7 @@ function renderSketchBar() {
 const readerName = () => (rcfg.rung === 'device' ? 'Gemini Nano' : rcfg.rung === 'machine' ? (rcfg.models[(machine.found && machine.found.id) || rcfg.server || 'ollama'] || 'the model server') : (rcfg.models[rcfg.provider] || (LD.PROVIDERS[rcfg.provider] || {}).label || 'your provider'));
 function renderSuggest() {
   for (const el of document.querySelectorAll('[data-sg]')) el.innerHTML = suggestHtml(el.dataset.sg);
-  renderChecks(); renderSketchBar();
+  renderChecks(); renderSketchBar(); renderTidbits();
 }
 function renderChecks() {
   const list = C.checks(S()), box = $('#checks div');
@@ -2228,6 +2241,17 @@ function renderTidbits() {
     return `<li><div class="tline"><textarea data-tidbit="${t.id}" data-kfield="text" rows="2" aria-label="Tidbit" maxlength="5000">${esc(t.text)}</textarea><button class="x" data-cmd="tidbit.remove" data-args="${attr({ id: t.id })}" aria-label="Remove tidbit">remove</button></div>
       <div class="tmeta">${t.placed.length ? `in ${chips}` : 'not placed yet'} ${addable.length ? `<select class="addtag" data-tidbit="${t.id}" data-kfield="place" aria-label="Place this tidbit in a beat"><option value="">+ beat</option>${addable.map(b => `<option value="${b.id}">beat ${posOf(b.id) + 1}</option>`).join('')}</select>` : ''}</div></li>`;
   }).join('') || '<li class="faint">Nothing kept yet. Note what you see in life; place it in a beat when it fits.</li>';
+  $('#tidbit-sg').innerHTML = placeHtml(unplaced);
+}
+function placeHtml(unplaced) {
+  const g = app.suggest;
+  if (g && g.kind === 'place' && g.pending) return `<p class="sg-wait">Asking ${esc(readerName())} where your tidbits fit… <button class="link" type="button" data-cmd="read.cancel">Stop</button></p>`;
+  if (g && g.kind === 'place') {
+    const live = g.placements.filter(x => { const t = (S().tidbits || []).find(k => k.id === x.tidbit); return t && posOf(x.beat) >= 0 && !t.placed.includes(x.beat); });
+    return `<div class="sg"><p class="sg-h">${esc(g.model)}: where your tidbits could live. Placing one only links it to the beat; you write it in.</p><ul>${live.map(x => `<li><b>${esc(snip(x.text, 60))}</b> <span class="sg-tag">beat ${posOf(x.beat) + 1} · ${esc(x.as)}</span> ${esc(x.how)}${x.why ? `<span class="nx">${esc(x.why)}</span>` : ''}<button class="link" type="button" data-cmd="tidbit.update" data-args="${attr({ id: x.tidbit, patch: { placed: [...((S().tidbits || []).find(k => k.id === x.tidbit) || { placed: [] }).placed, x.beat] } })}">Place in beat ${posOf(x.beat) + 1}</button></li>`).join('') || '<li class="faint">All placed.</li>'}</ul>
+      <p class="sg-actions"><button class="link" type="button" data-cmd="write.dismiss">Close</button></p></div>`;
+  }
+  return unplaced ? '<p class="ask"><button class="link" type="button" data-ui="ask-place">Ask the model where they fit</button></p>' : '';
 }
 function renderCoverage() {
   const s = S(), cov = C.coverage(s), n = s.beats.length;
@@ -2299,7 +2323,7 @@ document.addEventListener('change', (e) => {
   delete d.dirty;
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
-const UI_ACTIONS = { 'sketch-start': () => { sketching = true; renderSketchBar(); }, 'sketch-cancel': () => { sketching = false; renderChart(); }, 'sketch-clear': () => ui('story.sketch', { points: [] }), 'ask-shape': () => ui('write.shape', {}),
+const UI_ACTIONS = { 'sketch-start': () => { sketching = true; renderSketchBar(); }, 'sketch-cancel': () => { sketching = false; renderChart(); }, 'sketch-clear': () => ui('story.sketch', { points: [] }), 'ask-shape': () => ui('write.shape', {}), 'ask-place': () => ui('write.place', {}),
   'ask-q': (u) => ui('write.questions', { beat: u.dataset.id }), 'ask-o': (u) => ui('write.options', { beat: u.dataset.id }), 'ask-joints': () => ui('write.joints', {}),
   help: () => openSplash(false), tour: () => startTour(), 'splash-close': () => splash.close(), open: () => $('#file').click(), wizard: () => openWizard(),
   'wiz-next': () => wizardMove(1), 'wiz-back': () => wizardMove(-1), 'wiz-skip': () => wizardMove(1), 'wiz-more': () => wizardMore(),
