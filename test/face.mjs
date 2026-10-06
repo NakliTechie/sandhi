@@ -1,3 +1,4 @@
+/* oxlint-disable no-underscore-dangle -- window.__name values are test-only hooks set inside the page; the dunder keeps them apart from the app's own names */
 // Face + TTFV gate (SPEC §4). The verifier drives the agent face, not the DOM (Build Doctrine).
 //   cd test && npm install && node face.mjs
 // 1. Hard rule ②: first value ≤ 5 000 ms on a COLD load, 3 runs, fresh browser context each.
@@ -44,138 +45,140 @@ check('ttfv.cold_le_5000ms', !indeterminate && worst <= BAR_MS && samples.every(
 check('splash.cold_load_shows_it', samples.every(s => s.splash), samples.map(s => s.splash));
 
 // ---- 2. agent face
-const ctx = await browser.newContext({ acceptDownloads: true });
-const page = await ctx.newPage();
-const errors = [];
-page.on('pageerror', e => errors.push(String(e)));
-page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-await page.goto(base);
-await page.evaluate(() => window.sandhi.ready);
-const call = (name, args) => page.evaluate(([n, a]) => window.sandhi.tools[n](a), [name, args]);
-const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .beat').length);
+{ // the agent face drives one page: every check in this block shares it
+  const ctx = await browser.newContext({ acceptDownloads: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto(base);
+  await page.evaluate(() => window.sandhi.ready);
+  const call = (name, args) => page.evaluate(([n, a]) => window.sandhi.tools[n](a), [name, args]);
+  const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .beat').length);
 
-const man = await page.evaluate(() => window.sandhi.manifest);
-const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 49 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key', 'write.apply']), { n: man.length, personOnly });
-let st = await call('status', {});
-check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
+  const man = await page.evaluate(() => window.sandhi.manifest);
+  const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
+  check('face.manifest', man.length === 49 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key', 'write.apply']), { n: man.length, personOnly });
+  let st = await call('status', {});
+  check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
-let r = await call('beat.remove', { id: 'b2' });
-const ch = await call('checks', {});
-const whistle = ch.data.items.find(c => c.class === 'payoff_unplanted' && c.thread === 'whistle');
-check('face.remove_beat2_flags_whistle_payoff', r.ok && whistle && whistle.beat === 'b8' && whistle.at === 7, ch.data);
-check('face.ui_reflects_agent_call', (await domBeats()) === 9, await domBeats());
-r = await call('undo', {});
-st = await call('status', {});
-check('face.undo_restores', r.ok && st.data.beats === 10 && st.data.checks.count === 0 && (await domBeats()) === 10, st);
+  let r = await call('beat.remove', { id: 'b2' });
+  const ch = await call('checks', {});
+  const whistle = ch.data.items.find(c => c.class === 'payoff_unplanted' && c.thread === 'whistle');
+  check('face.remove_beat2_flags_whistle_payoff', r.ok && whistle && whistle.beat === 'b8' && whistle.at === 7, ch.data);
+  check('face.ui_reflects_agent_call', (await domBeats()) === 9, await domBeats());
+  r = await call('undo', {});
+  st = await call('status', {});
+  check('face.undo_restores', r.ok && st.data.beats === 10 && st.data.checks.count === 0 && (await domBeats()) === 10, st);
 
-r = await call('beat.update', { id: 'b1', patch: { fortune: 9 } });
-check('face.invalid_fortune', r.class === 'invalid' && r.next && r.data.errors.some(e => e.path === 'beats[0].fortune'), r);
-r = await call('beat.update', { id: 'nope', patch: { text: 'x' } });
-check('face.not_found', r.class === 'not_found' && !!r.next, r);
-r = await call('beat.update', { id: 'b1', patch: { mood: 'grim' } });
-check('face.unknown_field', r.class === 'invalid' && /mood/.test(r.message), r);
-st = await call('status', {});
-check('face.failures_leave_story', st.data.checks.count === 0 && st.data.undo === 0, st);
+  r = await call('beat.update', { id: 'b1', patch: { fortune: 9 } });
+  check('face.invalid_fortune', r.class === 'invalid' && r.next && r.data.errors.some(e => e.path === 'beats[0].fortune'), r);
+  r = await call('beat.update', { id: 'nope', patch: { text: 'x' } });
+  check('face.not_found', r.class === 'not_found' && !!r.next, r);
+  r = await call('beat.update', { id: 'b1', patch: { mood: 'grim' } });
+  check('face.unknown_field', r.class === 'invalid' && /mood/.test(r.message), r);
+  st = await call('status', {});
+  check('face.failures_leave_story', st.data.checks.count === 0 && st.data.undo === 0, st);
 
-r = await call('story.new', {});
-st = await call('status', {});
-check('face.story_new', r.ok && st.data.beats === 5 && st.data.checks.classes.beat_empty === 5 && (await domBeats()) === 5, st);
-await call('undo', {});
-const story = (await call('story.get', {})).data.story;
-check('face.undo_story_new', story.title === 'The whistle' && story.beats.length === 10, story.title);
-
-const [dl] = await Promise.all([page.waitForEvent('download'), call('story.save', {})]);
-check('face.save_says_downloaded', (await page.textContent('#savestate')) === 'Downloaded the-whistle.sandhi.json', await page.textContent('#savestate'));
-const saved = JSON.parse(readFileSync(await dl.path(), 'utf8'));
-check('face.save_file', dl.suggestedFilename() === 'the-whistle.sandhi.json' && JSON.stringify(saved) === JSON.stringify(story), dl.suggestedFilename());
-await call('story.new', {});
-r = await call('story.load', { story: saved });
-const loaded = (await call('story.get', {})).data.story;
-check('face.load_round_trip', r.ok && JSON.stringify(loaded) === JSON.stringify(saved), r);
-r = await call('story.load', { story: { sandhi: 1 } });
-check('face.load_rejects_bad', r.class === 'invalid' && (await call('story.get', {})).data.story.title === 'The whistle', r);
-
-r = await call('thread.add', { label: 'The lantern', plant: 'b6' });
-const unpaid = (await call('checks', {})).data.items.find(c => c.class === 'plant_unpaid');
-check('face.thread_add_flags_unpaid', r.ok && unpaid && unpaid.thread === r.data.id && unpaid.at === 6, unpaid);
-r = await call('thread.update', { id: r.data.id, patch: { payoffs: ['b9'] } });
-check('face.thread_paid', r.ok && (await call('checks', {})).data.count === 0, r);
-r = await call('beat.move', { id: 'b10', position: 1 });
-check('face.move', r.ok && (await call('story.get', {})).data.story.beats[0].id === 'b10', r);
-await call('undo', {});
-r = await call('view.focus', { principle: 'plant' });
-const dimmed = await page.evaluate(() => document.querySelectorAll('#beats .beat.dim').length);
-check('face.focus_dims_untagged', r.ok && dimmed === 8, dimmed);
-await call('view.focus', { principle: 'all' });
-
-// paste as beats, with no model: one beat per paragraph, nothing labelled for the writer
-{
-  const pr = await call('story.paste', { text: 'First paragraph of a story.\n\nSecond paragraph.\n\nThird.' });
-  const st = (await call('story.get', {})).data.story;
-  check('face.paste_as_beats', pr.ok && st.beats.length === 3 && st.beats.every(b => b.tags.length === 0 && b.joint === null && b.by === 'writer') && st.beats[1].text === 'Second paragraph.' && st.title === '', { pr: pr.class, n: st.beats.length });
+  r = await call('story.new', {});
+  st = await call('status', {});
+  check('face.story_new', r.ok && st.data.beats === 5 && st.data.checks.classes.beat_empty === 5 && (await domBeats()) === 5, st);
   await call('undo', {});
-}
-// ---- 3. splash + tour, then a UI click goes through the same bus; autosave survives a reload
-check('splash.open_on_first_visit', await page.evaluate(() => document.querySelector('#splash').open), 'closed');
-await page.click('#splash-close');
-check('splash.closes', !(await page.evaluate(() => document.querySelector('#splash').open)), 'still open');
-await page.keyboard.press('?');
-check('splash.question_key_reopens', await page.evaluate(() => document.querySelector('#splash').open && document.querySelector('#splash-close').textContent === 'Back to the story'), 'not reopened');
-await page.click('#splash [data-ui="tour"]');
-const tourTitles = [];
-for (let k = 0; k < 8; k++) {
-  tourTitles.push(await page.evaluate(() => document.querySelector('.tour-layer h2') && document.querySelector('.tour-layer h2').textContent));
-  if (k < 7) await page.keyboard.press('ArrowRight');
-}
-const spot = await page.waitForFunction(() => { const box = document.querySelector('.tour-spot').getBoundingClientRect(); return box.width > 20 && box.height > 20; }, null, { timeout: 2000 }).then(() => true, () => false);   // placed on the next frame
-await page.keyboard.press('Escape');
-const tourGone = await page.evaluate(() => !document.querySelector('.tour-layer') && !document.querySelector('#splash').open);
-check('tour.eight_steps_then_escape', tourTitles[0] === 'The shape of the story' && tourTitles[7] === 'Your story, your file' && new Set(tourTitles).size === 8 && spot && tourGone, { tourTitles, spot, tourGone });
-await page.click('#matrix tbody tr:nth-child(1) td.c:nth-child(3) button');   // principle 1 (care), beat 2
-const b2 = (await call('story.get', {})).data.story.beats[1];
-const j = (await call('journal', { n: 5 })).data.entries;
-check('ui.click_goes_through_bus', b2.tags.includes('care') && j.some(e => e.tool === 'beat.update' && e.door === 'ui'), { tags: b2.tags, journal: j });
-await page.reload(); await page.evaluate(() => window.sandhi.ready);
-await page.waitForTimeout(150);
-check('splash.not_shown_again', !(await page.evaluate(() => document.querySelector('#splash').open)), 'shown again');
-const after = (await call('story.get', {})).data.story;
-check('ui.autosave_survives_reload', after.beats[1].tags.includes('care') && after.title === 'The whistle', after.beats[1].tags);
-check('ui.journal_persists', (await call('journal', { n: 200 })).data.entries.length >= 20, 'journal short');
-// New opens a wizard: one question per screen, in Story Spine order; Finish builds the story through story.start
-{
-  const before = (await call('story.get', {})).data.story.title;
-  await page.click('[data-ui="wizard"]');
-  await page.waitForFunction(() => document.querySelector('#wizard').open);
-  const first = await page.textContent('#wiz-h');
-  await page.keyboard.type('The lighthouse'); await page.keyboard.press('Enter');   // a one-line answer: Enter moves on
-  await page.fill('#wiz-text', 'A keeper who wants one more winter at the light.'); await page.click('#wiz-next');
-  for (const t of ['Mara keeps the light on the north rock.', 'Every night she climbs and trims the wick.', 'One day the company writes: the light will be automated.', 'So she hides the letter from her daughter.']) { await page.fill('#wiz-text', t); await page.click('#wiz-next'); }
-  await page.click('[data-ui="wiz-back"]'); await page.click('#wiz-more');           // back on "Because of that", add a second one
-  await page.fill('#wiz-text', 'Because of that the inspector finds her asleep at the lamp.'); await page.click('#wiz-next');
-  await page.fill('#wiz-text', 'Until finally the storm comes and the new lamp fails.'); await page.click('#wiz-next');
-  await page.click('[data-ui="wiz-skip"]');                                           // no "ever since then"
-  const lastLabel = await page.textContent('#wiz-next');
-  await page.fill('#wiz-text', 'Care is a kind of light.'); await page.click('#wiz-next');
-  await page.waitForFunction(() => !document.querySelector('#wizard').open);
-  const w = (await call('story.get', {})).data.story;
-  check('wizard.builds_the_spine', first === 'What is the story called?' && lastLabel === 'Finish' && w.title === 'The lighthouse' && w.logline.startsWith('A keeper') && w.belief === 'Care is a kind of light.'
-    && JSON.stringify(w.beats.map(b => b.spine)) === JSON.stringify(['once', 'everyday', 'oneday', 'because', 'because', 'until'])
-    && JSON.stringify(w.beats.map(b => b.joint)) === JSON.stringify([null, null, 'but', 'therefore', 'therefore', 'therefore']) && w.beats[4].text.includes('inspector') && w.beats.every(b => b.by === 'writer') && (await domBeats()) === 6,
-    { first, lastLabel, title: w.title, spine: w.beats.map(b => b.spine), joints: w.beats.map(b => b.joint) });
+  const story = (await call('story.get', {})).data.story;
+  check('face.undo_story_new', story.title === 'The whistle' && story.beats.length === 10, story.title);
+
+  const [dl] = await Promise.all([page.waitForEvent('download'), call('story.save', {})]);
+  check('face.save_says_downloaded', (await page.textContent('#savestate')) === 'Downloaded the-whistle.sandhi.json', await page.textContent('#savestate'));
+  const saved = JSON.parse(readFileSync(await dl.path(), 'utf8'));
+  check('face.save_file', dl.suggestedFilename() === 'the-whistle.sandhi.json' && JSON.stringify(saved) === JSON.stringify(story), dl.suggestedFilename());
+  await call('story.new', {});
+  r = await call('story.load', { story: saved });
+  const loaded = (await call('story.get', {})).data.story;
+  check('face.load_round_trip', r.ok && JSON.stringify(loaded) === JSON.stringify(saved), r);
+  r = await call('story.load', { story: { sandhi: 1 } });
+  check('face.load_rejects_bad', r.class === 'invalid' && (await call('story.get', {})).data.story.title === 'The whistle', r);
+
+  r = await call('thread.add', { label: 'The lantern', plant: 'b6' });
+  const unpaid = (await call('checks', {})).data.items.find(c => c.class === 'plant_unpaid');
+  check('face.thread_add_flags_unpaid', r.ok && unpaid && unpaid.thread === r.data.id && unpaid.at === 6, unpaid);
+  r = await call('thread.update', { id: r.data.id, patch: { payoffs: ['b9'] } });
+  check('face.thread_paid', r.ok && (await call('checks', {})).data.count === 0, r);
+  r = await call('beat.move', { id: 'b10', position: 1 });
+  check('face.move', r.ok && (await call('story.get', {})).data.story.beats[0].id === 'b10', r);
   await call('undo', {});
-  check('wizard.undo_restores', (await call('story.get', {})).data.story.title === before, 'not restored');
-  await page.click('[data-ui="wizard"]'); await page.waitForFunction(() => document.querySelector('#wizard').open);
-  await page.keyboard.type('Never finished'); await page.keyboard.press('Escape');
-  check('wizard.escape_keeps_story', !(await page.evaluate(() => document.querySelector('#wizard').open)) && (await call('story.get', {})).data.story.title === before, 'story changed');
-  const agent = await call('story.start', { title: 'By an agent', lines: [{ stage: 'once', text: 'A start.' }, { stage: 'oneday', text: 'A turn.' }] });
-  const ag = (await call('story.get', {})).data.story;
-  const bad = await call('story.start', { lines: [{ stage: 'climax', text: 'x' }] }), bad2 = await call('story.start', { lines: 'once' });
-  check('wizard.agent_door', agent.ok && ag.beats.length === 2 && ag.beats[1].joint === 'but' && ag.beats.every(b => b.by === 'agent') && bad.class === 'invalid' && bad2.class === 'invalid', { agent: agent.class, bad: bad.class, bad2: bad2.class });
-  await call('undo', {});
+  r = await call('view.focus', { principle: 'plant' });
+  const dimmed = await page.evaluate(() => document.querySelectorAll('#beats .beat.dim').length);
+  check('face.focus_dims_untagged', r.ok && dimmed === 8, dimmed);
+  await call('view.focus', { principle: 'all' });
+
+  // paste as beats, with no model: one beat per paragraph, nothing labelled for the writer
+  {
+    const pr = await call('story.paste', { text: 'First paragraph of a story.\n\nSecond paragraph.\n\nThird.' });
+    const sto = (await call('story.get', {})).data.story;
+    check('face.paste_as_beats', pr.ok && sto.beats.length === 3 && sto.beats.every(b => b.tags.length === 0 && b.joint === null && b.by === 'writer') && sto.beats[1].text === 'Second paragraph.' && sto.title === '', { pr: pr.class, n: sto.beats.length });
+    await call('undo', {});
+  }
+  // ---- 3. splash + tour, then a UI click goes through the same bus; autosave survives a reload
+  check('splash.open_on_first_visit', await page.evaluate(() => document.querySelector('#splash').open), 'closed');
+  await page.click('#splash-close');
+  check('splash.closes', !(await page.evaluate(() => document.querySelector('#splash').open)), 'still open');
+  await page.keyboard.press('?');
+  check('splash.question_key_reopens', await page.evaluate(() => document.querySelector('#splash').open && document.querySelector('#splash-close').textContent === 'Back to the story'), 'not reopened');
+  await page.click('#splash [data-ui="tour"]');
+  const tourTitles = [];
+  for (let k = 0; k < 8; k++) {
+    tourTitles.push(await page.evaluate(() => document.querySelector('.tour-layer h2') && document.querySelector('.tour-layer h2').textContent));
+    if (k < 7) await page.keyboard.press('ArrowRight');
+  }
+  const spot = await page.waitForFunction(() => { const box = document.querySelector('.tour-spot').getBoundingClientRect(); return box.width > 20 && box.height > 20; }, null, { timeout: 2000 }).then(() => true, () => false);   // placed on the next frame
+  await page.keyboard.press('Escape');
+  const tourGone = await page.evaluate(() => !document.querySelector('.tour-layer') && !document.querySelector('#splash').open);
+  check('tour.eight_steps_then_escape', tourTitles[0] === 'The shape of the story' && tourTitles[7] === 'Your story, your file' && new Set(tourTitles).size === 8 && spot && tourGone, { tourTitles, spot, tourGone });
+  await page.click('#matrix tbody tr:nth-child(1) td.c:nth-child(3) button');   // principle 1 (care), beat 2
+  const b2 = (await call('story.get', {})).data.story.beats[1];
+  const j = (await call('journal', { n: 5 })).data.entries;
+  check('ui.click_goes_through_bus', b2.tags.includes('care') && j.some(e => e.tool === 'beat.update' && e.door === 'ui'), { tags: b2.tags, journal: j });
+  await page.reload(); await page.evaluate(() => window.sandhi.ready);
+  await page.waitForTimeout(150);
+  check('splash.not_shown_again', !(await page.evaluate(() => document.querySelector('#splash').open)), 'shown again');
+  const after = (await call('story.get', {})).data.story;
+  check('ui.autosave_survives_reload', after.beats[1].tags.includes('care') && after.title === 'The whistle', after.beats[1].tags);
+  check('ui.journal_persists', (await call('journal', { n: 200 })).data.entries.length >= 20, 'journal short');
+  // New opens a wizard: one question per screen, in Story Spine order; Finish builds the story through story.start
+  {
+    const before = (await call('story.get', {})).data.story.title;
+    await page.click('[data-ui="wizard"]');
+    await page.waitForFunction(() => document.querySelector('#wizard').open);
+    const first = await page.textContent('#wiz-h');
+    await page.keyboard.type('The lighthouse'); await page.keyboard.press('Enter');   // a one-line answer: Enter moves on
+    await page.fill('#wiz-text', 'A keeper who wants one more winter at the light.'); await page.click('#wiz-next');
+    for (const t of ['Mara keeps the light on the north rock.', 'Every night she climbs and trims the wick.', 'One day the company writes: the light will be automated.', 'So she hides the letter from her daughter.']) { await page.fill('#wiz-text', t); await page.click('#wiz-next'); }
+    await page.click('[data-ui="wiz-back"]'); await page.click('#wiz-more');           // back on "Because of that", add a second one
+    await page.fill('#wiz-text', 'Because of that the inspector finds her asleep at the lamp.'); await page.click('#wiz-next');
+    await page.fill('#wiz-text', 'Until finally the storm comes and the new lamp fails.'); await page.click('#wiz-next');
+    await page.click('[data-ui="wiz-skip"]');                                           // no "ever since then"
+    const lastLabel = await page.textContent('#wiz-next');
+    await page.fill('#wiz-text', 'Care is a kind of light.'); await page.click('#wiz-next');
+    await page.waitForFunction(() => !document.querySelector('#wizard').open);
+    const w = (await call('story.get', {})).data.story;
+    check('wizard.builds_the_spine', first === 'What is the story called?' && lastLabel === 'Finish' && w.title === 'The lighthouse' && w.logline.startsWith('A keeper') && w.belief === 'Care is a kind of light.'
+      && JSON.stringify(w.beats.map(b => b.spine)) === JSON.stringify(['once', 'everyday', 'oneday', 'because', 'because', 'until'])
+      && JSON.stringify(w.beats.map(b => b.joint)) === JSON.stringify([null, null, 'but', 'therefore', 'therefore', 'therefore']) && w.beats[4].text.includes('inspector') && w.beats.every(b => b.by === 'writer') && (await domBeats()) === 6,
+      { first, lastLabel, title: w.title, spine: w.beats.map(b => b.spine), joints: w.beats.map(b => b.joint) });
+    await call('undo', {});
+    check('wizard.undo_restores', (await call('story.get', {})).data.story.title === before, 'not restored');
+    await page.click('[data-ui="wizard"]'); await page.waitForFunction(() => document.querySelector('#wizard').open);
+    await page.keyboard.type('Never finished'); await page.keyboard.press('Escape');
+    check('wizard.escape_keeps_story', !(await page.evaluate(() => document.querySelector('#wizard').open)) && (await call('story.get', {})).data.story.title === before, 'story changed');
+    const agent = await call('story.start', { title: 'By an agent', lines: [{ stage: 'once', text: 'A start.' }, { stage: 'oneday', text: 'A turn.' }] });
+    const ag = (await call('story.get', {})).data.story;
+    const bad = await call('story.start', { lines: [{ stage: 'climax', text: 'x' }] }), bad2 = await call('story.start', { lines: 'once' });
+    check('wizard.agent_door', agent.ok && ag.beats.length === 2 && ag.beats[1].joint === 'but' && ag.beats.every(b => b.by === 'agent') && bad.class === 'invalid' && bad2.class === 'invalid', { agent: agent.class, bad: bad.class, bad2: bad2.class });
+    await call('undo', {});
+  }
+  check('page.no_errors', errors.length === 0, errors);
+  await ctx.close();
 }
-check('page.no_errors', errors.length === 0, errors);
-await ctx.close();
 
 
 // ---- 3b. read mode: a stand-in Gemini Nano answers from a fixture; Claude's API is intercepted (dummy test key, nothing leaves)
@@ -195,12 +198,14 @@ const FIX = {
   threads: SEED.threads.map(t => ({ label: t.label, plant_scene: ix[t.plant] + 1, payoff_scenes: t.payoffs.map(b => ix[b] + 1) }))
 };
 const tok = (s) => Math.ceil(s.length / 4);
+// a JSON reply from an intercepted local server or provider, with the CORS header a browser needs
+const reply = (body) => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
 const P = CORE.READ_PROMPTS, whole = P.whole(prose), emptyScenes = P.scenes('', 1, 1);
 const labelsP = P.labels(FIX.beats.map(b => ({ summary: b.summary, fortune: b.fortune, introduces: [], uses: [] })));
 const twoPassInput = Math.max(tok(labelsP.system + '\n' + labelsP.user), tok(emptyScenes.system + '\n' + emptyScenes.user) + 420) + 40;
 check('read.fixture_forces_two_pass', twoPassInput < tok(whole.system + '\n' + whole.user), { twoPassInput, whole: tok(whole.system + '\n' + whole.user) });
 // the stand-ins answer whole / split / scenes / labels prompts from the fixture; Nano runs it in the page, LM Studio in Node
-const answerFor = (FIX, user) => {
+const answerFor = (fix, user) => {
   // one row per prompt the page sends: write mode (questions, options, tidbits, sketch, joints), then read mode
   const rows = [
     [() => user.startsWith('Ask the writer'), () => { return { questions: [{ principle: 'stakes', question: 'What does Tavi lose if the boats never come?' }, { principle: 'nonsense', question: 'Ignored: no such principle.' }, { principle: 'earn', question: 'Who gets him out: luck or his own choice?' }] }; }],
@@ -211,20 +216,20 @@ const answerFor = (FIX, user) => {
     [() => user.startsWith('The writer keeps tidbits'), () => { const n = (user.match(/^Tidbit \d+:/gm) || []).length; return { placements: [{ tidbit: 1, beat: 2, as: 'Character', how: 'Oren keeps the bell rope greased with fish fat.', why: 'Shows his care.' }, { tidbit: n + 1, beat: 1, as: 'beat', how: 'Out of range.', why: '' }, { tidbit: 2, beat: 99, as: 'setting', how: 'No such beat.', why: '' }, { tidbit: 1, beat: 3, as: 'beat', how: 'A second placement for the same tidbit is dropped.', why: '' }] }; }],
     [() => user.startsWith('The writer sketched'), () => { const ats = [...user.matchAll(/^Beat (\d+): fortune/gm)].map(m => +m[1]); return { moves: [...ats.map(n => ({ beat: n, text: `A turn that moves beat ${n} toward the sketch.`, why: 'Follows the shape.' })), { beat: 99, text: 'Out of range.', why: '' }] }; }],
     [() => user.startsWith('For every beat that the writer joined'), () => { const n = (user.match(/^Beat \d+/gm) || []).length; return { joints: [{ beat: 5, verdict: 'slack', reason: 'It follows; nothing causes it.', question: 'What makes the fog come now?' }, { beat: 1, verdict: 'holds', reason: 'Beat 1 has no joint.', question: '' }, { beat: 3, verdict: 'slack', reason: 'Beat 3 has no labelled joint.', question: '' }, { beat: n + 3, verdict: 'holds', reason: 'Out of range.', question: '' }, { beat: 6, verdict: 'HOLDS', reason: 'Because of the storm.', question: 'Fine.' }] }; }],
-    [() => user.startsWith('This is chapter'), () => { const i = +user.match(/^This is chapter (\d+)/)[1]; return { summary: FIX.beats[i - 1].summary, fortune: FIX.beats[i - 1].fortune, introduces: [], uses: [] }; }],
-    [() => user.startsWith('Mark the structure'), () => { return FIX.whole; }],
-    [() => user.startsWith('Split this story'), () => { return { beats: FIX.beats.map(b => ({ start: b.start })) }; }],
-    [() => user.startsWith('Here is a story split into numbered beats'), () => { const n = (user.match(/^Beat \d+:/gm) || []).length; return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ beat: k + 1, ...b.labels })), threads: FIX.threads.map(t => ({ label: t.label, plant_beat: t.plant_scene, payoff_beats: t.payoff_scenes })) }; }],
-    [() => user.startsWith('This is part'), () => { const part = user.slice(user.indexOf(':\n', user.lastIndexOf('PART ')) + 2); return { scenes: FIX.beats.filter(b => part.includes(b.start)).map(b => ({ start: b.start, summary: b.summary, fortune: b.fortune, introduces: [], uses: [] })) }; }],
+    [() => user.startsWith('This is chapter'), () => { const i = +user.match(/^This is chapter (\d+)/)[1]; return { summary: fix.beats[i - 1].summary, fortune: fix.beats[i - 1].fortune, introduces: [], uses: [] }; }],
+    [() => user.startsWith('Mark the structure'), () => { return fix.whole; }],
+    [() => user.startsWith('Split this story'), () => { return { beats: fix.beats.map(b => ({ start: b.start })) }; }],
+    [() => user.startsWith('Here is a story split into numbered beats'), () => { const n = (user.match(/^Beat \d+:/gm) || []).length; return { title: 'The whistle', beats: fix.beats.slice(0, n).map((b, k) => ({ beat: k + 1, ...b.labels })), threads: fix.threads.map(t => ({ label: t.label, plant_beat: t.plant_scene, payoff_beats: t.payoff_scenes })) }; }],
+    [() => user.startsWith('This is part'), () => { const part = user.slice(user.indexOf(':\n', user.lastIndexOf('PART ')) + 2); return { scenes: fix.beats.filter(b => part.includes(b.start)).map(b => ({ start: b.start, summary: b.summary, fortune: b.fortune, introduces: [], uses: [] })) }; }],
   ];
   for (const [is, answer] of rows) if (is()) return answer();
   const n = (user.match(/^Scene \d+/gm) || []).length;
-  return { title: 'The whistle', beats: FIX.beats.slice(0, n).map((b, k) => ({ scene: k + 1, ...b.labels })), threads: FIX.threads };
+  return { title: 'The whistle', beats: fix.beats.slice(0, n).map((b, k) => ({ scene: k + 1, ...b.labels })), threads: fix.threads };
 };
 // the stand-in: Chrome's LanguageModel surface
-const fakeNano = ({ FIX, windowTokens, hang, late }, answerFor) => {
+const fakeNano = ({ FIX: fix, windowTokens, hang, late }, answerWith) => {
   window.__nanoCalls = [];
-  const answer = (user) => answerFor(FIX, user);
+  const answer = (user) => answerWith(fix, user);
   const session = (init) => ({ contextWindow: windowTokens, measureContextUsage: async (t) => Math.ceil(t.length / 4),
     prompt: async (user, opts) => {
       window.__nanoCalls.push({ kind: user.slice(0, 12), system: !!(init && init.initialPrompts), schema: !!(opts && opts.responseConstraint), signal: !!(opts && opts.signal) });
@@ -560,7 +565,6 @@ check('read.long_fixture_outgrows_window', tok(longWhole.system + '\n' + longWho
 // a stand-in LM Studio on 127.0.0.1:1234 that loaded its model with a `win`-token window; Ollama is not running
 async function lmStudioPage(win) {
   const page = await readPage({}), kinds = [];
-  const reply = (body) => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
   await page.p.route('http://127.0.0.1:11434/**', (route) => route.abort());
   await page.p.route('http://127.0.0.1:1234/**', async (route) => {
     const q = route.request();
@@ -591,7 +595,6 @@ async function lmStudioPage(win) {
   const novel = ROMAN.map((r, i) => `CHAPTER ${r}\n\n${SEED.beats[i].text}${FILL}`).join('\n\n');
   const page = await readPage({}), { p, call, errs } = page, chapterCalls = [];
   let hangAt = 4;
-  const reply = (body) => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
   await p.route('http://127.0.0.1:11434/**', (route) => route.abort());
   await p.route('http://127.0.0.1:1234/**', async (route) => {
     const q = route.request();
@@ -608,7 +611,7 @@ async function lmStudioPage(win) {
   const firstCalls = chapterCalls.length; hangAt = 0;
   const second = await call('read.run', { text: novel });
   const story = (await call('read.get', {})).data.story;
-  const left = await p.evaluate(() => new Promise(res => { const q = indexedDB.open('sandhi-reads', 1); q.onsuccess = () => { const c = q.result.transaction('parts').objectStore('parts').count(); c.onsuccess = () => res(c.result); }; q.onerror = () => res(-1); }));
+  const left = await p.evaluate(() => new Promise(res => { const q = indexedDB.open('sandhi-reads', 1); q.addEventListener('success', () => { const c = q.result.transaction('parts').objectStore('parts').count(); c.addEventListener('success', () => res(c.result)); }); q.addEventListener('error', () => res(-1)); }));
   check('read.novel_chapters_resume', first.class === 'cancelled' && firstCalls === 4 && second.ok && second.data.mode === 'chapters' && second.data.chapters === 8 && second.data.resumed === 3
     && chapterCalls.slice(4).join() === '4,5,6,7,8' && story.beats.length === 8 && story.beats[0].text.startsWith('CHAPTER I') && story.beats[7].text.startsWith('CHAPTER VIII') && story.beats[7].chapter === 'CHAPTER VIII' && left === 0,
     { first: first.class, firstCalls, second: second.data || second, calls: chapterCalls, beats: story && story.beats.length, left });
@@ -633,7 +636,6 @@ async function lmStudioPage(win) {
   const { ctx2, p, errs, call } = await readPage({});
   const sent = []; let mode = 'ok';
   const TEST_KEY = 'sk-test-0000-not-a-real-key';
-  const reply = (body) => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
   await p.route('https://api.anthropic.com/v1/messages', async (route) => {
     const q = route.request(); sent.push({ host: 'anthropic', headers: q.headers(), body: JSON.parse(q.postData()) });
     if (mode === '401') return route.fulfill({ status: 401, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }) });
@@ -731,7 +733,6 @@ async function lmStudioPage(win) {
 { // the AI ladder, rung 1: a model server on this machine (Ollama), found only when the writer asks
   const { ctx2, p, errs, call } = await readPage({});
   const sent = [];
-  const reply = (body) => ({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
   await p.route('http://127.0.0.1:11434/**', async (route) => {
     const q = route.request();
     if (q.method() === 'GET') return route.fulfill(reply({ object: 'list', data: [{ id: 'llama3.2' }] }));

@@ -458,6 +458,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 
 <script id="sandhi-core">
 // sandhi core: L0 library, L1 schema, L2 derived views. Pure functions, no DOM; test/core.mjs runs this block in Node.
+/* oxlint-disable unicorn/consistent-function-scoping -- the core is one IIFE so the same block runs in the page, in node:vm and in the tests; its helpers live inside it on purpose */
 (function (root) {
   'use strict';
   const SCHEMA = 1;
@@ -629,11 +630,11 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     if (list === undefined) return;
     if (!Array.isArray(list)) { v.e('tidbits', 'must be an array'); return; }
     if (list.length > LIMITS.tidbits) { v.e('tidbits', `more than ${LIMITS.tidbits} tidbits`); return; }
-    const ids = new Set();
+    const seen = new Set();
     list.forEach((t, k) => {
       const p = `tidbits[${k}]`;
       if (!v.obj(t, p)) return;
-      v.keys(t, ['id', 'text', 'note', 'placed'], p); v.id(t.id, ids, `${p}.id`); v.str(t.text, `${p}.text`, 5000); v.str(t.note, `${p}.note`, 2000);
+      v.keys(t, ['id', 'text', 'note', 'placed'], p); v.id(t.id, seen, `${p}.id`); v.str(t.text, `${p}.text`, 5000); v.str(t.note, `${p}.note`, 2000);
       if (!Array.isArray(t.placed) || new Set(t.placed).size !== t.placed.length || !t.placed.every(b => beatIds.has(b))) v.e(`${p}.placed`, 'must be distinct beat ids');
     });
   }
@@ -1109,6 +1110,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 </script>
 
 <script id="sandhi-ladder">
+/* oxlint-disable unicorn/consistent-function-scoping -- one IIFE, like the core: the ladder runs alone in test/ladder.mjs */
 // sandhi's AI ladder (Edge-First doctrine; ported from Draft's sidecar/ladder.mjs and byok.mjs).
 // Readers in a fixed order, closest to the writer first: a model server on this machine, the model built
 // into Chrome, then the writer's own provider and key. Pure: probes are injected, so detection is tested
@@ -1143,9 +1145,9 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 
   // Which rungs can read now. probeMachine: async () -> server id or null; nanoState: async () -> ready|download|downloading|absent;
   // hasKey: async () -> bool. A throwing or missing probe reads as "not available": the ground floor has no AI, so absence is not an error.
-  async function detectLadder({ probeMachine, nanoState, hasKey } = {}) {
+  async function detectLadder({ probeMachine: probeServers, nanoState, hasKey } = {}) {
     const safe = async (fn, fallback) => { try { return fn ? await fn() : fallback; } catch { return fallback; } };
-    const server = await safe(probeMachine, null), device = await safe(nanoState, 'absent'), key = !!(await safe(hasKey, false));
+    const server = await safe(probeServers, null), device = await safe(nanoState, 'absent'), key = !!(await safe(hasKey, false));
     const available = { machine: !!server, device: device !== 'absent', provider: key };
     const rungs = ORDER.filter(r => available[r]);
     // ready = can read without a fresh model download first
@@ -1340,12 +1342,12 @@ const vault = {
   db: () => new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') { reject(new Error('IndexedDB unavailable')); return; }
     const q = indexedDB.open('sandhi-byok', 1);
-    q.onupgradeneeded = () => q.result.createObjectStore('keys', { keyPath: 'provider' });
-    q.onsuccess = () => resolve(q.result); q.onerror = () => reject(q.error);
+    q.addEventListener('upgradeneeded', () => q.result.createObjectStore('keys', { keyPath: 'provider' }));
+    q.addEventListener('success', () => resolve(q.result)); q.addEventListener('error', () => reject(q.error));
   }),
   async tx(mode, fn) {
     const db = await vault.db();
-    try { return await new Promise((resolve, reject) => { const t = db.transaction('keys', mode), r = fn(t.objectStore('keys')); t.oncomplete = () => resolve(r.result); t.onerror = () => reject(t.error); }); }
+    try { return await new Promise((resolve, reject) => { const t = db.transaction('keys', mode), r = fn(t.objectStore('keys')); t.addEventListener('complete', () => resolve(r.result)); t.addEventListener('error', () => reject(t.error)); }); }
     finally { db.close(); }
   },
   // a record is { provider, key, base }: base only for 'custom', so a key goes only to the address the writer typed with it
@@ -1627,12 +1629,12 @@ const readCache = {
   db: () => new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') { reject(new Error('IndexedDB unavailable')); return; }
     const q = indexedDB.open('sandhi-reads', 1);
-    q.onupgradeneeded = () => q.result.createObjectStore('parts', { keyPath: 'key' });
-    q.onsuccess = () => resolve(q.result); q.onerror = () => reject(q.error);
+    q.addEventListener('upgradeneeded', () => q.result.createObjectStore('parts', { keyPath: 'key' }));
+    q.addEventListener('success', () => resolve(q.result)); q.addEventListener('error', () => reject(q.error));
   }),
   async tx(mode, fn) {
     const db = await readCache.db();
-    try { return await new Promise((resolve, reject) => { const t = db.transaction('parts', mode), r = fn(t.objectStore('parts')); t.oncomplete = () => resolve(r && r.result); t.onerror = () => reject(t.error); }); }
+    try { return await new Promise((resolve, reject) => { const t = db.transaction('parts', mode), r = fn(t.objectStore('parts')); t.addEventListener('complete', () => resolve(r && r.result)); t.addEventListener('error', () => reject(t.error)); }); }
     finally { db.close(); }
   },
   get: (key) => readCache.tx('readonly', st => st.get(key)).then(r => (r ? r.value : null)).catch(() => null),

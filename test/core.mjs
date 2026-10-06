@@ -139,8 +139,8 @@ const rejects = {
 // each rejection names the field it rejects, so a different guard firing cannot pass it (a vacuous negative)
 const REJECT_PATH = { dup_beat_id: 'beats[5].id', dup_thread_id: 'threads[1].id', model_without_id: 'beats[0].model', model_id_too_long: 'beats[0].model', too_many_beats: 'beats', too_many_threads: 'threads', bad_note_key: 'notes.drama' };
 for (const [name, fn] of Object.entries(rejects)) {
-  const r = plain(C.validate(mut(fn))), want = REJECT_PATH[name];
-  check(`rejects.${name}`, !r.ok && (!want || r.errors.some(e => e.path === want)), r.errors.slice(0, 3));
+  const r = plain(C.validate(mut(fn))), wantPath = REJECT_PATH[name];
+  check(`rejects.${name}`, !r.ok && (!wantPath || r.errors.some(e => e.path === wantPath)), r.errors.slice(0, 3));
 }
 check('accepts.agent_provenance', C.validate(mut(s => { s.beats[0].by = 'agent'; })).ok, 'rejected');
 check('accepts.model_provenance', C.validate(mut(s => { s.beats[0].by = 'model'; s.beats[0].model = 'gemini-nano'; })).ok, 'rejected');
@@ -292,8 +292,8 @@ check('read.schemas_closed', Object.values(plain(C.READ_SCHEMAS)).every(closed),
 // weak places (Batch D interview): empty beats first, then the checks, thin beats, unserved principles; at most 8
 {
   const st = mut(t => { t.beats[4].text = ''; t.beats[2].text = 'Too short.'; t.beats.forEach(b => { b.tags = b.tags.filter(x => x !== 'cut'); }); });
-  const w = plain(C.weakPlaces(st));
-  check('interview.weak_places', w[0].beat === 'b5' && w[0].at === 5 && w.some(x => x.text === 'Beat 3 is thin: 2 words.') && w.some(x => x.principle === 'cut') && w.length <= 8 && plain(C.weakPlaces(plain(C.seed()))).every(x => x.kind !== 'beat' || x.at), w);
+  const wp = plain(C.weakPlaces(st));
+  check('interview.weak_places', wp[0].beat === 'b5' && wp[0].at === 5 && wp.some(x => x.text === 'Beat 3 is thin: 2 words.') && wp.some(x => x.principle === 'cut') && wp.length <= 8 && plain(C.weakPlaces(plain(C.seed()))).every(x => x.kind !== 'beat' || x.at), wp);
   const iv = plain(C.coerceInterview({ place: 1, question: 'Q?', lands: 'note' }, st)), bad = C.coerceInterview({ place: 99, question: 'Q?' }, st);
   check('interview.coerce', iv.place.beat === 'b5' && iv.lands === 'note' && bad === null, iv);
 }

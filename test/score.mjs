@@ -34,9 +34,9 @@ export function score(story, seed, prose, C) {
 
 // A story with small hand labels (test/stories/<name>.labels.json): did the reading find the turn, the low point and
 // each labelled thread? A label is a short exact quote; the reading finds it when a beat it marks contains the quote.
+const has = (b, q) => !!b && b.text.includes(q);
 export function scoreStory(story, labels, C) {
   const beatOf = (id) => story.beats.find(b => b.id === id);
-  const has = (b, q) => !!b && b.text.includes(q);
   const marked = (m) => story.beats.filter(b => b.marks.includes(m));
   const found = (t) => story.threads.some(x => x.plant && has(beatOf(x.plant), t.plant) && x.payoffs.some(p => has(beatOf(p), t.payoff)));
   return {
