@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 47 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key', 'write.apply']), { n: man.length, personOnly });
+check('face.manifest', man.length === 49 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key', 'write.apply']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -205,6 +205,8 @@ const answerFor = (FIX, user) => {
   const rows = [
     [() => user.startsWith('Ask the writer'), () => { return { questions: [{ principle: 'stakes', question: 'What does Tavi lose if the boats never come?' }, { principle: 'nonsense', question: 'Ignored: no such principle.' }, { principle: 'earn', question: 'Who gets him out: luck or his own choice?' }] }; }],
     [() => /^Beat \d+: what could happen here/.test(user), () => { return { obvious: 'Tavi rings the bell and saves everyone.', options: [{ text: 'The bell cracks and Tavi must whistle from the rock.', joint: 'but', fortune: -3, principle: 'stakes', why: 'Raises the cost.' }, { text: 'Oren is too ill to climb, so Tavi goes alone.', joint: 'therefore', fortune: -1, principle: 'earn', why: 'His choice.' }, { text: '', joint: 'but', fortune: 0, principle: 'care', why: 'dropped: no text' }, { text: 'The fog lifts on its own.', joint: 'sideways', fortune: 9, principle: 'luck', why: 'Coerced.' }, { text: 'Named, not id.', joint: 'but', fortune: -1, principle: 'Make it hard', why: 'A name maps to its id.' }, { text: 'A list of ids.', joint: 'therefore', fortune: -2, principle: 'nonsense, plant, two', why: 'The first valid id is kept.' }] }; }],
+    [() => user.startsWith('You interview the writer'), () => ({ place: 1, question: 'What is on the rock the morning after the storm?', lands: 'BEAT' })],
+    [() => / is thin\. Suggest 2 to 4 ways/.test(user), () => ({ suggestions: [{ kind: 'tidbit', text: 'The smell of wet rope in the tower.', why: 'Grounds the place.' }, { kind: 'plant', text: 'Oren hums while he climbs.', why: 'Pays off as rhythm.' }, { kind: 'prose', text: 'Dropped: not a kind.', why: '' }, { kind: 'question', text: '', why: 'Dropped: empty.' }] })],
     [() => user.startsWith('The writer wants to add this plot element'), () => ({ changes: [{ op: 'insert', beat: 6, stage: 'because', joint: 'but', fortune: -4, label: 'Ama\'s boat loses its mast.', why: 'The element forces it.' }, { op: 'relabel', beat: 7, stage: '', joint: 'but', fortune: -5, label: '', why: 'Now despite the mast.' }, { op: 'remove', beat: 2, stage: '', joint: '', fortune: 0, label: '', why: 'Not an op.' }] })],
     [() => user.startsWith('The writer keeps tidbits'), () => { const n = (user.match(/^Tidbit \d+:/gm) || []).length; return { placements: [{ tidbit: 1, beat: 2, as: 'Character', how: 'Oren keeps the bell rope greased with fish fat.', why: 'Shows his care.' }, { tidbit: n + 1, beat: 1, as: 'beat', how: 'Out of range.', why: '' }, { tidbit: 2, beat: 99, as: 'setting', how: 'No such beat.', why: '' }, { tidbit: 1, beat: 3, as: 'beat', how: 'A second placement for the same tidbit is dropped.', why: '' }] }; }],
     [() => user.startsWith('The writer sketched'), () => { const ats = [...user.matchAll(/^Beat (\d+): fortune/gm)].map(m => +m[1]); return { moves: [...ats.map(n => ({ beat: n, text: `A turn that moves beat ${n} toward the sketch.`, why: 'Follows the shape.' })), { beat: 99, text: 'Out of range.', why: '' }] }; }],
@@ -290,6 +292,33 @@ async function readPage(opts) {
   check('tidbits.ledger', k.text.startsWith('Meat') && JSON.stringify(placed) === JSON.stringify([b4]) && unplaced.length === 0 && JSON.stringify(restored) === JSON.stringify([b4])
     && ag.ok && empty.class === 'invalid' && ghost.class === 'invalid' && unknown.class === 'invalid' && rm.ok && missing.class === 'not_found', { placed, unplaced, restored, empty: empty.class, ghost: ghost.class });
   check('tidbits.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // interview loop and depth (Batch D): one question on the weakest place; the writer's answer lands where they send it
+  const { ctx2, p, errs, call } = await readPage({ nano: 6144 });
+  const s0 = (await call('story.get', {})).data.story;
+  await call('beat.add', { after: s0.beats[9].id });                                  // an empty beat: the weakest place
+  const empty = (await call('story.get', {})).data.story.beats[10];
+  await p.click('[data-ui="ask-interview"]');
+  await p.waitForFunction(() => /What is on the rock/.test(document.querySelector('#interview-sg').textContent));
+  const g = (await call('write.get', {})).data, places = await p.evaluate((st) => window.SandhiCore.weakPlaces(st), (await call('story.get', {})).data.story);
+  await p.fill('#iv-answer', 'Gulls on the rope, and the bell still wet.');
+  await p.click('[data-ui="iv-beat"]');
+  await p.waitForFunction((id) => window.sandhi && document.querySelector(`#beat-${id} textarea.btext`).value.includes('Gulls on the rope'), empty.id);
+  await p.waitForFunction(() => /What is on the rock/.test(document.querySelector('#interview-sg').textContent));   // the next question
+  await p.fill('#iv-answer', 'A fisherman who counts bell strokes under his breath.');
+  await p.click('[data-ui="iv-tidbit"]');
+  await p.waitForFunction(() => /Tidbits · 1/.test(document.querySelector('#tidbits-h').textContent));
+  const st = (await call('story.get', {})).data.story;
+  check('write.interview_lands', g.kind === 'interview' && g.interview.lands === 'beat' && g.interview.place.beat === empty.id && places[0].beat === empty.id
+    && st.beats[10].text === 'Gulls on the rope, and the bell still wet.' && st.tidbits[0].text.startsWith('A fisherman'), { g, places: places.slice(0, 2) });
+  await call('write.dismiss', {});
+  await p.click(`#beat-${s0.beats[2].id} [data-ui="ask-q"]`); await p.waitForSelector(`[data-sg="${s0.beats[2].id}"] [data-ui="ask-depth"]`);
+  await p.click(`[data-sg="${s0.beats[2].id}"] [data-ui="ask-depth"]`);
+  await p.waitForFunction((id) => /ways to give this beat depth/.test(document.querySelector(`[data-sg="${id}"]`).textContent), s0.beats[2].id);
+  const d = (await call('write.get', {})).data;
+  check('write.depth', d.kind === 'depth' && d.suggestions.length === 2 && d.suggestions.map(x => x.kind).join() === 'tidbit,plant' && JSON.stringify((await call('story.get', {})).data.story.beats[2]) === JSON.stringify(st.beats[2]), d);
+  check('write.interview_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
 { // plot elements (Batch D): the reader proposes structural changes as a diff; only the writer's real click applies them
@@ -493,7 +522,7 @@ async function readPage(opts) {
   const names = await p5.evaluate(() => window.__mc.map(t => t.name));
   const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
   const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
-  check('door.model_context', names.length === 44 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  check('door.model_context', names.length === 46 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
   await ctx5.close();
 }
 { // a page opened as a file stores no key: every local file shares its storage

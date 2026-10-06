@@ -179,6 +179,9 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 .sg-tag{font-size:11px;color:var(--accent-ink);background:var(--accent-bg);border-radius:999px;padding:0 7px;margin-right:4px}
 .sg-obvious{margin:0 0 6px}
 .sg-actions{margin:8px 0 0;display:flex;gap:10px;align-items:center}
+#iv-answer{width:100%;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:6px 8px;font:15px/1.6 var(--serif);margin:6px 0 0}
+.iv-q{font:16px/1.5 var(--serif);margin:0}
+.interview-ask{margin:-4px 0 10px}
 .sg-wait{font-size:13px;color:var(--muted);margin:8px 0 0}
 #threads li{display:flex;flex-direction:column;gap:4px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 #threads li:last-child{border-bottom:none;padding-bottom:0}
@@ -351,6 +354,8 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
       <h2 class="lab" id="beats-h">Beats on the Story Spine</h2>
       <form id="plot-add" class="plotadd"><input placeholder="A plot element to add: what happens, in a line" aria-label="Plot element" maxlength="500"><button class="ghost" type="submit" disabled>Ask how the structure changes</button></form>
       <div id="plot-sg" aria-live="polite"></div>
+      <p class="ask interview-ask"><button class="link" type="button" data-ui="ask-interview">Interview me: one question at a time, on the weakest place</button></p>
+      <div id="interview-sg" aria-live="polite"></div>
       <div id="beats"></div>
       <button class="ghost addbeat" data-cmd="beat.add" data-args="{}">Add a beat</button>
     </section>
@@ -820,6 +825,8 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     joints: obj({ joints: { type: 'array', items: obj({ beat: { type: 'integer' }, verdict: { type: 'string' }, reason: { type: 'string' }, question: { type: 'string' } }) } }),
     shape: obj({ moves: { type: 'array', items: obj({ beat: { type: 'integer' }, text: { type: 'string' }, why: { type: 'string' } }) } }),
     plot: obj({ changes: { type: 'array', items: obj({ op: { type: 'string' }, beat: { type: 'integer' }, stage: { type: 'string' }, joint: { type: 'string' }, fortune: { type: 'integer' }, label: { type: 'string' }, why: { type: 'string' } }) } }),
+    interview: obj({ place: { type: 'integer' }, question: { type: 'string' }, lands: { type: 'string' } }),
+    depth: obj({ suggestions: { type: 'array', items: obj({ kind: { type: 'string' }, text: { type: 'string' }, why: { type: 'string' } }) } }),
     place: obj({ placements: { type: 'array', items: obj({ tidbit: { type: 'integer' }, beat: { type: 'integer' }, as: { type: 'string' }, how: { type: 'string' }, why: { type: 'string' } }) } })
   };
   const words = (t, n) => { const w = String(t || '').split(/\s+/).filter(Boolean); return w.length > n ? w.slice(0, n).join(' ') + ' …' : w.join(' '); };
@@ -843,6 +850,8 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     options: (brief, n) => ({ system: WRITE_GUIDE, user: `Beat ${n}: what could happen here? First, "obvious" = the most obvious thing that could happen, in one line; it is set aside. Then 3 to 5 other options, none of them the obvious one. Each option is a situation in one line of at most 25 words, in the present tense and in your own plain words, not prose and never the story's wording. Give each its "joint" to the beat before, its "fortune" at this beat, the one "principle" id it serves most (exactly one id), and "why" in at most 20 words. Spread them: use different joints and different fortunes, and make at least one an option where things get worse. If beat ${n} is already written, propose things other than what it says; do not restate it.\n\nTHE STORY SO FAR:\n${brief}` }),
     shape: (brief, n, s) => ({ system: WRITE_GUIDE, user: `The writer sketched the shape they want the story's fortune to follow. These beats sit far from it:\n${sketchMisses(s).map(m => `Beat ${m.at}: fortune ${m.fortune} now; the sketch wants ${m.target}.`).join('\n')}\n\nFor each of these beats, propose one situation, in one line of at most 25 words, in the present tense and in your own plain words, never the story's wording or voice, that would move the beat toward the sketch while keeping what the writer has planted. Give the beat number, the "text", and "why" in at most 20 words.\n\nTHE STORY:\n${brief}` }),
     plot: (brief, n, s, extra) => ({ system: WRITE_GUIDE, user: `The writer wants to add this plot element: "${extra}".\n\nPropose how the structure changes around it: at most 6 changes. op "insert" = a new beat after beat "beat" (0 = at the start); give its "stage" (Story Spine id), "joint" to the beat before, "fortune", and "label": the situation in one line of at most 20 words, present tense, your own plain words, not prose. op "relabel" = an existing beat ("beat" = its number) whose stage, joint or fortune should change; give only the new values and leave label empty. Every change has "why" in at most 20 words. Change only what the element forces; keep what the writer planted.\n\nTHE STORY:\n${brief}` }),
+    interview: (brief, n, s) => ({ system: WRITE_GUIDE, user: `You interview the writer, one question at a time. These are the weak places in the story:\n${weakPlaces(s).map((w, k) => `Place ${k + 1}: ${w.text}`).join('\n')}\n\nPick the one place that most weakens the story, and ask the writer one question about it, at most 25 words, that only they can answer from what they know or have seen. Give "place" (its number), the "question", and "lands": where the answer belongs (beat = into that beat's text, tidbit = a real-life detail to keep, note = a note on the story).\n\nTHE STORY:\n${brief}` }),
+    depth: (brief, n) => ({ system: WRITE_GUIDE, user: `Beat ${n} is thin. Suggest 2 to 4 ways to give it depth, never prose: "kind" tidbit (a kind of real-life detail to look for or use, or one of the writer's tidbits by its words), plant (something to plant here that pays off later, or a payoff for something planted), or question (one the writer should answer). Each "text" at most 25 words in the present tense and your own plain words; "why" at most 20 words.\n\nTHE STORY SO FAR:\n${brief}` }),
     place: (brief, n, s) => ({ system: WRITE_GUIDE, user: `The writer keeps tidbits: things noticed in real life that could give the story life. Place each tidbit below in the one beat where it would do the most: give the tidbit number, the beat number, "as" (beat = it happens there, character = it shows who someone is, setting = it gives the place life), "how" it could live there in one line of at most 25 words in the present tense and your own plain words, never the story's wording, and "why" in at most 20 words. Skip a tidbit that fits nowhere.\n\nTIDBITS TO PLACE:\n${toPlace(s).map((t, k) => `Tidbit ${k + 1}: ${t.text}${t.note ? ` (the writer's note: ${t.note})` : ''}`).join('\n')}\n\nTHE STORY:\n${brief}` }),
     joints: (brief) => ({ system: WRITE_GUIDE, user: `For every beat that the writer joined to the beat before with "therefore" or "but", judge the joint: "holds" if it reads that way, "slack" if "and then" fits better, "unsure" otherwise. Give the beat number, the verdict, the "reason" in at most 20 words, and one "question" to the writer in at most 20 words. Judge only the joints the writer labelled.\n\nTHE STORY:\n${brief}` })
   };
@@ -860,6 +869,25 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   function coerceOptions(json) {
     const opts = rows(json && json.options).map(o => { const f = Math.round(Number(o.fortune)); return { text: line(o.text, 300), joint: pick(o.joint, JOINT_SET), fortune: Number.isFinite(f) ? Math.max(-5, Math.min(5, f)) : null, principle: principleId(o.principle), why: line(o.why, 200) }; });
     return { obvious: line(json && json.obvious, 300), options: opts.filter(o => o.text).slice(0, 6) };
+  }
+  // the story's weak places, worst first: empty beats, the checks' findings, thin beats, principles no beat serves (at most 8)
+  function weakPlaces(s) {
+    const ix = new Map(s.beats.map((b, i) => [b.id, i + 1])), out = [];
+    s.beats.forEach((b, i) => { if (!String(b.text || '').trim()) out.push({ kind: 'beat', beat: b.id, text: `Beat ${i + 1} (${spineName(b.spine)}) is empty.` }); });
+    for (const c of checks(s)) if (c.class !== 'beat_empty' && c.class !== 'beat_idle') out.push({ kind: c.beat ? 'beat' : 'story', beat: c.beat || null, text: c.message });
+    s.beats.forEach((b, i) => { const w = wordCount(b.text || ''); if (w > 0 && w < 25) out.push({ kind: 'beat', beat: b.id, text: `Beat ${i + 1} is thin: ${w} words.` }); });
+    for (const c of coverage(s)) if (!c.beats.length) out.push({ kind: 'principle', principle: c.id, text: `No beat serves "${c.name}".` });
+    return out.slice(0, 8).map(w => ({ ...w, at: w.beat ? ix.get(w.beat) : null }));
+  }
+  const LANDS = new Set(['beat', 'tidbit', 'note']), DEPTH = new Set(['tidbit', 'plant', 'question']);
+  function coerceInterview(json, s) {
+    const places = weakPlaces(s), k = Math.round(Number(json && json.place)), q = line(json && json.question, 300);
+    if (!q || !Number.isInteger(k) || k < 1 || k > places.length) return null;
+    const w = places[k - 1], lands = pick(json.lands, LANDS) || (w.beat ? 'beat' : 'note');
+    return { question: q, place: w, lands: lands === 'beat' && !w.beat ? 'note' : lands };
+  }
+  function coerceDepth(json) {
+    return rows(json && json.suggestions).map(x => ({ kind: pick(x.kind, DEPTH), text: line(x.text, 300), why: line(x.why, 200) })).filter(x => x.kind && x.text).slice(0, 5);
   }
   // the tidbits a placement ask is about: the unplaced ones, in story order
   const toPlace = (s) => (s.tidbits || []).filter(t => !t.placed.length);
@@ -1040,7 +1068,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 
   root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
     LIMITS, seed: () => clone(SEED), validate, blankStory, storyFromSpine, newBeat, nextId, checks, arcMatch, coverage, clone, wordCount, spineName,
-    READ_SCHEMAS, READ_PROMPTS, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, coerceShape, coercePlace, coercePlot, applyPlot, SKETCH_N, sketchAt, sketchMisses, sketchFrom, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
+    READ_SCHEMAS, READ_PROMPTS, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, coerceShape, coercePlace, coercePlot, applyPlot, weakPlaces, coerceInterview, coerceDepth, SKETCH_N, sketchAt, sketchMisses, sketchFrom, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
 })(globalThis);
 </script>
 
@@ -1616,6 +1644,7 @@ let suggestSeq = 0;
 // the reader is always the one the writer chose (rcfg.rung): an agent cannot pick the provider here (decision L2)
 // what each kind of ask needs from the story before a model is called; null when it has it
 const WRITE_NEEDS = {
+  interview: (s) => (C.weakPlaces(s).length ? null : fail('invalid', 'Nothing in the story reads as weak to the checks.', 'Ask about a beat instead (write.questions).')),
   plot: (s, a) => (typeof a.element === 'string' && a.element.trim() && a.element.length <= 500 ? null : fail('invalid', 'A plot element needs its text, up to 500 characters.', 'Send element: what happens, in a line.')),
   place: (s) => ((s.tidbits || []).some(t => !t.placed.length) ? null : fail('invalid', 'No tidbit is waiting to be placed.', 'Keep a tidbit first (tidbit.add), or unplace one.')),
   shape: (s) => (!s.sketch ? fail('invalid', 'There is no sketch yet.', 'Sketch the shape you want on the fortune chart first (story.sketch).')
@@ -1640,17 +1669,21 @@ async function askReader(kind, s, at, extra) {
   } finally { r.close(); }
 }
 // the reader's answer, kept to the shape and the closed sets; null when it holds nothing to show
+// the reader's answer for each kind of ask, kept to the shape and the closed sets: [key, coerce]; empty lists mean nothing to show
+const WRITE_ITEMS = {
+  joints: ['joints', (j, s) => C.coerceJoints(j, s)], shape: ['moves', (j, s) => C.coerceShape(j, s)], plot: ['changes', (j, s) => C.coercePlot(j, s)],
+  place: ['placements', (j, s) => C.coercePlace(j, s)], depth: ['suggestions', (j) => C.coerceDepth(j)], questions: ['questions', (j) => C.coerceQuestions(j)],
+  interview: ['interview', (j, s) => C.coerceInterview(j, s)]
+};
 function writeItems(kind, json, s) {
-  if (kind === 'joints') return { joints: C.coerceJoints(json, s) };
-  if (kind === 'shape') { const moves = C.coerceShape(json, s); return moves.length ? { moves } : null; }
-  if (kind === 'plot') { const changes = C.coercePlot(json, s); return changes.length ? { changes } : null; }
-  if (kind === 'place') { const placements = C.coercePlace(json, s); return placements.length ? { placements } : null; }
-  const items = kind === 'questions' ? { questions: C.coerceQuestions(json) } : C.coerceOptions(json);
-  return (items.questions || items.options).length ? items : null;
+  if (kind === 'options') { const o = C.coerceOptions(json); return o.options.length ? o : null; }
+  const [key, coerce] = WRITE_ITEMS[kind], v = coerce(json, s);
+  if (kind === 'joints') return { joints: v };   // no verdicts is an answer too: every labelled joint was judged elsewhere or none came back
+  return v && (!Array.isArray(v) || v.length) ? { [key]: v } : null;
 }
 async function runWrite(kind, a) {
   const bad = writeError(kind, a); if (bad) return bad;
-  const s = C.clone(S()), at = ['joints', 'shape', 'place', 'plot'].includes(kind) ? -1 : s.beats.findIndex(b => b.id === a.beat), seq = ++suggestSeq;
+  const s = C.clone(S()), at = ['joints', 'shape', 'place', 'plot', 'interview'].includes(kind) ? -1 : s.beats.findIndex(b => b.id === a.beat), seq = ++suggestSeq;
   app.reading = true; readAbort = new AbortController();
   app.suggest = { id: seq, kind, beat: a.beat || null, pending: true }; renderSuggest();
   try {
@@ -1873,6 +1906,11 @@ const TOOLS = [
     handler: async (a) => runWrite('joints', a) },
   { name: 'write.shape', description: "Ask the chosen reader how to bring the beats that sit 2 or more from the writer's sketched fortune line toward it: one line per beat, with why. Proposals only; no fortune or text changes. Needs a sketch (story.sketch). It uses the reader the writer chose.", spends: true, inputSchema: NONE,
     handler: async (a) => runWrite('shape', a) },
+  { name: 'write.interview', description: "Ask the chosen reader for one question aimed at the weakest place in the story (empty beats, the checks, thin beats, principles no beat serves), with where the answer belongs: a beat's text, a tidbit or a note. The writer answers in their own words (beat.update, tidbit.add, story.update); nothing is written by the model. It uses the reader the writer chose.", spends: true, inputSchema: NONE,
+    handler: async (a) => runWrite('interview', a) },
+  { name: 'write.depth', description: "Ask the chosen reader how to give one thin beat depth: 2 to 4 suggestions, each a tidbit to look for or use, a plant, or a question, never prose. Nothing enters the story. It uses the reader the writer chose.", spends: true,
+    inputSchema: { type: 'object', properties: { beat: { type: 'string', description: 'beat id' } }, required: ['beat'] },
+    handler: async (a) => runWrite('depth', a) },
   { name: 'write.plot', description: "Ask the chosen reader how the structure changes around a new plot element: up to 6 changes, each a new empty beat (its stage, joint, fortune and a one-line label) or a relabel of an existing beat's stage, joint or fortune, with why. A proposal with a diff (write.get); nothing changes until the writer applies it (write.apply, person-only). It uses the reader the writer chose.", spends: true,
     inputSchema: { type: 'object', properties: { element: { type: 'string', description: 'the plot element, in a line' } }, required: ['element'] },
     handler: async (a) => runWrite('plot', a) },
@@ -2000,7 +2038,7 @@ const patchKeys = (args) => (args.patch ? Object.keys(args.patch) : []);
 const AFTER = {
   'view.focus': (args, door) => { renderAll(); if (door === 'ui' && args.principle !== 'all') $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
   'read.discard': () => renderProposal(),
-  'write.questions': () => renderSuggest(), 'write.options': () => renderSuggest(), 'write.joints': () => renderSuggest(), 'write.shape': () => renderSuggest(), 'write.place': () => renderSuggest(), 'write.plot': () => renderSuggest(), 'write.apply': (args, door) => { notice('write.apply', door); renderAll(); renderSuggest(); }, 'write.dismiss': () => renderSuggest(),
+  'write.questions': () => renderSuggest(), 'write.options': () => renderSuggest(), 'write.joints': () => renderSuggest(), 'write.shape': () => renderSuggest(), 'write.place': () => renderSuggest(), 'write.plot': () => renderSuggest(), 'write.interview': () => renderSuggest(), 'write.depth': () => renderSuggest(), 'write.apply': (args, door) => { notice('write.apply', door); renderAll(); renderSuggest(); }, 'write.dismiss': () => renderSuggest(),
   'story.update': () => { renderHeader(); renderViews(); },
   'story.save': () => renderSaveState(),
   'thread.update': (args) => (patchKeys(args).every(k => k === 'label') ? (renderViews(), patchCards()) : renderAll()),
@@ -2225,11 +2263,12 @@ function checkItem(c) {
 const pname = (pid) => { const x = C.PRINCIPLES.find(p => p.id === pid); return x ? x.name : ''; };
 function suggestHtml(id) {
   const g = app.suggest;
-  if (!g || g.beat !== id || g.kind === 'joints') return '';
+  if (!g || g.beat !== id || !['questions', 'options', 'depth'].includes(g.kind)) return '';
   if (g.pending) return `<p class="sg-wait">Asking ${esc(readerName())}… <button class="link" type="button" data-cmd="read.cancel">Stop</button></p>`;
   const close = `<button class="link" type="button" data-cmd="write.dismiss">Close</button>`;
+  if (g.kind === 'depth') return `<div class="sg"><p class="sg-h">${esc(g.model)}: ways to give this beat depth, not text to use</p><ul>${g.suggestions.map(x => `<li><span class="sg-tag">${esc(x.kind)}</span> ${esc(x.text)}${x.why ? `<span class="nx">${esc(x.why)}</span>` : ''}</li>`).join('')}</ul><p class="sg-actions">${close}</p></div>`;
   if (g.kind === 'questions') return `<div class="sg"><p class="sg-h">Questions from ${esc(g.model)}, for you to answer in your own words</p><ul>${g.questions.map(q => `<li>${esc(q.question)}${q.principle ? ` <span class="faint">· ${esc(pname(q.principle))}</span>` : ''}</li>`).join('')}</ul>
-    <p class="sg-actions"><button class="btn" type="button" data-ui="ask-o" data-id="${id}">What could happen here?</button> ${close}</p></div>`;
+    <p class="sg-actions"><button class="btn" type="button" data-ui="ask-o" data-id="${id}">What could happen here?</button> <button class="btn" type="button" data-ui="ask-depth" data-id="${id}">How to deepen it</button> ${close}</p></div>`;
   return `<div class="sg"><p class="sg-h">Options from ${esc(g.model)}: situations to weigh, not text to use. Write the beat yourself.</p>
     ${g.obvious ? `<p class="sg-obvious"><span class="faint">The obvious one, set aside:</span> <s>${esc(g.obvious)}</s></p>` : ''}
     <ul>${g.options.map(o => `<li><span class="sg-tag">${esc(o.joint || '—')}${o.fortune === null ? '' : ` · fortune ${esc(fmtF(o.fortune))}`}${o.principle ? ` · ${esc(pname(o.principle))}` : ''}</span> ${esc(o.text)}${o.why ? `<span class="nx">${esc(o.why)}</span>` : ''}</li>`).join('')}</ul>
@@ -2256,7 +2295,7 @@ function renderSketchBar() {
 const readerName = () => (rcfg.rung === 'device' ? 'Gemini Nano' : rcfg.rung === 'machine' ? (rcfg.models[(machine.found && machine.found.id) || rcfg.server || 'ollama'] || 'the model server') : (rcfg.models[rcfg.provider] || (LD.PROVIDERS[rcfg.provider] || {}).label || 'your provider'));
 function renderSuggest() {
   for (const el of document.querySelectorAll('[data-sg]')) el.innerHTML = suggestHtml(el.dataset.sg);
-  renderChecks(); renderSketchBar(); renderTidbits(); renderPlot();
+  renderChecks(); renderSketchBar(); renderTidbits(); renderPlot(); renderInterview();
 }
 function renderChecks() {
   const list = C.checks(S()), box = $('#checks div');
@@ -2275,6 +2314,35 @@ function renderThreads() {
     return `<li><div class="tline"><span class="tstate${complete ? '' : left ? ' left' : ' open'}" title="${complete ? 'planted and paid off' : left ? 'left open on purpose' : 'open'}"></span><textarea data-thread="${t.id}" data-tfield="label" rows="1" aria-label="Thread label" maxlength="200">${esc(t.label)}</textarea><button class="x" data-cmd="thread.remove" data-args="${attr({ id: t.id })}" aria-label="Remove thread ${esc(t.label)}">remove</button></div>
       <div class="tmeta">planted in <select class="sel" data-thread="${t.id}" data-tfield="plant" aria-label="Plant beat">${beatOpts(t.plant, 'nowhere')}</select> pays off in ${pays}${addable.length ? `<select class="addtag" data-thread="${t.id}" data-tfield="payoff-add" aria-label="Add a payoff beat"><option value="">+ beat</option>${addable.map(b => `<option value="${b.id}">beat ${posOf(b.id) + 1}</option>`).join('')}</select>` : ''}${t.payoffs.length ? '' : `<label class="tleft"><input type="checkbox" data-thread="${t.id}" data-tfield="open"${t.open ? ' checked' : ''}> left open on purpose</label>`}</div></li>`;
   }).join('') || '<li class="faint">No threads yet. Name something the story plants: an object, a line, a habit.</li>';
+}
+function renderInterview() {
+  const g = app.suggest, box = $('#interview-sg'); if (!box) return;
+  if (!g || g.kind !== 'interview') { box.innerHTML = ''; return; }
+  if (g.pending) { box.innerHTML = `<p class="sg-wait">Asking ${esc(readerName())} for a question… <button class="link" type="button" data-cmd="read.cancel">Stop</button></p>`; return; }
+  const w = g.interview.place, beatOk = w.beat && posOf(w.beat) >= 0;
+  const to = [beatOk ? `<button class="btn${g.interview.lands === 'beat' ? ' primary' : ''}" type="button" data-ui="iv-beat">Add to beat ${posOf(w.beat) + 1}</button>` : '',
+    `<button class="btn${g.interview.lands === 'tidbit' ? ' primary' : ''}" type="button" data-ui="iv-tidbit">Keep as a tidbit</button>`,
+    w.principle ? `<button class="btn${g.interview.lands === 'note' ? ' primary' : ''}" type="button" data-ui="iv-note">Keep as a note on “${esc(pname(w.principle))}”</button>` : ''].filter(Boolean).join(' ');
+  box.innerHTML = `<div class="sg"><p class="sg-h">${esc(g.model)} asks, about: ${esc(w.text)}</p><p class="iv-q">${esc(g.interview.question)}</p>
+    <textarea id="iv-answer" rows="3" aria-label="Your answer, in your own words" placeholder="Your answer, in your own words"></textarea>
+    <p class="sg-actions">${to} <button class="link" type="button" data-ui="ask-interview">Next question</button> <button class="link" type="button" data-cmd="write.dismiss">Stop the interview</button></p></div>`;
+}
+// an answer goes where the writer sends it, in the writer's words, through the ordinary tools; then the next question
+// where an interview answer can go, in the writer's words: the beat's text, a principle note, or a tidbit
+const appendTo = (old, text, sep) => ((old || '').trim() ? old.trimEnd() + sep : '') + text;
+function answerCall(where, w, text) {
+  const b = w.beat && S().beats.find(x => x.id === w.beat);
+  if (where === 'beat' && b) return ['beat.update', { id: b.id, patch: { text: appendTo(b.text, text, '\n\n') } }];
+  if (where === 'note' && w.principle) return ['story.update', { notes: { [w.principle]: appendTo(S().notes[w.principle], text, ' ') } }];
+  return ['tidbit.add', { text }];
+}
+async function landAnswer(where) {
+  const g = app.suggest, text = (($('#iv-answer') || {}).value || '').trim();
+  if (!g || g.kind !== 'interview' || !text) { toast('Write your answer first.', 'It goes in your words, where you choose.'); return; }
+  const r = await ui(...answerCall(where, g.interview.place, text));
+  if (!r.ok) return;
+  if (where === 'beat') renderAll();   // a page edit to text redraws only the card's labels; the answer must show in the beat's own field
+  ui('write.interview', {});
 }
 function renderPlot() {
   const g = app.suggest, box = $('#plot-sg'); if (!box) return;
@@ -2378,7 +2446,8 @@ document.addEventListener('change', (e) => {
   delete d.dirty;
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
-const UI_ACTIONS = { 'plot-apply': (u, e) => { if (e && e.isTrusted) ui('write.apply', { id: +u.dataset.id }).then(r => { if (r.ok) toast(`Applied ${r.data.changes} change${r.data.changes > 1 ? 's' : ''}.`, 'Undo reverses them. New beats are empty: write them.'); }); },
+const UI_ACTIONS = { 'ask-interview': () => ui('write.interview', {}), 'ask-depth': (u) => ui('write.depth', { beat: u.dataset.id }), 'iv-beat': () => landAnswer('beat'), 'iv-tidbit': () => landAnswer('tidbit'), 'iv-note': () => landAnswer('note'),
+  'plot-apply': (u, e) => { if (e && e.isTrusted) ui('write.apply', { id: +u.dataset.id }).then(r => { if (r.ok) toast(`Applied ${r.data.changes} change${r.data.changes > 1 ? 's' : ''}.`, 'Undo reverses them. New beats are empty: write them.'); }); },
   'sketch-start': () => { sketching = true; renderSketchBar(); }, 'sketch-cancel': () => { sketching = false; renderChart(); }, 'sketch-clear': () => ui('story.sketch', { points: [] }), 'ask-shape': () => ui('write.shape', {}), 'ask-place': () => ui('write.place', {}),
   'ask-q': (u) => ui('write.questions', { beat: u.dataset.id }), 'ask-o': (u) => ui('write.options', { beat: u.dataset.id }), 'ask-joints': () => ui('write.joints', {}),
   help: () => openSplash(false), tour: () => startTour(), 'splash-close': () => splash.close(), open: () => $('#file').click(), wizard: () => openWizard(),

@@ -289,6 +289,14 @@ check('read.schemas_closed', Object.values(plain(C.READ_SCHEMAS)).every(closed),
   check('plot.coerce_apply', ch.length === 4 && C.validate(n).ok && n.beats.length === s0.beats.length + 3 && at('A storm warning.') === 0 && at('Tavi sees the mast go.') === at('Ama\'s boat loses its mast.') + 1
     && n.beats[at('Ama\'s boat loses its mast.') - 1].id === s0.beats[5].id && n.beats.find(b => b.id === s0.beats[6].id).joint === 'but' && n.beats[0].text === '' && n.beats[0].by === 'model', { ch, labels: n.beats.map(b => b.label) });
 }
+// weak places (Batch D interview): empty beats first, then the checks, thin beats, unserved principles; at most 8
+{
+  const st = mut(t => { t.beats[4].text = ''; t.beats[2].text = 'Too short.'; t.beats.forEach(b => { b.tags = b.tags.filter(x => x !== 'cut'); }); });
+  const w = plain(C.weakPlaces(st));
+  check('interview.weak_places', w[0].beat === 'b5' && w[0].at === 5 && w.some(x => x.text === 'Beat 3 is thin: 2 words.') && w.some(x => x.principle === 'cut') && w.length <= 8 && plain(C.weakPlaces(plain(C.seed()))).every(x => x.kind !== 'beat' || x.at), w);
+  const iv = plain(C.coerceInterview({ place: 1, question: 'Q?', lands: 'note' }, st)), bad = C.coerceInterview({ place: 99, question: 'Q?' }, st);
+  check('interview.coerce', iv.place.beat === 'b5' && iv.lands === 'note' && bad === null, iv);
+}
 check('write.schemas_closed', Object.values(plain(C.WRITE_SCHEMAS)).every(closed), 'open object in a write schema');
 // the sketch (TaleBrush): 25 values from -5 to 5; a drawn path resamples to them; beats 2 or more away are the misses
 {
