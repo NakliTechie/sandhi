@@ -359,6 +359,21 @@ async function readPage(opts) {
   check('write.place_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // novel scale in the editor (Batch E): chapter headers over beats, fold a chapter, the thread ledger per chapter
+  const { ctx2, p, errs, call } = await readPage({});
+  const s0 = (await call('story.get', {})).data.story;
+  for (const [i, b] of s0.beats.entries()) await call('beat.update', { id: b.id, patch: { chapter: i < 3 ? 'The island' : i < 6 ? 'The storm' : 'The bell' } });
+  const heads = await p.$$eval('#beats h3.chap', hs => hs.map(h => h.textContent.trim()));
+  await p.click('#beats h3.chap button[data-name="The island"]');
+  const cards = await p.$$eval('#beats article.beat', a => a.length);
+  const allThreads = await p.$$eval('#threads ul li', l => l.length);
+  await p.selectOption('#thread-chapter', 'The storm');
+  const islandThreads = await p.$$eval('#threads ul li', l => l.length);
+  const touches = s0.threads.filter(t => [t.plant, ...t.payoffs].some(id => { const k = s0.beats.findIndex(b => b.id === id); return k >= 3 && k < 6; })).length;
+  check('chapters.editor', heads.length === 3 && /^▾ The island\s+beats 1–3/.test(heads[0]) && /The storm\s+beats 4–6/.test(heads[1]) && /The bell\s+beats 7–10/.test(heads[2]) && cards === 7 && islandThreads === touches && allThreads === s0.threads.length, { heads, cards, allThreads, islandThreads, touches });
+  check('chapters.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 { // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
   const { ctx2, p, errs, call } = await readPage({});
   const t0 = (await call('story.get', {})).data.story.threads[0];
@@ -595,7 +610,7 @@ async function lmStudioPage(win) {
   const story = (await call('read.get', {})).data.story;
   const left = await p.evaluate(() => new Promise(res => { const q = indexedDB.open('sandhi-reads', 1); q.onsuccess = () => { const c = q.result.transaction('parts').objectStore('parts').count(); c.onsuccess = () => res(c.result); }; q.onerror = () => res(-1); }));
   check('read.novel_chapters_resume', first.class === 'cancelled' && firstCalls === 4 && second.ok && second.data.mode === 'chapters' && second.data.chapters === 8 && second.data.resumed === 3
-    && chapterCalls.slice(4).join() === '4,5,6,7,8' && story.beats.length === 8 && story.beats[0].text.startsWith('CHAPTER I') && story.beats[7].text.startsWith('CHAPTER VIII') && left === 0,
+    && chapterCalls.slice(4).join() === '4,5,6,7,8' && story.beats.length === 8 && story.beats[0].text.startsWith('CHAPTER I') && story.beats[7].text.startsWith('CHAPTER VIII') && story.beats[7].chapter === 'CHAPTER VIII' && left === 0,
     { first: first.class, firstCalls, second: second.data || second, calls: chapterCalls, beats: story && story.beats.length, left });
   check('read.novel_no_errors', errs.length === 0, errs);
   await page.ctx2.close();

@@ -192,6 +192,11 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 .tstate{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--accent)}
 .tstate.open{background:transparent;border:1.5px solid var(--accent)}
 .tstate.left{background:transparent;border:1.5px dashed var(--muted)}
+.chap{font:500 15px/1.4 var(--serif);margin:18px 0 6px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.chap-t{all:unset;cursor:pointer;color:var(--ink)}
+.chap-t:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chap .faint{font:12px var(--sans)}
+.chapfilter{font-size:12px;color:var(--muted);display:block;margin:0 0 8px}
 .tleft{display:inline-flex;gap:4px;align-items:center;margin-left:8px;font-size:12px;color:var(--muted)}
 .tmeta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:12px;color:var(--faint)}
 .x{border:none;background:transparent;color:var(--faint);font-size:12px;padding:0 4px}
@@ -361,7 +366,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     </section>
     <aside>
       <section class="card" id="checks" aria-labelledby="checks-h"><h2 class="lab" id="checks-h">Checks</h2><div></div></section>
-      <section class="card" id="threads" aria-labelledby="threads-h"><h2 class="lab" id="threads-h">Plants and payoffs</h2><ul></ul>
+      <section class="card" id="threads" aria-labelledby="threads-h"><h2 class="lab" id="threads-h">Plants and payoffs</h2><label class="chapfilter" hidden>in <select id="thread-chapter" aria-label="Show the threads of one chapter"></select></label><ul></ul>
         <form id="thread-add"><input placeholder="Something planted: an object, a line, a habit" aria-label="New thread" maxlength="200"><button class="ghost" type="submit" disabled>Add</button></form>
       </section>
       <section class="card" id="tidbits" aria-labelledby="tidbits-h"><h2 class="lab" id="tidbits-h">Tidbits</h2><ul></ul>
@@ -554,7 +559,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   const ids = a => new Set(a.map(x => x.id));
   const SPINE_IDS = ids(SPINE), AV_IDS = ids(AVASTHA), KIS_IDS = ids(KIS);
   const JOINT_SET = new Set(JOINTS), MARK_SET = new Set(MARKS), DRIVER_SET = new Set(DRIVERS), BY_SET = new Set(['writer', 'model', 'agent']);
-  const BEAT_KEYS = ['id', 'label', 'spine', 'joint', 'text', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis', 'drafts', 'by', 'model'];
+  const BEAT_KEYS = ['id', 'label', 'spine', 'joint', 'text', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis', 'drafts', 'by', 'model', 'chapter'];
   const STORY_KEYS = ['sandhi', 'title', 'logline', 'belief', 'beats', 'threads', 'notes', 'sketch', 'tidbits'];
   // the writer's sketched fortune line (TaleBrush): SKETCH_N values from -5 to 5, evenly spaced from the first beat to the last
   const SKETCH_N = 25;
@@ -601,6 +606,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     if (!v.obj(b, p)) return;
     v.keys(b, BEAT_KEYS, p); v.id(b.id, beatIds, `${p}.id`);
     v.str(b.label, `${p}.label`, 200); v.str(b.text, `${p}.text`, 200000);
+    if (b.chapter !== undefined) v.str(b.chapter, `${p}.chapter`, 80);   // optional: consecutive beats with one chapter name group under it
     v.oneOf(b.spine, SPINE_IDS, `${p}.spine`); v.oneOf(b.joint, JOINT_SET, `${p}.joint`, true);
     if (!Number.isInteger(b.fortune) || b.fortune < -5 || b.fortune > 5) v.e(`${p}.fortune`, 'must be an integer from -5 to 5');
     v.list(b.tags, PIDS, `${p}.tags`); v.list(b.marks, MARK_SET, `${p}.marks`);
@@ -836,13 +842,21 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   const words = (t, n) => { const w = String(t || '').split(/\s+/).filter(Boolean); return w.length > n ? w.slice(0, n).join(' ') + ' …' : w.join(' '); };
   // The story as the model sees it. detail 0 = every beat's full text; 1 = full text near the asked beat, 40 words elsewhere;
   // 2 = 15 words elsewhere; 3 = labels only elsewhere. The page asks for less detail until the prompt fits the reader's window.
+  // detail 4 (a novel): beats outside the asked beat's chapter collapse to one line per chapter
+  function chapterLine(s, run) { const bs = s.beats.slice(run.from - 1, run.to); return `${run.name} (beats ${run.from}–${run.to}): fortune ${bs[0].fortune} to ${bs.at(-1).fortune}; ${bs.map(b => b.label || spineName(b.spine)).join('; ')}`.slice(0, 600); }
+  const beatLabelsLine = (b) => [b.spine, b.joint ? `joint ${b.joint}` : '', `fortune ${b.fortune}`, b.tags.length ? `principles ${b.tags.join(', ')}` : 'no principles tagged', b.marks.join(', ')].filter(Boolean).join('; ');
+  const BRIEF_TEXT = [(t) => t, (t) => words(t, 40), (t) => words(t, 15)];
+  function beatLine(b, i, at, detail) {
+    const near = at < 0 ? detail === 0 : Math.abs(i - at) <= 1, text = near ? String(b.text || '') : (BRIEF_TEXT[detail] || (() => ''))(String(b.text || ''));
+    return `Beat ${i + 1}${i === at ? ' (THE BEAT ASKED ABOUT)' : ''}${b.chapter ? ` (${b.chapter})` : ''} [${beatLabelsLine(b)}]: ${text.trim() || '(empty: not written yet)'}`;
+  }
   function storyBrief(s, at, detail) {
     const head = [`Title: ${s.title || '(untitled)'}`, s.logline ? `Who wants what: ${s.logline}` : '', s.belief ? `Why the writer tells it: ${s.belief}` : ''].filter(Boolean);
-    const lines = s.beats.map((b, i) => {
-      const near = at < 0 ? detail === 0 : Math.abs(i - at) <= 1;
-      const text = detail === 0 || near ? String(b.text || '') : detail === 1 ? words(b.text, 40) : detail === 2 ? words(b.text, 15) : '';
-      const lab = [b.spine, b.joint ? `joint ${b.joint}` : '', `fortune ${b.fortune}`, b.tags.length ? `principles ${b.tags.join(', ')}` : 'no principles tagged', b.marks.length ? b.marks.join(', ') : ''].filter(Boolean).join('; ');
-      return `Beat ${i + 1}${i === at ? ' (THE BEAT ASKED ABOUT)' : ''} [${lab}]: ${text.trim() || '(empty: not written yet)'}`;
+    const runs = detail >= 4 ? chapterRuns(s) : [], mine = runs.find(r => at + 1 >= r.from && at + 1 <= r.to), inRun = (i) => runs.find(r => i + 1 >= r.from && i + 1 <= r.to);
+    const lines = s.beats.flatMap((b, i) => {
+      const run = inRun(i);
+      if (run && run !== mine) return run.from === i + 1 ? [`Chapter ${chapterLine(s, run)}`] : [];
+      return [beatLine(b, i, at, detail)];
     });
     const ix = new Map(s.beats.map((b, i) => [b.id, i + 1]));
     const threads = s.threads.map(t => `Thread "${t.label}": planted in beat ${ix.get(t.plant) || '?'}, pays off in ${t.payoffs.map(x => ix.get(x)).filter(Boolean).join(', ') || 'no beat yet'}.`);
@@ -873,6 +887,12 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   function coerceOptions(json) {
     const opts = rows(json && json.options).map(o => { const f = Math.round(Number(o.fortune)); return { text: line(o.text, 300), joint: pick(o.joint, JOINT_SET), fortune: Number.isFinite(f) ? Math.max(-5, Math.min(5, f)) : null, principle: principleId(o.principle), why: line(o.why, 200) }; });
     return { obvious: line(json && json.obvious, 300), options: opts.filter(o => o.text).slice(0, 6) };
+  }
+  // chapters as runs of consecutive beats with the same chapter name: [{ name, from, to }] (1-based beat numbers); none -> []
+  function chapterRuns(s) {
+    const out = [];
+    s.beats.forEach((b, i) => { const name = String(b.chapter || '').trim(); if (!name) return; const last = out.at(-1); if (last && last.name === name && last.to === i) last.to = i + 1; else out.push({ name, from: i + 1, to: i + 1 }); });
+    return out;
   }
   // the story's weak places, worst first: empty beats, the checks' findings, thin beats, principles no beat serves (at most 8)
   function weakPlaces(s) {
@@ -1084,7 +1104,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 
   root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
     LIMITS, seed: () => clone(SEED), validate, blankStory, storyFromSpine, newBeat, nextId, checks, arcMatch, coverage, clone, wordCount, spineName,
-    READ_SCHEMAS, READ_PROMPTS, splitChapters, chapterScene, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, coerceShape, coercePlace, coercePlot, applyPlot, weakPlaces, coerceInterview, coerceDepth, SKETCH_N, sketchAt, sketchMisses, sketchFrom, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
+    READ_SCHEMAS, READ_PROMPTS, splitChapters, chapterScene, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, coerceShape, coercePlace, coercePlot, applyPlot, weakPlaces, chapterRuns, coerceInterview, coerceDepth, SKETCH_N, sketchAt, sketchMisses, sketchFrom, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
 })(globalThis);
 </script>
 
@@ -1234,7 +1254,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch { /* storage unavailable: nothing was kept */ } }
 };
-const app = { story: null, undo: [], redo: [], dirty: false, kept: true, focus: 'all', last: null, coalesce: null, coalesceAt: 0, coalesceStart: 0, journal: [], open: new Set(), proposal: null, reading: false, suggest: null };
+const app = { story: null, undo: [], redo: [], dirty: false, kept: true, focus: 'all', last: null, coalesce: null, coalesceAt: 0, coalesceStart: 0, journal: [], open: new Set(), shut: new Set(), proposal: null, reading: false, suggest: null };
 let sketching = false;   // the fortune chart takes a drawn line instead of dot drags while true
 const ok = (data) => ({ ok: true, class: 'ok', data: data || {} });
 const fail = (cls, message, next, data) => ({ ok: false, class: cls, message, next, ...(data ? { data } : {}) });
@@ -1273,7 +1293,7 @@ function commit(next, key) {
 }
 const noBeat = (id) => fail('not_found', `no beat with id ${id}`, 'Call status or story.get for the current beat ids.');
 const noThread = (id) => fail('not_found', `no thread with id ${id}`, 'Call story.get for the current thread ids.');
-const BEAT_PATCH = new Set(['label', 'spine', 'joint', 'text', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis', 'drafts']);
+const BEAT_PATCH = new Set(['label', 'spine', 'joint', 'text', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis', 'drafts', 'chapter']);
 const THREAD_PATCH = new Set(['label', 'plant', 'payoffs', 'open']), TIDBIT_PATCH = new Set(['text', 'note', 'placed']);
 const unknownKeys = (patch, allowed) => Object.keys(patch || {}).filter(k => !allowed.has(k));
 
@@ -1651,6 +1671,7 @@ async function readChapters(text, chapters, r, progress) {
   if (await r.measure(lp.system + '\n' + lp.user) > r.maxInput) throw readerFail('too_long', `An outline of ${chapters.length} chapters is too long for ${r.model} to read at once.`, 'Choose your provider with your key, or a model with a longer window. The chapters read so far are kept: read again to resume.');
   progress(`Reading the whole book in outline: ${chapters.length} chapters…`);
   const out = await r.run(lp, C.READ_SCHEMAS.labels), res = C.storyFromLabels(text, scenes, out.json, out.model);
+  if (res.story && res.story.beats.length === chapters.length) res.story.beats.forEach((b, i) => { b.chapter = chapters[i].title.slice(0, 80); });
   await readCache.clear(key);
   return { ...res, mode: 'chapters', calls: calls + 1, chapters: chapters.length, resumed, model: out.model };
 }
@@ -1735,7 +1756,7 @@ function writeError(kind, a) {
 async function askReader(kind, s, at, extra) {
   const r = await READERS[rcfg.rung].open(() => { /* a download shows in the read dialog; here the panel says it is asking */ });
   try {
-    for (const detail of [0, 1, 2, 3]) {
+    for (const detail of [0, 1, 2, 3, 4]) {
       const pr = C.WRITE_PROMPTS[kind](C.storyBrief(s, at, detail), at + 1, s, extra);
       if (await r.measure(pr.system + '\n' + pr.user) <= r.maxInput) return await r.run(pr, C.WRITE_SCHEMAS[kind]);
     }
@@ -2263,6 +2284,7 @@ function labelHtml(b, s, P) {
   const drafts = b.drafts.map((d, k) => `<li><s>${esc(d.text)}</s><input class="dnote" data-beat="${id}" data-field="draft-note" data-k="${k}" value="${esc(d.note)}" placeholder="Why it changed" aria-label="Note on draft ${d.n}"></li>`).join('');
   return `<details class="more" data-more="${id}"${app.open.has(id) ? ' open' : ''}><summary>Label this beat <span class="lsum">${esc(labelSummary(b))}</span></summary><div class="inner">
       <label>name <input class="blabel" data-beat="${id}" data-field="label" value="${esc(b.label)}" placeholder="${esc(C.spineName(b.spine))}" aria-label="Name of beat ${P}" maxlength="200"></label>
+      <label>chapter <input class="bchap" data-beat="${id}" data-field="chapter" value="${esc(b.chapter || '')}" placeholder="none" aria-label="Chapter of beat ${P}" maxlength="80"></label>
       <div class="brow">${markBtn(b, 'turn', 'the turn')}${markBtn(b, 'low', 'low point')}
         <label>fortune <input type="range" min="-5" max="5" step="1" value="${b.fortune}" data-beat="${id}" data-field="fortune" aria-label="Fortune of beat ${P}"><output>${fmtF(b.fortune)}</output></label>
         <label>moved by <select class="sel" data-beat="${id}" data-field="driver" aria-label="What moves beat ${P}"><option value="">—</option>${drivers}</select></label></div>
@@ -2312,11 +2334,17 @@ function patchCards() {
     if (pa) pa.innerHTML = threadNames(s, t => t.payoffs.includes(b.id));
   }
 }
+// a chapter's header over its beats: its name, its beats and words, its fortune from first to last, and a toggle to fold it
+function chapterHead(r, s) {
+  const bs = s.beats.slice(r.from - 1, r.to), open = !app.shut.has(r.name), words = bs.reduce((n, b) => n + C.wordCount(b.text), 0);
+  return `<h3 class="chap"><button class="chap-t" type="button" data-ui="chapter-toggle" data-name="${esc(r.name)}" aria-expanded="${open}">${open ? '▾' : '▸'} ${esc(r.name)}</button> <span class="faint">beats ${r.from}${r.to > r.from ? `–${r.to}` : ''} · ${words.toLocaleString('en')} words · fortune ${fmtF(bs[0].fortune)} → ${fmtF(bs.at(-1).fortune)}</span></h3>`;
+}
 function renderBeats() {
   // which "Label this beat" sections are open, read from the page now: the toggle event arrives a moment after the click
   for (const d of document.querySelectorAll('#beats details.more')) { if (d.open) app.open.add(d.dataset.more); else app.open.delete(d.dataset.more); }
   const s = S();
-  $('#beats').innerHTML = s.beats.length ? s.beats.map((b, i) => beatCard(b, i, s)).join('') : '<p class="empty">No beats. Add one, or load The whistle.</p>';
+  const runs = C.chapterRuns(s), head = new Map(runs.map(r => [r.from, r])), shut = (i) => runs.some(r => i + 1 >= r.from && i + 1 <= r.to && app.shut.has(r.name));
+  $('#beats').innerHTML = s.beats.length ? s.beats.map((b, i) => (head.has(i + 1) ? chapterHead(head.get(i + 1), s) : '') + (shut(i) ? '' : beatCard(b, i, s))).join('') : '<p class="empty">No beats. Add one, or load The whistle.</p>';
 }
 
 const CHECK_NAMES = { beat_empty: 'Empty beat', beat_idle: 'No principle yet', joint_unlabelled: 'Unlabelled joint', joint_slack: 'Slack joint', plant_unpaid: 'Plant never fires', payoff_unplanted: 'Payoff without a plant', payoff_early: 'Payoff before its plant', low_not_lowest: 'Low point is not the lowest', thread_unused: 'Unused plant', ending_luck: 'Luck after the turn', no_turn: 'No turn marked', flat_fortune: 'Flat fortune' };
@@ -2381,7 +2409,11 @@ function renderChecks() {
 }
 function renderThreads() {
   const s = S(), beatOpts = (cur, none) => `<option value="">${none}</option>` + s.beats.map((b, i) => `<option value="${b.id}"${b.id === cur ? ' selected' : ''}>beat ${i + 1}</option>`).join('');
-  $('#threads ul').innerHTML = s.threads.map(t => {
+  const runs = C.chapterRuns(s), pick = $('#thread-chapter'), want = runs.find(r => r.name === app.threadChapter);
+  pick.closest('label').hidden = !runs.length;
+  pick.innerHTML = `<option value="">every chapter</option>${runs.map(r => `<option${want && want.name === r.name ? ' selected' : ''}>${esc(r.name)}</option>`).join('')}`;
+  const inRun = (id) => { const k = posOf(id) + 1; return !want || (k >= want.from && k <= want.to); };
+  $('#threads ul').innerHTML = s.threads.filter(t => !want || inRun(t.plant) || t.payoffs.some(inRun)).map(t => {
     const complete = t.plant && t.payoffs.length, left = !t.payoffs.length && t.open;
     const pays = t.payoffs.map(p => ({ p, i: posOf(p) })).toSorted((a, b) => a.i - b.i).map(({ p, i }) => `<button class="chip" data-cmd="thread.update" data-args="${attr({ id: t.id, patch: { payoffs: t.payoffs.filter(x => x !== p) } })}" title="Remove this payoff">beat ${i + 1} ×</button>`).join('');
     const addable = s.beats.filter(b => !t.payoffs.includes(b.id));
@@ -2520,7 +2552,8 @@ document.addEventListener('change', (e) => {
   delete d.dirty;
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
-const UI_ACTIONS = { 'ask-interview': () => ui('write.interview', {}), 'ask-depth': (u) => ui('write.depth', { beat: u.dataset.id }), 'iv-beat': () => landAnswer('beat'), 'iv-tidbit': () => landAnswer('tidbit'), 'iv-note': () => landAnswer('note'),
+const UI_ACTIONS = { 'chapter-toggle': (u) => { const n = u.dataset.name; if (app.shut.has(n)) app.shut.delete(n); else app.shut.add(n); renderBeats(); },
+  'ask-interview': () => ui('write.interview', {}), 'ask-depth': (u) => ui('write.depth', { beat: u.dataset.id }), 'iv-beat': () => landAnswer('beat'), 'iv-tidbit': () => landAnswer('tidbit'), 'iv-note': () => landAnswer('note'),
   'plot-apply': (u, e) => { if (e && e.isTrusted) ui('write.apply', { id: +u.dataset.id }).then(r => { if (r.ok) toast(`Applied ${r.data.changes} change${r.data.changes > 1 ? 's' : ''}.`, 'Undo reverses them. New beats are empty: write them.'); }); },
   'sketch-start': () => { sketching = true; renderSketchBar(); }, 'sketch-cancel': () => { sketching = false; renderChart(); }, 'sketch-clear': () => ui('story.sketch', { points: [] }), 'ask-shape': () => ui('write.shape', {}), 'ask-place': () => ui('write.place', {}),
   'ask-q': (u) => ui('write.questions', { beat: u.dataset.id }), 'ask-o': (u) => ui('write.options', { beat: u.dataset.id }), 'ask-joints': () => ui('write.joints', {}),
@@ -2549,6 +2582,7 @@ document.addEventListener('click', (e) => {
 });
 function openLabels(id) { const d = document.querySelector(`#beat-${CSS.escape(id)} details.more`); if (d) { d.open = true; app.open.add(id); } }
 document.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.more) { if (d.open) app.open.add(d.dataset.more); else app.open.delete(d.dataset.more); } }, true);
+$('#thread-chapter').addEventListener('change', (e) => { app.threadChapter = e.target.value || null; renderThreads(); });
 $('#trad-all').checked = !!uiPrefs.traditions;
 $('#trad-all').addEventListener('change', (e) => { uiPrefs.traditions = e.target.checked; store.set(UIKEY, JSON.stringify(uiPrefs)); renderChart(); });
 $('#plot-add input').addEventListener('input', (e) => { $('#plot-add button').disabled = !e.target.value.trim(); });

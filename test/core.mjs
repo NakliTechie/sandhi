@@ -303,6 +303,14 @@ check('read.schemas_closed', Object.values(plain(C.READ_SCHEMAS)).every(closed),
   const ch = plain(C.splitChapters(t));
   check('chapters.split', ch.map(c => c.title).join('|') === 'CHAPTER I. The Fog|Chapter Twenty-One|Chapter 3: Late|IV.' && ch[0].start === 0 && ch.at(-1).end === t.length && ch.every((c, k) => !k || c.start === ch[k - 1].end) && C.splitChapters('a\n\nChapter 1\n\nb\n\nChapter 2\n\nc') === null, ch);
 }
+// novel scale (Batch E): chapters are runs of beats with one chapter name; a detail-4 brief folds the other chapters to a line
+{
+  const st = mut(t => t.beats.forEach((b, i) => { b.chapter = i < 3 ? 'One' : i < 6 ? 'Two' : 'Three'; }));
+  const runs = plain(C.chapterRuns(st)), long = mut(t => { t.beats[0].chapter = 'x'.repeat(81); });
+  const brief = C.storyBrief(st, 4, 4);
+  check('chapters.runs_brief', JSON.stringify(runs) === JSON.stringify([{ name: 'One', from: 1, to: 3 }, { name: 'Two', from: 4, to: 6 }, { name: 'Three', from: 7, to: 10 }]) && C.validate(st).ok && !C.validate(long).ok
+    && /^Chapter One \(beats 1–3\)/m.test(brief) && /^Chapter Three \(beats 7–10\)/m.test(brief) && /^Beat 5 \(THE BEAT ASKED ABOUT\) \(Two\)/m.test(brief) && !/^Beat 1 /m.test(brief) && C.chapterRuns(plain(C.seed())).length === 0, { runs, brief: brief.slice(0, 300) });
+}
 check('write.schemas_closed', Object.values(plain(C.WRITE_SCHEMAS)).every(closed), 'open object in a write schema');
 // the sketch (TaleBrush): 25 values from -5 to 5; a drawn path resamples to them; beats 2 or more away are the misses
 {
