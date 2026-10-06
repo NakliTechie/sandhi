@@ -36,7 +36,7 @@ An agent driving sandhi is context-poor and may be killed mid-turn. The contract
 ## §1 Story schema `sandhi: 1`
 
 ```
-story   { sandhi: 1, title, logline, belief, beats: [beat], threads: [thread], notes: {principleId: text} }
+story   { sandhi: 1, title, logline, belief, beats: [beat], threads: [thread], notes: {principleId: text}, sketch? }
 beat    { id, label, spine, joint, text, fortune, tags, marks, driver, avastha, kis, drafts: [draft], by }
 thread  { id, label, plant: beatId|null, payoffs: [beatId] }
 draft   { n, text, note }
@@ -52,6 +52,7 @@ draft   { n, text, note }
 | `driver` | `luck` · `choice` · `null` (who moves this beat) |
 | `avastha` | `arambha` · `prayatna` · `praptyasha` · `niyatapti` · `phalagama` · `null` (Nāṭyaśāstra's five stages) |
 | `kis` | `ki` · `sho` · `ten` · `ketsu` · `null` (kishōtenketsu) |
+| `sketch` (optional) | 25 numbers from −5 to 5: the fortune line the writer sketched, evenly spaced from the first beat to the last (TaleBrush) |
 | `by` | `writer` · `model` (with `model: <id>`, 1–200 characters) · `agent` (an agent's edit through `window.sandhi` or `navigator.modelContext`) |
 
 Unknown fields are rejected. Ids match `[a-z0-9-]{1,40}`. One story holds at most 400 beats, 100 threads and 3,000,000 characters of text (`LIMITS`): every thread picker lists every beat, so beats × threads is the drawing cost. Per-principle beat lists are derived from beat `tags`, never stored. In the explainer they matched the tags for all 13 principles (checked 2026-10-04).
@@ -107,7 +108,7 @@ Readers follow the house AI ladder (Edge-First doctrine; ported from Draft's `si
 
 **Staged, then accepted.** `read.run` stages a proposal (`read.get` shows it) and changes nothing. `read.accept` (person-only) commits it, undoable. Beats carry `by: model` and `model: <id>`; changing any label of a beat makes it `by: writer` (or `by: agent` when an agent changes it).
 
-**Write mode (Batch C, 2026-10-06).** The chosen reader asks and proposes; the writer writes (history Decisions, "Write mode, from the prior-art pass"). `write.questions {beat}` returns 2–4 questions, each tied to a principle id. `write.options {beat}` returns the obvious option, shown struck through as set aside, and 3–5 one-line situations, each with joint, fortune, principle and why; the prompt asks for different joints and at least one down-turn. `write.joints` judges each joint the writer labelled *therefore* or *but*: `holds`, `slack` or `unsure`, with a reason and a question; verdicts on other beats are dropped. Results live in `app.suggest` (`write.get`), one at a time, never in the story; `write.dismiss` or a new ask drops them, and no tool writes an option into a beat. The prompt carries title, logline, belief, every beat's labels and text, and the threads; when it does not fit the reader's window, beats away from the asked one shrink to 40 words, then 15, then labels only, and past that the ask is refused `too_long`. Each ask holds the read lock and stops with `read.cancel`. Tested with a stand-in reader (`face.mjs` write.*); not yet measured with a real model.
+**Write mode (Batch C, 2026-10-06).** The chosen reader asks and proposes; the writer writes (history Decisions, "Write mode, from the prior-art pass"). `write.questions {beat}` returns 2–4 questions, each tied to a principle id. `write.options {beat}` returns the obvious option, shown struck through as set aside, and 3–5 one-line situations, each with joint, fortune, principle and why; the prompt asks for different joints and at least one down-turn. `write.joints` judges each joint the writer labelled *therefore* or *but*: `holds`, `slack` or `unsure`, with a reason and a question; verdicts on other beats are dropped. Results live in `app.suggest` (`write.get`), one at a time, never in the story; `write.dismiss` or a new ask drops them, and no tool writes an option into a beat. The prompt carries title, logline, belief, every beat's labels and text, and the threads; when it does not fit the reader's window, beats away from the asked one shrink to 40 words, then 15, then labels only, and past that the ask is refused `too_long`. `write.shape` sends the beats that sit 2 or more from the writer's sketch (`story.sketch`, drawn on the chart or sent as points) and returns one line per beat toward it; moves for other beats are dropped. With no model, the chart still draws the sketch dashed and rings those beats. Each ask holds the read lock and stops with `read.cancel`. Tested with a stand-in reader (`face.mjs` write.*); not yet measured with a real model.
 
 ## §4 Gates
 

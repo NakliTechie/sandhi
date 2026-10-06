@@ -259,6 +259,19 @@ check('ids.next_after_long_ids', /^[a-z0-9-]{1,40}$/.test(nid) && !longIds.some(
 // schemas: every object closes additionalProperties and requires all its keys (structured-output rules)
 const closed = (o) => !o || typeof o !== 'object' || ((o.type !== 'object' || (o.additionalProperties === false && isDeepStrictEqual([...o.required].toSorted(), Object.keys(o.properties).toSorted()))) && Object.values(o).every(closed));
 check('read.schemas_closed', Object.values(plain(C.READ_SCHEMAS)).every(closed), 'open object in a schema');
+check('write.schemas_closed', Object.values(plain(C.WRITE_SCHEMAS)).every(closed), 'open object in a write schema');
+// the sketch (TaleBrush): 25 values from -5 to 5; a drawn path resamples to them; beats 2 or more away are the misses
+{
+  const sk = plain(C.sketchFrom([{ t: 0, v: -4 }, { t: 0.5, v: 4 }, { t: 1, v: -4 }]));
+  check('sketch.resampled', sk.length === C.SKETCH_N && sk[0] === -4 && sk[12] === 4 && sk[24] === -4 && sk[6] === 0 && C.sketchFrom([{ t: 0.5, v: 1 }]) === null, sk);
+  const st = plain(C.seed()); st.sketch = sk;
+  const bad = plain(C.seed()); bad.sketch = [1, 2, 3];
+  const big = plain(C.seed()); big.sketch = Array(25).fill(6);
+  check('sketch.validated', C.validate(st).ok && !C.validate(bad).ok && !C.validate(big).ok && C.validate(plain(C.seed())).ok, C.validate(bad).errors);
+  const m = plain(C.sketchMisses(st)), s0 = plain(C.seed());
+  const expect = s0.beats.map((b, i) => ({ at: i + 1, f: b.fortune, t: Math.round(C.sketchAt(sk, i / (s0.beats.length - 1))) })).filter(x => Math.abs(x.t - x.f) >= 2);
+  check('sketch.misses', m.length === expect.length && m.length > 0 && m.every((x, k) => x.at === expect[k].at && x.target === expect[k].t), { m, expect });
+}
 
 const failed = results.filter(r => !r.pass);
 const receipt = { gate: 'core', verdict: failed.length ? 'fail' : 'pass', checks: results.length, failed: failed.length, ...(failed.length ? { failures: failed } : {}) };

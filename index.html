@@ -80,6 +80,14 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,.blabel:focus-vi
 #chart .hit{fill:transparent;cursor:ns-resize}
 .mark,.chip,details.menu>summary{min-height:24px}
 #chart .dot:focus{outline:none;stroke:var(--ink)}
+#chart .sketch,#chart .drawing{fill:none;stroke:var(--muted);stroke-width:1.6;stroke-dasharray:5 4;stroke-linejoin:round}
+#chart .miss{fill:none;stroke:var(--accent);stroke-width:1.2;stroke-dasharray:2 2}
+.sketchbar{font-size:12.5px;margin:6px 0 4px}
+.sketchbar .sg{margin-top:8px}
+.sg .check{all:unset;display:block;cursor:pointer;border-radius:6px}
+.sg .check:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sg .at{color:var(--accent-ink);background:var(--accent-bg);border-radius:999px;padding:0 7px;font-size:11px;margin-right:4px}
+.sg li b{font-weight:500}
 #chart .markt{font-size:11px;font-style:italic;fill:var(--muted)}
 #chart .seg-a{fill:var(--seg-a)}#chart .seg-b{fill:var(--seg-b)}
 #chart .segt{font-size:10.5px;fill:var(--muted)}
@@ -327,6 +335,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     <h2 class="lab" id="fortune-h">Fortune, beat by beat · drag a dot to move it</h2>
     <label class="tradsw"><input type="checkbox" id="trad-all"> show all three traditions</label>
     <div id="chart"></div>
+    <div id="sketchbar" class="sketchbar"></div>
     <div id="arc"></div>
   </section>
 
@@ -528,7 +537,9 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   const SPINE_IDS = ids(SPINE), AV_IDS = ids(AVASTHA), KIS_IDS = ids(KIS);
   const JOINT_SET = new Set(JOINTS), MARK_SET = new Set(MARKS), DRIVER_SET = new Set(DRIVERS), BY_SET = new Set(['writer', 'model', 'agent']);
   const BEAT_KEYS = ['id', 'label', 'spine', 'joint', 'text', 'fortune', 'tags', 'marks', 'driver', 'avastha', 'kis', 'drafts', 'by', 'model'];
-  const STORY_KEYS = ['sandhi', 'title', 'logline', 'belief', 'beats', 'threads', 'notes'];
+  const STORY_KEYS = ['sandhi', 'title', 'logline', 'belief', 'beats', 'threads', 'notes', 'sketch'];
+  // the writer's sketched fortune line (TaleBrush): SKETCH_N values from -5 to 5, evenly spaced from the first beat to the last
+  const SKETCH_N = 25;
   const ID_RE = /^[a-z0-9-]{1,40}$/;
   // what one page can hold and draw: thread pickers list every beat, so beats × threads is the cost that grows
   const LIMITS = { beats: 400, threads: 100, chars: 3000000 };
@@ -588,6 +599,9 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     if (new Set(t.payoffs).size !== t.payoffs.length) v.e(`${p}.payoffs`, 'has duplicates');
     t.payoffs.forEach((b, k) => { if (!beatIds.has(b)) v.e(`${p}.payoffs[${k}]`, 'must be a beat id'); });
   }
+  function validateSketch(v, sk) {
+    if (sk !== undefined && !(Array.isArray(sk) && sk.length === SKETCH_N && sk.every(x => typeof x === 'number' && x >= -5 && x <= 5))) v.e('sketch', `must be ${SKETCH_N} numbers from -5 to 5`);
+  }
   function validate(s) {
     const v = collector();
     if (!v.obj(s, '')) return { ok: false, errors: [{ path: '', message: 'story must be an object' }] };
@@ -603,7 +617,37 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     else if (s.threads.length > LIMITS.threads) v.e('threads', `more than ${LIMITS.threads} threads`);
     else s.threads.forEach((t, i) => validateThread(v, t, `threads[${i}]`, beatIds, threadIds));
     if (v.obj(s.notes, 'notes')) for (const [k, x] of Object.entries(s.notes)) { if (!PIDS.has(k)) v.e(`notes.${k}`, 'not a principle id'); v.str(x, `notes.${k}`, 5000); }
+    validateSketch(v, s.sketch);
     return { ok: v.errors.length === 0, errors: v.errors };
+  }
+
+  // the sketch's value at t (0 = the first beat, 1 = the last), by straight lines between its points
+  function sketchAt(sk, t) {
+    const u = Math.max(0, Math.min(1, t)) * (sk.length - 1), k = Math.min(sk.length - 2, Math.floor(u));
+    return sk[k] + (sk[k + 1] - sk[k]) * (u - k);
+  }
+  // beats whose fortune is 2 or more from the sketch at their place: the readback that needs no model
+  function sketchMisses(s) {
+    if (!s.sketch || s.beats.length < 2) return [];
+    return s.beats.map((b, i) => ({ beat: b.id, at: i + 1, fortune: b.fortune, target: Math.round(sketchAt(s.sketch, i / (s.beats.length - 1))) }))
+      .filter(m => Math.abs(m.target - m.fortune) >= 2);
+  }
+  // a drawn path [{t, v}] -> SKETCH_N evenly spaced values: the mean of the points near each place, gaps filled by straight lines
+  function sketchFrom(points) {
+    const pts = (Array.isArray(points) ? points : []).filter(p => p && Number.isFinite(p.t) && Number.isFinite(p.v)).map(p => ({ t: Math.max(0, Math.min(1, p.t)), v: Math.max(-5, Math.min(5, p.v)) }));
+    if (pts.length < 2) return null;
+    const sum = Array(SKETCH_N).fill(0), cnt = Array(SKETCH_N).fill(0);
+    for (const p of pts) { const k = Math.round(p.t * (SKETCH_N - 1)); sum[k] += p.v; cnt[k]++; }
+    const known = cnt.map((c, k) => (c ? k : -1)).filter(k => k >= 0);
+    if (known.length < 2) return null;
+    return sum.map((x, k) => {
+      if (cnt[k]) return Math.round(x / cnt[k] * 10) / 10;
+      const a = known.filter(j => j < k).pop(), b = known.find(j => j > k);
+      if (a === undefined) return Math.round(sum[b] / cnt[b] * 10) / 10;
+      if (b === undefined) return Math.round(sum[a] / cnt[a] * 10) / 10;
+      const va = sum[a] / cnt[a], vb = sum[b] / cnt[b];
+      return Math.round((va + (vb - va) * (k - a) / (b - a)) * 10) / 10;
+    });
   }
 
   function nextId(prefix, list) {
@@ -745,7 +789,8 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   const WRITE_SCHEMAS = {
     questions: obj({ questions: { type: 'array', items: obj({ principle: { type: 'string' }, question: { type: 'string' } }) } }),
     options: obj({ obvious: { type: 'string' }, options: { type: 'array', items: obj({ text: { type: 'string' }, joint: { type: 'string' }, fortune: { type: 'integer' }, principle: { type: 'string' }, why: { type: 'string' } }) } }),
-    joints: obj({ joints: { type: 'array', items: obj({ beat: { type: 'integer' }, verdict: { type: 'string' }, reason: { type: 'string' }, question: { type: 'string' } }) } })
+    joints: obj({ joints: { type: 'array', items: obj({ beat: { type: 'integer' }, verdict: { type: 'string' }, reason: { type: 'string' }, question: { type: 'string' } }) } }),
+    shape: obj({ moves: { type: 'array', items: obj({ beat: { type: 'integer' }, text: { type: 'string' }, why: { type: 'string' } }) } })
   };
   const words = (t, n) => { const w = String(t || '').split(/\s+/).filter(Boolean); return w.length > n ? w.slice(0, n).join(' ') + ' …' : w.join(' '); };
   // The story as the model sees it. detail 0 = every beat's full text; 1 = full text near the asked beat, 40 words elsewhere;
@@ -765,6 +810,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   const WRITE_PROMPTS = {
     questions: (brief, n) => ({ system: WRITE_GUIDE, user: `Ask the writer 2 to 4 questions about beat ${n}. Each comes from one principle this beat does least for, and asks about something the writer has not decided yet. Questions only: suggest nothing. Each question at most 25 words; "principle" is its principle id.\n\nTHE STORY SO FAR:\n${brief}` }),
     options: (brief, n) => ({ system: WRITE_GUIDE, user: `Beat ${n}: what could happen here? First, "obvious" = the most obvious thing that could happen, in one line; it is set aside. Then 3 to 5 other options, none of them the obvious one. Each option is a situation in one line of at most 25 words, not prose. Give each its "joint" to the beat before, its "fortune" at this beat, the "principle" id it serves, and "why" in at most 20 words. Spread them: use different joints, and make at least one an option where things get worse.\n\nTHE STORY SO FAR:\n${brief}` }),
+    shape: (brief, n, s) => ({ system: WRITE_GUIDE, user: `The writer sketched the shape they want the story's fortune to follow. These beats sit far from it:\n${sketchMisses(s).map(m => `Beat ${m.at}: fortune ${m.fortune} now; the sketch wants ${m.target}.`).join('\n')}\n\nFor each of these beats, propose one situation, in one line of at most 25 words and not prose, that would move the beat toward the sketch while keeping what the writer has planted. Give the beat number, the "text", and "why" in at most 20 words.\n\nTHE STORY:\n${brief}` }),
     joints: (brief) => ({ system: WRITE_GUIDE, user: `For every beat that the writer joined to the beat before with "therefore" or "but", judge the joint: "holds" if it reads that way, "slack" if "and then" fits better, "unsure" otherwise. Give the beat number, the verdict, the "reason" in at most 20 words, and one "question" to the writer in at most 20 words. Judge only the joints the writer labelled.\n\nTHE STORY:\n${brief}` })
   };
   const VERDICTS = new Set(['holds', 'slack', 'unsure']);
@@ -775,6 +821,11 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   function coerceOptions(json) {
     const opts = rows(json && json.options).map(o => { const f = Math.round(Number(o.fortune)); return { text: line(o.text, 300), joint: pick(o.joint, JOINT_SET), fortune: Number.isFinite(f) ? Math.max(-5, Math.min(5, f)) : null, principle: pick(o.principle, PIDS), why: line(o.why, 200) }; });
     return { obvious: line(json && json.obvious, 300), options: opts.filter(o => o.text).slice(0, 6) };
+  }
+  function coerceShape(json, s) {
+    const want = new Map(sketchMisses(s).map(m => [m.at, m])), seen = new Set();
+    return rows(json && json.moves).map(m => ({ at: Math.round(Number(m.beat)), text: line(m.text, 300), why: line(m.why, 200) }))
+      .filter(m => want.has(m.at) && m.text && !seen.has(m.at) && seen.add(m.at)).map(m => ({ ...m, ...want.get(m.at) }));
   }
   function coerceJoints(json, s) {
     const seen = new Set();
@@ -917,7 +968,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
 
   root.SandhiCore = { SCHEMA, SOURCES, PRINCIPLES, ARCS, SPINE, SETUP, JOINTS, MARKS, DRIVERS, AVASTHA, KIS,
     LIMITS, seed: () => clone(SEED), validate, blankStory, storyFromSpine, newBeat, nextId, checks, arcMatch, coverage, clone, wordCount, spineName,
-    READ_SCHEMAS, READ_PROMPTS, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
+    READ_SCHEMAS, READ_PROMPTS, WRITE_SCHEMAS, WRITE_PROMPTS, storyBrief, coerceQuestions, coerceOptions, coerceJoints, coerceShape, SKETCH_N, sketchAt, sketchMisses, sketchFrom, foldText, findQuote, coerceLabels, chunkText, storyFromWhole, anchorScenes, storyFromLabels, beatTexts, storyFromSplit };
 })(globalThis);
 </script>
 
@@ -1068,6 +1119,7 @@ const store = {
   del(k) { try { localStorage.removeItem(k); } catch { /* storage unavailable: nothing was kept */ } }
 };
 const app = { story: null, undo: [], redo: [], dirty: false, kept: true, focus: 'all', last: null, coalesce: null, coalesceAt: 0, coalesceStart: 0, journal: [], open: new Set(), proposal: null, reading: false, suggest: null };
+let sketching = false;   // the fortune chart takes a drawn line instead of dot drags while true
 const ok = (data) => ({ ok: true, class: 'ok', data: data || {} });
 const fail = (cls, message, next, data) => ({ ok: false, class: cls, message, next, ...(data ? { data } : {}) });
 const S = () => app.story;
@@ -1494,6 +1546,11 @@ function writeError(kind, a) {
   const id = rcfg.rung, s = S();
   if (!id) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Import: your provider with your key, or another reader (reader.select).');
   if (app.reading) return fail('busy', 'A model is already working.', 'Wait for it to finish, or stop it (read.cancel).');
+  if (kind === 'shape') {
+    if (!s.sketch) return fail('invalid', 'There is no sketch yet.', 'Sketch the shape you want on the fortune chart first (story.sketch).');
+    if (!C.sketchMisses(s).length) return fail('invalid', 'Every beat already sits within 1 of your sketch.', 'Redraw the sketch, or move a beat\'s fortune.');
+    return null;
+  }
   if (kind === 'joints') {
     if (!s.beats.some(b => b.joint === 'therefore' || b.joint === 'but')) return fail('invalid', 'No beat is joined to the one before by "therefore" or "but".', 'Label the joints first: open "Label this beat" and set the joint.');
     return null;
@@ -1506,7 +1563,7 @@ async function askReader(kind, s, at) {
   const r = await READERS[rcfg.rung].open(() => { /* a download shows in the read dialog; here the panel says it is asking */ });
   try {
     for (const detail of [0, 1, 2, 3]) {
-      const pr = C.WRITE_PROMPTS[kind](C.storyBrief(s, at, detail), at + 1);
+      const pr = C.WRITE_PROMPTS[kind](C.storyBrief(s, at, detail), at + 1, s);
       if (await r.measure(pr.system + '\n' + pr.user) <= r.maxInput) return await r.run(pr, C.WRITE_SCHEMAS[kind]);
     }
     throw readerFail('too_long', `The story is too long for ${r.label || r.model} to see at once, even in outline.`, 'Choose your provider with your key, or a model server with a longer window.');
@@ -1515,12 +1572,13 @@ async function askReader(kind, s, at) {
 // the reader's answer, kept to the shape and the closed sets; null when it holds nothing to show
 function writeItems(kind, json, s) {
   if (kind === 'joints') return { joints: C.coerceJoints(json, s) };
+  if (kind === 'shape') { const moves = C.coerceShape(json, s); return moves.length ? { moves } : null; }
   const items = kind === 'questions' ? { questions: C.coerceQuestions(json) } : C.coerceOptions(json);
   return (items.questions || items.options).length ? items : null;
 }
 async function runWrite(kind, a) {
   const bad = writeError(kind, a); if (bad) return bad;
-  const s = C.clone(S()), at = kind === 'joints' ? -1 : s.beats.findIndex(b => b.id === a.beat), seq = ++suggestSeq;
+  const s = C.clone(S()), at = kind === 'joints' || kind === 'shape' ? -1 : s.beats.findIndex(b => b.id === a.beat), seq = ++suggestSeq;
   app.reading = true; readAbort = new AbortController();
   app.suggest = { id: seq, kind, beat: a.beat || null, pending: true }; renderSuggest();
   try {
@@ -1714,6 +1772,17 @@ const TOOLS = [
     handler: async (a) => runWrite('options', a) },
   { name: 'write.joints', description: "Ask the chosen reader to judge every joint the writer labelled therefore or but: holds, slack (and then fits better) or unsure, with a reason and a question. Advice only; no joint is relabelled. It uses the reader the writer chose.", spends: true, inputSchema: NONE,
     handler: async (a) => runWrite('joints', a) },
+  { name: 'write.shape', description: "Ask the chosen reader how to bring the beats that sit 2 or more from the writer's sketched fortune line toward it: one line per beat, with why. Proposals only; no fortune or text changes. Needs a sketch (story.sketch). It uses the reader the writer chose.", spends: true, inputSchema: NONE,
+    handler: async (a) => runWrite('shape', a) },
+  { name: 'story.sketch', description: 'Set the shape the writer wants the fortune to follow: points [{t, v}] with t from 0 (the first beat) to 1 (the last) and v from -5 to 5, resampled to 25 values; an empty list clears it. The chart draws it under the fortune line and rings beats 2 or more from it. Undo reverses it.', mutating: true,
+    inputSchema: { type: 'object', properties: { points: { type: 'array', items: { type: 'object', properties: { t: { type: 'number' }, v: { type: 'number' } }, required: ['t', 'v'] } } }, required: ['points'] },
+    handler: async (a) => {
+      if (!Array.isArray(a.points)) return fail('invalid', 'points must be a list of {t, v}', 'Send points from the first beat (t 0) to the last (t 1), or [] to clear.');
+      const n = C.clone(S());
+      if (!a.points.length) delete n.sketch;
+      else { const sk = C.sketchFrom(a.points); if (!sk) return fail('invalid', 'A sketch needs at least two points at different places.', 'Draw across more of the chart.'); n.sketch = sk; }
+      return commit(n, null) || ok({ sketch: n.sketch || null, misses: C.sketchMisses(n) });
+    } },
   { name: 'write.get', description: 'The current suggestion (questions, options or joint verdicts), or no_proposal.', inputSchema: NONE,
     handler: async () => (app.suggest && !app.suggest.pending ? ok(C.clone(app.suggest)) : fail('no_proposal', 'nothing is suggested', 'Call write.questions, write.options or write.joints first.')) },
   { name: 'write.dismiss', description: 'Drop the current suggestion. Nothing was kept from it.', inputSchema: NONE,
@@ -1818,7 +1887,7 @@ const patchKeys = (args) => (args.patch ? Object.keys(args.patch) : []);
 const AFTER = {
   'view.focus': (args, door) => { renderAll(); if (door === 'ui' && args.principle !== 'all') $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
   'read.discard': () => renderProposal(),
-  'write.questions': () => renderSuggest(), 'write.options': () => renderSuggest(), 'write.joints': () => renderSuggest(), 'write.dismiss': () => renderSuggest(),
+  'write.questions': () => renderSuggest(), 'write.options': () => renderSuggest(), 'write.joints': () => renderSuggest(), 'write.shape': () => renderSuggest(), 'write.dismiss': () => renderSuggest(),
   'story.update': () => { renderHeader(); renderViews(); },
   'story.save': () => renderSaveState(),
   'thread.update': (args) => (patchKeys(args).every(k => k === 'label') ? (renderViews(), patchCards()) : renderAll()),
@@ -1885,17 +1954,21 @@ function renderChart() {
   for (const v of [-5, 5]) g += `<line class="grid" x1="${L}" x2="${R}" y1="${y(v)}" y2="${y(v)}"/>`;
   g += `<line class="zero" x1="${L}" x2="${R}" y1="${y(0)}" y2="${y(0)}"/>`;
   g += `<text class="axis" x="${L - 12}" y="${y(5) + 4}" text-anchor="end">good</text><text class="axis" x="${L - 12}" y="${y(0) + 4}" text-anchor="end">0</text><text class="axis" x="${L - 12}" y="${y(-5) + 4}" text-anchor="end">ill</text>`;
+  if (s.sketch && n > 1) g += `<polyline class="sketch" points="${s.sketch.map((v, k) => `${x(0) + (x(n - 1) - x(0)) * k / (s.sketch.length - 1)},${y(v)}`).join(' ')}"><title>Your sketch</title></polyline>`;
+  const missed = new Set(C.sketchMisses(s).map(m => m.at - 1));
   g += `<polyline class="fline" points="${s.beats.map((b, i) => `${x(i)},${y(b.fortune)}`).join(' ')}"/>`;
   s.beats.forEach((b, i) => {
     const on = app.focus === 'all' || b.tags.includes(app.focus), hit = app.focus !== 'all' && on;
     g += `<text class="num" x="${x(i)}" y="${NUM}" text-anchor="middle">${i + 1}</text>`;
     for (const m of b.marks) g += `<text class="markt" x="${x(i)}" y="${y(b.fortune) + (m === 'low' ? 22 : -12)}" text-anchor="middle">${m === 'turn' ? 'turn' : 'low point'}</text>`;
+    if (missed.has(i)) g += `<circle class="miss" cx="${x(i)}" cy="${y(b.fortune)}" r="10"><title>Beat ${i + 1} is 2 or more from your sketch</title></circle>`;
     g += `<circle class="hit" data-i="${i}" cx="${x(i)}" cy="${y(b.fortune)}" r="12" aria-hidden="true"/>`;   // a 24 px target around an 11 px dot
     g += `<circle class="dot${on ? '' : ' off'}" data-i="${i}" cx="${x(i)}" cy="${y(b.fortune)}" r="${hit ? 7 : 5.5}" tabindex="0" role="slider" aria-label="Beat ${i + 1} fortune" aria-valuemin="-5" aria-valuemax="5" aria-valuenow="${b.fortune}"><title>Beat ${i + 1} · ${esc(b.label || C.spineName(b.spine))} · fortune ${fmtF(b.fortune)}${b.text ? ' — ' + esc(snip(b.text, 90)) : ''}</title></circle>`;
   });
   rows.forEach((row, ri) => { g += phaseRow(s, row, P0 + ri * (RH + 4), { n, L, w, RH }); });
   box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="group" aria-label="Fortune line and phases of ${esc(s.title)}">${g}</svg>`;
-  box.dataset.geom = JSON.stringify({ T, B });
+  box.dataset.geom = JSON.stringify({ T, B, x0: x(0), x1: x(n - 1) });
+  renderSketchBar();
 }
 // one row of the phase strip: consecutive beats with the same label merge into one segment
 function phaseRow(s, [k, label, vocab], yy, geo) {
@@ -2037,7 +2110,6 @@ function checkItem(c) {
 }
 // the suggestion panel: inside the beat it is about, or (joint verdicts) under the checks
 const pname = (pid) => { const x = C.PRINCIPLES.find(p => p.id === pid); return x ? x.name : ''; };
-const signed = (n) => (n > 0 ? `+${n}` : String(n));
 function suggestHtml(id) {
   const g = app.suggest;
   if (!g || g.beat !== id || g.kind === 'joints') return '';
@@ -2047,7 +2119,7 @@ function suggestHtml(id) {
     <p class="sg-actions"><button class="btn" type="button" data-ui="ask-o" data-id="${id}">What could happen here?</button> ${close}</p></div>`;
   return `<div class="sg"><p class="sg-h">Options from ${esc(g.model)}: situations to weigh, not text to use. Write the beat yourself.</p>
     ${g.obvious ? `<p class="sg-obvious"><span class="faint">The obvious one, set aside:</span> <s>${esc(g.obvious)}</s></p>` : ''}
-    <ul>${g.options.map(o => `<li><span class="sg-tag">${esc(o.joint || '—')}${o.fortune === null ? '' : ` · fortune ${esc(signed(o.fortune))}`}${o.principle ? ` · ${esc(pname(o.principle))}` : ''}</span> ${esc(o.text)}${o.why ? `<span class="nx">${esc(o.why)}</span>` : ''}</li>`).join('')}</ul>
+    <ul>${g.options.map(o => `<li><span class="sg-tag">${esc(o.joint || '—')}${o.fortune === null ? '' : ` · fortune ${esc(fmtF(o.fortune))}`}${o.principle ? ` · ${esc(pname(o.principle))}` : ''}</span> ${esc(o.text)}${o.why ? `<span class="nx">${esc(o.why)}</span>` : ''}</li>`).join('')}</ul>
     <p class="sg-actions"><button class="btn" type="button" data-ui="ask-o" data-id="${id}">Ask again</button> ${close}</p></div>`;
 }
 function judgeHtml() {
@@ -2058,10 +2130,20 @@ function judgeHtml() {
   return `<div class="sg"><p class="sg-h">${esc(g.model)} on your joints: advice, not a relabel</p><ul>${g.joints.map(j => `<li><button class="check" type="button" data-goto="${j.beat}"><span class="at">beat ${j.at}</span><b>${esc(j.joint)}: ${esc(W[j.verdict])}.</b> ${esc(j.reason)}${j.question ? `<span class="nx">${esc(j.question)}</span>` : ''}</button></li>`).join('') || '<li class="faint">No verdicts came back.</li>'}</ul>
     <p class="sg-actions"><button class="link" type="button" data-cmd="write.dismiss">Close</button></p></div>`;
 }
+function renderSketchBar() {
+  const s = S(), bar = $('#sketchbar'), g = app.suggest; if (!bar) return;
+  if (sketching) { bar.innerHTML = '<span class="faint">Drag across the chart, first beat to last, to draw the shape you want.</span> <button class="link" type="button" data-ui="sketch-cancel">Cancel</button>'; return; }
+  const misses = C.sketchMisses(s).length;
+  const shape = g && g.kind === 'shape' ? (g.pending ? `<p class="sg-wait">Asking ${esc(readerName())} how to reach your sketch… <button class="link" type="button" data-cmd="read.cancel">Stop</button></p>`
+    : `<div class="sg"><p class="sg-h">${esc(g.model)}: ways toward your sketch, for you to weigh. Nothing has changed.</p><ul>${g.moves.map(m => `<li><button class="check" type="button" data-goto="${m.beat}"><span class="at">beat ${m.at}</span><b>fortune ${esc(fmtF(m.fortune))} → ${esc(fmtF(m.target))}.</b> ${esc(m.text)}${m.why ? `<span class="nx">${esc(m.why)}</span>` : ''}</button></li>`).join('')}</ul><p class="sg-actions"><button class="link" type="button" data-cmd="write.dismiss">Close</button></p></div>`) : '';
+  bar.innerHTML = (s.sketch
+    ? `<span class="faint">Dashed: your sketch${misses ? ` · ${misses} beat${misses > 1 ? 's' : ''} ringed, 2 or more away` : ' · every beat follows it'}.</span> <button class="link" type="button" data-ui="sketch-start">Redraw</button> <button class="link" type="button" data-ui="sketch-clear">Clear</button>${misses ? ' <button class="link" type="button" data-ui="ask-shape">Ask the model how to get there</button>' : ''}`
+    : '<button class="link" type="button" data-ui="sketch-start">Sketch the shape you want</button>') + shape;
+}
 const readerName = () => (rcfg.rung === 'device' ? 'Gemini Nano' : rcfg.rung === 'machine' ? (rcfg.models[(machine.found && machine.found.id) || rcfg.server || 'ollama'] || 'the model server') : (rcfg.models[rcfg.provider] || (LD.PROVIDERS[rcfg.provider] || {}).label || 'your provider'));
 function renderSuggest() {
   for (const el of document.querySelectorAll('[data-sg]')) el.innerHTML = suggestHtml(el.dataset.sg);
-  renderChecks();
+  renderChecks(); renderSketchBar();
 }
 function renderChecks() {
   const list = C.checks(S()), box = $('#checks div');
@@ -2144,7 +2226,8 @@ document.addEventListener('change', (e) => {
   delete d.dirty;
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
-const UI_ACTIONS = { 'ask-q': (u) => ui('write.questions', { beat: u.dataset.id }), 'ask-o': (u) => ui('write.options', { beat: u.dataset.id }), 'ask-joints': () => ui('write.joints', {}),
+const UI_ACTIONS = { 'sketch-start': () => { sketching = true; renderSketchBar(); }, 'sketch-cancel': () => { sketching = false; renderChart(); }, 'sketch-clear': () => ui('story.sketch', { points: [] }), 'ask-shape': () => ui('write.shape', {}),
+  'ask-q': (u) => ui('write.questions', { beat: u.dataset.id }), 'ask-o': (u) => ui('write.options', { beat: u.dataset.id }), 'ask-joints': () => ui('write.joints', {}),
   help: () => openSplash(false), tour: () => startTour(), 'splash-close': () => splash.close(), open: () => $('#file').click(), wizard: () => openWizard(),
   'wiz-next': () => wizardMove(1), 'wiz-back': () => wizardMove(-1), 'wiz-skip': () => wizardMove(1), 'wiz-more': () => wizardMore(),
   'wiz-finish': () => { wiz.values[wiz.i] = $('#wiz-text').value; wizardFinish(); }, 'wiz-restart': () => { wizardReset(); wizardStep(); },
@@ -2249,24 +2332,29 @@ document.addEventListener('keydown', (e) => {
 
 // fortune chart: drag a dot, or focus it and press arrow keys
 (function chartInput() {
-  const box = $('#chart'); let drag = null;
+  const box = $('#chart'); let drag = null, path = null;
+  const svgPoint = (ev) => { const svg = box.querySelector('svg'), pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; return pt.matrixTransform(svg.getScreenCTM().inverse()); };
+  const sketchPoint = (ev) => { const { T, B, x0, x1 } = JSON.parse(box.dataset.geom), p = svgPoint(ev); return { t: (p.x - x0) / Math.max(1, x1 - x0), v: 5 - (p.y - T) / (B - T) * 10, x: p.x, y: p.y }; };
   const valueAt = (ev) => {
     const svg = box.querySelector('svg'), { T, B } = JSON.parse(box.dataset.geom), pt = svg.createSVGPoint();
     pt.x = ev.clientX; pt.y = ev.clientY; const p = pt.matrixTransform(svg.getScreenCTM().inverse());
     return Math.max(-5, Math.min(5, Math.round(5 - (p.y - T) / (B - T) * 10)));
   };
   box.addEventListener('pointerdown', (e) => {
+    if (sketching && box.querySelector('svg')) { e.preventDefault(); box.setPointerCapture(e.pointerId); path = [sketchPoint(e)]; return; }
     const h = e.target.closest('.dot, .hit'); if (!h) return;
     const d = box.querySelector(`.dot[data-i="${h.dataset.i}"]`);
     e.preventDefault(); d.setPointerCapture(e.pointerId);
     drag = { el: d, i: +d.dataset.i, start: S().beats[+d.dataset.i].fortune, v: null };
   });
   box.addEventListener('pointermove', (e) => {
+    if (path) { path.push(sketchPoint(e)); let l = box.querySelector('.drawing'); if (!l) { l = document.createElementNS('http://www.w3.org/2000/svg', 'polyline'); l.setAttribute('class', 'drawing'); box.querySelector('svg').append(l); } l.setAttribute('points', path.map(p => `${p.x},${p.y}`).join(' ')); return; }
     if (!drag) return;
     const { T, B } = JSON.parse(box.dataset.geom), v = valueAt(e);
     drag.v = v; drag.el.setAttribute('cy', T + (5 - v) * (B - T) / 10);
   });
   box.addEventListener('pointerup', () => {
+    if (path) { const pts = path.map(({ t, v }) => ({ t, v })); path = null; sketching = false; ui('story.sketch', { points: pts }).then(r => { if (!r.ok) renderChart(); }); return; }
     if (!drag) return;
     const { i, start, v } = drag, b = S().beats[i]; drag = null;
     if (v !== null && v !== start) ui('beat.update', { id: b.id, patch: { fortune: v } }); else goBeat(b.id);

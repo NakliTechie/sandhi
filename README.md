@@ -44,7 +44,7 @@ You choose who reads it. Your own provider and key is the recommended way: OpenR
 
 Every beat carries labels you set: its spine stage, fortune, joint, a turn or low-point mark, whether luck or the hero's choice moves it, and the principles it serves. The checks compare those labels and name the next step: an empty beat or one with no principle, a slack joint, a plant that never pays off, a payoff with nothing planted, luck after the turn. They never guess from your prose.
 
-Stuck on a beat? **Ask about this beat** gets two to four questions from the reader you chose, then, if you ask, what could happen there: the obvious option set aside, and a few one-line situations with their joint, fortune and principle. **Ask the model about your joints** says which *therefore* or *but* reads as *and then*. None of it enters the story and nothing writes an option into a beat; you write. Not yet measured with a real model.
+Stuck on a beat? **Ask about this beat** gets two to four questions from the reader you chose, then, if you ask, what could happen there: the obvious option set aside, and a few one-line situations with their joint, fortune and principle. **Ask the model about your joints** says which *therefore* or *but* reads as *and then*. **Sketch the shape you want** on the fortune chart: sandhi rings the beats that miss it, and the model can suggest a line for each. None of it enters the story and nothing writes an option into a beat; you write. Not yet measured with a real model.
 
 ## Commands
 
@@ -56,7 +56,7 @@ node cli-read.mjs score <reply> <name> --story gift-of-the-magi   # score a mode
 node page-read.mjs --model qwen3.5:4b --story to-build-a-fire     # the real page reads with a local model
 ```
 
-Agents: `window.sandhi` exposes 39 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
+Agents: `window.sandhi` exposes 41 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
 
 ## Verify it yourself
 

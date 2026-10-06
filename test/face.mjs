@@ -56,7 +56,7 @@ const domBeats = () => page.evaluate(() => document.querySelectorAll('#beats .be
 
 const man = await page.evaluate(() => window.sandhi.manifest);
 const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-check('face.manifest', man.length === 39 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
+check('face.manifest', man.length === 41 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key']), { n: man.length, personOnly });
 let st = await call('status', {});
 check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -204,6 +204,7 @@ const answerFor = (FIX, user) => {
   // write mode: questions, options for a beat, joint verdicts
   if (user.startsWith('Ask the writer')) return { questions: [{ principle: 'stakes', question: 'What does Tavi lose if the boats never come?' }, { principle: 'nonsense', question: 'Ignored: no such principle.' }, { principle: 'earn', question: 'Who gets him out: luck or his own choice?' }] };
   if (/^Beat \d+: what could happen here/.test(user)) return { obvious: 'Tavi rings the bell and saves everyone.', options: [{ text: 'The bell cracks and Tavi must whistle from the rock.', joint: 'but', fortune: -3, principle: 'stakes', why: 'Raises the cost.' }, { text: 'Oren is too ill to climb, so Tavi goes alone.', joint: 'therefore', fortune: -1, principle: 'earn', why: 'His choice.' }, { text: '', joint: 'but', fortune: 0, principle: 'care', why: 'dropped: no text' }, { text: 'The fog lifts on its own.', joint: 'sideways', fortune: 9, principle: 'luck', why: 'Coerced.' }] };
+  if (user.startsWith('The writer sketched')) { const ats = [...user.matchAll(/^Beat (\d+): fortune/gm)].map(m => +m[1]); return { moves: [...ats.map(n => ({ beat: n, text: `A turn that moves beat ${n} toward the sketch.`, why: 'Follows the shape.' })), { beat: 99, text: 'Out of range.', why: '' }] }; }
   if (user.startsWith('For every beat that the writer joined')) { const n = (user.match(/^Beat \d+/gm) || []).length; return { joints: [{ beat: 5, verdict: 'slack', reason: 'It follows; nothing causes it.', question: 'What makes the fog come now?' }, { beat: 1, verdict: 'holds', reason: 'Beat 1 has no joint.', question: '' }, { beat: 3, verdict: 'slack', reason: 'Beat 3 has no labelled joint.', question: '' }, { beat: n + 3, verdict: 'holds', reason: 'Out of range.', question: '' }, { beat: 6, verdict: 'HOLDS', reason: 'Because of the storm.', question: 'Fine.' }] }; }
   if (user.startsWith('Mark the structure')) return FIX.whole;
   if (user.startsWith('Split this story')) return { beats: FIX.beats.map(b => ({ start: b.start })) };
@@ -264,6 +265,32 @@ async function readPage(opts) {
   const badBeat = await call('write.options', { beat: 'nope' });
   check('write.unknown_beat', badBeat.class === 'not_found', badBeat);
   check('write.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // the fortune sketch (TaleBrush): draw on the chart; it is kept with the story, misses are ringed, the reader proposes moves
+  const { ctx2, p, errs, call } = await readPage({ nano: 6144 });
+  await p.click('[data-ui="sketch-start"]');
+  const box = await p.locator('#chart svg').boundingBox(), geom = await p.evaluate(() => JSON.parse(document.querySelector('#chart').dataset.geom));
+  const scale = box.width / (await p.evaluate(() => document.querySelector('#chart svg').viewBox.baseVal.width));
+  const at = (t, v) => [box.x + (geom.x0 + (geom.x1 - geom.x0) * t) * scale, box.y + (geom.T + (5 - v) * (geom.B - geom.T) / 10) * scale];
+  await p.mouse.move(...at(0, 4)); await p.mouse.down();
+  for (let k = 1; k <= 20; k++) await p.mouse.move(...at(k / 20, 4 - 8 * k / 20));   // a straight fall, +4 to -4
+  await p.mouse.up();
+  await p.waitForFunction(() => document.querySelector('#chart .sketch'));
+  const st = (await call('story.get', {})).data.story, rings = await p.evaluate(() => document.querySelectorAll('#chart .miss').length), bar = await p.textContent('#sketchbar');
+  const misses = st.beats.filter((b, i) => Math.abs(Math.round(4 - 8 * i / (st.beats.length - 1)) - b.fortune) >= 2).length;
+  check('sketch.drawn_kept_ringed', st.sketch && st.sketch.length === 25 && Math.abs(st.sketch[0] - 4) < 0.6 && Math.abs(st.sketch[24] + 4) < 0.6 && rings >= misses - 1 && rings <= misses + 1 && rings > 0 && /ringed/.test(bar), { s0: st.sketch && st.sketch[0], s24: st.sketch && st.sketch[24], rings, misses, bar });
+  const fortunes = JSON.stringify(st.beats.map(b => b.fortune));
+  await p.click('[data-ui="ask-shape"]');
+  await p.waitForFunction(() => /ways toward your sketch/.test(document.querySelector('#sketchbar').textContent));
+  const g = (await call('write.get', {})).data, after = (await call('story.get', {})).data.story;
+  check('write.shape_proposes', g.kind === 'shape' && g.moves.length === rings && g.moves.every(m => m.at >= 1 && m.at <= after.beats.length && m.target !== m.fortune) && JSON.stringify(after.beats.map(b => b.fortune)) === fortunes, { g, rings });
+  await call('undo', {});
+  const undone = (await call('story.get', {})).data.story;
+  const bad = await call('story.sketch', { points: [{ t: 0.5, v: 1 }] }), none = await call('write.shape', {});
+  const agent = await call('story.sketch', { points: [{ t: 0, v: 0 }, { t: 1, v: 0 }] }), cleared = await call('story.sketch', { points: [] });
+  check('sketch.undo_agent_clear', undone.sketch === undefined && bad.class === 'invalid' && none.class === 'invalid' && agent.ok && agent.data.sketch.every(v => v === 0) && cleared.ok && (await call('story.get', {})).data.story.sketch === undefined, { bad: bad.class, none: none.class });
+  check('sketch.no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
 { // write mode with no reader chosen says so; Stop ends an ask and keeps nothing
@@ -390,7 +417,7 @@ async function readPage(opts) {
   const names = await p5.evaluate(() => window.__mc.map(t => t.name));
   const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
   const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
-  check('door.model_context', names.length === 37 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  check('door.model_context', names.length === 39 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
   await ctx5.close();
 }
 { // a page opened as a file stores no key: every local file shares its storage
