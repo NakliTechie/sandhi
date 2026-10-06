@@ -197,6 +197,7 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 .chap-t:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .chap .faint{font:12px var(--sans)}
 .chapfilter{font-size:12px;color:var(--muted);display:block;margin:0 0 8px}
+.chapfilter[hidden]{display:none}
 .tleft{display:inline-flex;gap:4px;align-items:center;margin-left:8px;font-size:12px;color:var(--muted)}
 .tmeta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:12px;color:var(--faint)}
 .x{border:none;background:transparent;color:var(--faint);font-size:12px;padding:0 4px}
@@ -266,7 +267,7 @@ table.matrix{border-collapse:collapse}
 .tour-card h2{font-size:16px;font-weight:500;margin:0 0 6px}
 .tour-card p{font-size:13.5px;line-height:1.6;color:var(--muted);margin:0}
 .tour-actions{display:flex;gap:8px;margin-top:14px}
-.tour-actions .skip{margin-right:auto}
+.tour-actions .tour-skip{margin-right:auto}
 
 /* read dialog */
 #wizard{border:1px solid var(--line-strong);border-radius:14px;background:var(--card);color:var(--ink);padding:24px 26px 18px;width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px)}
@@ -311,7 +312,7 @@ table.matrix{border-collapse:collapse}
 
 footer{max-width:1200px;margin:0 auto;padding:18px 24px 28px;border-top:1px solid var(--line);font-size:12px;color:var(--faint);display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between}
 footer code{font-size:11.5px}
-#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13px;padding:8px 14px;border-radius:8px;max-width:min(560px,calc(100vw - 32px));display:none;z-index:20}
+#toast{position:fixed;inset:auto;margin:0;border:0;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13px;padding:8px 14px;border-radius:8px;max-width:min(560px,calc(100vw - 32px));display:none;z-index:20}
 #toast.show{display:block}
 #toast span{opacity:.75}
 .empty{color:var(--faint);font-size:13px;margin:0}
@@ -470,7 +471,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     <div class="sp-actions" id="read-actions"><button class="btn primary" data-ui="read-run" type="button">Read it</button><button class="btn" data-cmd="read.cancel" id="read-stop" type="button" hidden>Stop</button><button class="btn primary" data-ui="read-accept" type="button" hidden>Use this structure</button><button class="btn" data-cmd="read.discard" type="button" hidden>Discard</button><button class="btn" data-ui="read-close" type="button">Close</button></div>
   </section>
 </dialog>
-<div id="toast" role="status"></div>
+<div id="toast" role="status" popover="manual"></div>
 
 <script id="sandhi-core">
 // sandhi core: L0 library, L1 schema, L2 derived views. Pure functions, no DOM; test/core.mjs runs this block in Node.
@@ -1141,7 +1142,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     // Ollama's OpenAI-compatible API ignores num_ctx and runs every model in 4,096 tokens, which cuts a story's answer off:
     // reads go to its own /api/chat, which takes num_ctx per request (seen on Ollama 0.35, 2026-10-04). LM Studio fixes the
     // window when it loads a model; its /api/v0/models says what it is.
-    ollama: { label: 'Ollama', base: 'http://127.0.0.1:11434/v1', native: 'http://127.0.0.1:11434/api', window: 16384, cors: 'start Ollama with OLLAMA_ORIGINS=https://sandhi.naklitechie.com' },
+    ollama: { label: 'Ollama', base: 'http://127.0.0.1:11434/v1', native: 'http://127.0.0.1:11434/api', window: 16384, cors: `start Ollama with OLLAMA_ORIGINS=${globalThis.location ? location.origin : 'https://sandhi.naklitechie.com'}` },
     lmstudio: { label: 'LM Studio', base: 'http://127.0.0.1:1234/v1', native: 'http://127.0.0.1:1234/api/v0', cors: 'turn on CORS in LM Studio’s server settings' }
   };
   // The writer's provider: any OpenAI-compatible API, or Anthropic's own. Browser CORS checked 2026-10-04 for every
@@ -1716,7 +1717,7 @@ const strategyFor = (a) => a.strategy || 'whole';
 let readProgress = () => { /* the dialog replaces this while it is open */ };
 function readError(words, id, strategy, door) {
   if (door !== 'ui' && id === 'provider' && rcfg.rung !== 'provider') return fail('person_only', 'Sending the story to a provider is the writer\'s choice; the writer has not chosen it.', 'Read with an on-device rung (machine or device), or ask the writer to choose the provider in Read a story.');
-  if (!id) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it: your provider with your key, or another reader (reader.select).');
+  if (!id) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Import: your provider with your key, or another reader.');
   if (strategy !== undefined && !['whole', 'split'].includes(strategy)) return fail('invalid', `no strategy ${strategy}`, 'Use "whole" or "split".');
   if (words < 50) return fail('invalid', `${words} words is too short to have a structure.`, 'Paste the whole story: at least 50 words.');
   if (!own(READERS, id)) return fail('invalid', `no rung ${id}`, `Use one of: ${LD.ORDER.join(', ')}.`);
@@ -1766,7 +1767,7 @@ const WRITE_NEEDS = {
   beat: (s, a) => (typeof a.beat === 'string' && s.beats.some(b => b.id === a.beat) ? null : fail('not_found', `no beat ${a.beat}`, 'Use a beat id from story.get.'))
 };
 function writeError(kind, a) {
-  if (!rcfg.rung) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Import: your provider with your key, or another reader (reader.select).');
+  if (!rcfg.rung) return fail('no_reader', 'No reader is chosen yet.', 'Choose who reads it in Import: your provider with your key, or another reader.');
   if (app.reading) return fail('busy', 'A model is already working.', 'Wait for it to finish, or stop it (read.cancel).');
   return (WRITE_NEEDS[kind] || WRITE_NEEDS.beat)(S(), a);
 }
@@ -2135,10 +2136,16 @@ const fmtF = (v) => (v > 0 ? '+' + v : v < 0 ? '−' + -v : '0');
 const snip = (t, n) => (t.length > n ? t.slice(0, n).trimEnd() + '…' : t);
 const opts = (list, cur, none) => (none !== undefined ? `<option value=""${cur ? '' : ' selected'}>${esc(none)}</option>` : '') + list.map(o => `<option value="${o.id}"${o.id === cur ? ' selected' : ''}>${esc(o.name)}${o.gloss ? ' · ' + esc(o.gloss) : ''}</option>`).join('');
 let toastTimer = null;
+// The toast is a manual popover: shown again after a modal dialog opens, it joins the top layer above the dialog, so a refusal
+// inside Import (or the error net) is seen (UX review 2026-10-06b H1).
+function toastShown(on) {
+  const el = $('#toast'); el.classList.toggle('show', on);
+  try { if (on) { if (el.matches(':popover-open')) el.hidePopover(); el.showPopover(); } else if (el.matches(':popover-open')) el.hidePopover(); } catch { /* no Popover API: the fixed toast still shows outside dialogs */ }
+}
 function toast(msg, next) {
   const el = $('#toast'); el.innerHTML = esc(msg) + (next ? ` <span>${esc(next)}</span>` : '');
-  el.classList.remove('show'); void el.offsetWidth;   // the same message again still shows as new
-  el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 5000);
+  toastShown(false); void el.offsetWidth;   // the same message again still shows as new
+  toastShown(true); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastShown(false), 5000);
 }
 
 // what to redraw after a command: header and plant-label edits leave the beat cards alone, so a click into a beat keeps its cursor
@@ -2146,7 +2153,7 @@ const NOTICES = { 'story.new': 'New story.', 'story.demo': 'Demo story loaded.',
 // what the writer is told after a change made in the page; Undo and Redo clear a notice that no longer holds
 function notice(name, door) {
   if (door !== 'ui') return;
-  if (name === 'undo' || name === 'redo') $('#toast').classList.remove('show');
+  if (name === 'undo' || name === 'redo') toastShown(false);
   else if (NOTICES[name]) toast(NOTICES[name], name === 'beat.remove' ? 'Undo brings it back.' : 'Undo brings your previous story back.');
 }
 const patchKeys = (args) => (args.patch ? Object.keys(args.patch) : []);
@@ -2162,9 +2169,15 @@ const AFTER = {
 const readTool = (name) => /^read(er)?\./.test(name);
 // a failed call from the page says so in a toast, except in the open read dialog, whose own status line says it (one announcement)
 function failNotice(name, door, env) { if (door === 'ui' && !(reader.open && readTool(name))) toast(env.message, env.next); }
+// a story that replaced the open one takes nothing of the old one along: the plot box empties, a suggestion about it goes
+function afterReplace() {
+  const box = $('#plot-add input'); if (box) { box.value = ''; $('#plot-add button').disabled = true; }
+  if (app.suggest && !app.suggest.pending) app.suggest = null;
+}
 function afterDispatch(name, args, door, env, t) {
   if (door !== 'ui' && readTool(name)) { renderProposal(); if (reader.open) renderReader(false); }   // the dialog shows what an agent changed
   if (!env.ok) { failNotice(name, door, env); return; }
+  if (REPLACES.has(name)) afterReplace();   // UX review 2026-10-06b M5
   if (AFTER[name]) { AFTER[name](args, door); return; }
   if (!t.mutating && name !== 'story.save') return;
   notice(name, door);
@@ -2357,7 +2370,7 @@ function patchCards() {
 // a chapter's header over its beats: its name, its beats and words, its fortune from first to last, and a toggle to fold it
 function chapterHead(r, s) {
   const bs = s.beats.slice(r.from - 1, r.to), open = !app.shut.has(r.name), words = bs.reduce((n, b) => n + C.wordCount(b.text), 0);
-  return `<h3 class="chap"><button class="chap-t" type="button" data-ui="chapter-toggle" data-name="${esc(r.name)}" aria-expanded="${open}">${open ? '▾' : '▸'} ${esc(r.name)}</button> <span class="faint">beats ${r.from}${r.to > r.from ? `–${r.to}` : ''} · ${words.toLocaleString('en')} words · fortune ${fmtF(bs[0].fortune)} → ${fmtF(bs.at(-1).fortune)}</span></h3>`;
+  return `<h3 class="chap"><button class="chap-t" type="button" data-ui="chapter-toggle" data-name="${esc(r.name)}" aria-expanded="${open}">${open ? '▾' : '▸'} ${esc(r.name)}</button> <span class="faint">${r.to > r.from ? 'beats' : 'beat'} ${r.from}${r.to > r.from ? `–${r.to}` : ''} · ${words.toLocaleString('en')} words · fortune ${fmtF(bs[0].fortune)} → ${fmtF(bs.at(-1).fortune)}</span></h3>`;
 }
 function renderBeats() {
   // which "Label this beat" sections are open, read from the page now: the toggle event arrives a moment after the click
@@ -2421,7 +2434,7 @@ function renderSuggest() {
 }
 function renderChecks() {
   const list = C.checks(S()), box = $('#checks div');
-  $('#checks-h').textContent = list.length ? `Checks · ${list.length}` : 'Checks';
+  $('#checks-h').textContent = list.length ? `Checks · ${list.length} to look at` : 'Checks';
   box.innerHTML = list.length ? `<ul>${groupChecks(list).map(checkItem).join('')}</ul>`
     : `<p class="clean">Nothing to flag in ${S().beats.length} beats and ${S().threads.length} plants.</p>`;
   const labelled = S().beats.some(b => b.joint === 'therefore' || b.joint === 'but');
@@ -2795,7 +2808,7 @@ function renderProposal() {
   const box = $('#read-result'), p = app.proposal, run = $('#read-actions [data-ui="read-run"]');
   const acc = $('#read-actions [data-ui="read-accept"]');
   acc.hidden = !p; acc.dataset.proposal = p ? p.id : ''; $('#read-actions [data-cmd="read.discard"]').hidden = !p;
-  run.textContent = p ? 'Read again' : 'Read it'; run.classList.toggle('primary', !p);
+  run.textContent = p ? (p.report.mode === 'paragraphs' ? 'Read it with a model' : 'Read again') : 'Read it'; run.classList.toggle('primary', !p);
   if (!p) { box.innerHTML = ''; return; }
   const r = p.report, drop = r.dropped.beats + r.dropped.quotes;
   const arc = C.ARCS.find(x => x.id === r.arc);
@@ -2806,7 +2819,7 @@ async function openReader() { $('#read-progress').textContent = ''; await render
 readProgress = (m) => { $('#read-progress').textContent = m; };
 const countWords = () => { const n = C.wordCount($('#read-text').value); $('#read-count').textContent = n < 50 ? `${n} words · 50 needed` : `${n} words`; if (n >= 50 && /too short/.test($('#read-progress').textContent)) readProgress(''); };
 $('#read-text').addEventListener('input', countWords);
-$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; const t = f && !tooBig(f) ? await textOf(f) : null; if (t !== null) { $('#read-text').value = t; countWords(); } });
+$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; const t = f && !tooBig(f) ? await textOf(f) : null; if (t !== null) { $('#read-text').value = t; countWords(); if (!t.trim()) readProgress(`"${f.name}" is empty. Open another file, or paste the story.`); } });
 const READER_CHANGES = {
   rung: (el) => { readProgress(''); return ui('reader.select', { rung: el.value }); },
   provider: (el) => ui('reader.select', { provider: el.value }),
@@ -2841,6 +2854,7 @@ async function onReaderTool(kind) {
   return renderReader(false);
 }
 async function readRunClick() {
+  if (!$('#read-text').value.trim()) { readProgress('Paste the story in step 1 first, or open a text file.'); $('#read-text').focus(); return null; }
   if (!reader.querySelector('input[name=rung]:checked')) {   // no reader yet: ask for the key, the recommended way in
     readProgress('Paste your provider’s API key in step 2 to read with it, or open Other readers.'); $('#provider-key').focus(); return null;
   }
@@ -2851,21 +2865,25 @@ async function readRunClick() {
   renderProposal();   // the previous proposal is gone while this read runs
   const r = await going;
   run.hidden = false; $('#read-stop').hidden = true;
-  readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal(); return renderReader(false);
+  readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal(); showPreview(); return renderReader(false);
+}
+// after a split or a read, the preview and its Use this structure button come into view (UX review 2026-10-06b M4)
+function showPreview() { const box = $('#read-result'); if (app.proposal && box.firstElementChild) box.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+// split by paragraphs: the same preview and "Use this structure" step as a model's reading (UX review H3)
+async function readPasteClick() {
+  const r = await ui('read.paragraphs', { text: $('#read-text').value });
+  readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal(); showPreview();
+  return null;
 }
 async function onReadControl(kind, e) {
   if (kind === 'read-open') return openReader();
   if (kind === 'read-close') return reader.close();
   if (kind === 'read-file') return $('#read-file').click();
-  if (kind === 'read-paste') {   // the same preview and "Use this structure" step as a model's reading (UX review H3)
-    const r = await ui('read.paragraphs', { text: $('#read-text').value });
-    readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal();
-    return null;
-  }
+  if (kind === 'read-paste') return readPasteClick();
   if (kind === 'read-run') return readRunClick();
   if (kind === 'read-accept' && e.isTrusted) {   // person-only: a real click, never a scripted one, on the proposal shown
     const r = await ui('read.accept', { id: +$('#read-actions [data-ui="read-accept"]').dataset.proposal });
-    if (r.ok) { reader.close(); toast(`Read by ${r.data.model}: ${r.data.beats} beats.`, 'Undo brings your previous story back.'); }
+    if (r.ok) { reader.close(); toast(r.data.mode === 'paragraphs' ? `Split into ${r.data.beats} beats.` : `Read by ${r.data.model}: ${r.data.beats} beats.`, 'Undo brings your previous story back.'); }
     else readProgress(`${r.message} ${r.next || ''}`);   // the dialog's own status line says why (one announcement)
     return null;
   }
@@ -3035,9 +3053,9 @@ function startTour() {
   tour.layer.className = 'tour-layer';
   tour.layer.innerHTML = `<div class="tour-dim" aria-hidden="true"></div><div class="tour-spot" aria-hidden="true"></div><section class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-h" aria-describedby="tour-p">
     <div class="tour-progress"></div><h2 id="tour-h"></h2><p id="tour-p" aria-live="polite"></p>
-    <div class="tour-actions"><button class="btn skip" type="button">Skip</button><button class="btn back" type="button">Back</button><button class="btn primary next" type="button">Next</button></div></section>`;
+    <div class="tour-actions"><button class="btn tour-skip" type="button">Skip</button><button class="btn back" type="button">Back</button><button class="btn primary next" type="button">Next</button></div></section>`;
   document.body.appendChild(tour.layer);
-  tour.layer.querySelector('.skip').addEventListener('click', endTour);
+  tour.layer.querySelector('.tour-skip').addEventListener('click', endTour);
   tour.layer.querySelector('.back').addEventListener('click', () => { if (tour.i > 0) tourStep(tour.i - 1); });
   tour.layer.querySelector('.next').addEventListener('click', () => { if (tour.i < tour.steps.length - 1) tourStep(tour.i + 1); else endTour(); });
   document.addEventListener('keydown', tourKeys, true);   // capture: works before focus reaches the card

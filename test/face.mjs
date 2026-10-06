@@ -392,6 +392,26 @@ async function readPage(opts) {
   check('learn.no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // the second UX review's quick wins (2026-10-06b): toasts over dialogs, hidden filter, a visible tour Skip, no old plot text, copy
+  const { ctx2, p, errs, call } = await readPage({});
+  await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);
+  await p.evaluate(() => { const dt = new DataTransfer(); dt.items.add(new File([new Uint8Array([137, 80, 78, 71, 0, 1])], 'picture.png', { type: 'image/png' })); document.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })); });
+  await p.waitForFunction(() => /picture\.png/.test(document.querySelector('#toast').textContent));
+  const overDialog = await p.evaluate(() => document.querySelector('#toast').matches(':popover-open'));
+  await p.fill('#read-text', ''); await p.click('#read-actions [data-ui="read-run"]');
+  const asksStory = await p.textContent('#read-progress');
+  await p.click('[data-ui="read-close"]');
+  const filterShown = await p.evaluate(() => document.querySelector('.chapfilter').checkVisibility());
+  await p.fill('#plot-add input', 'Ama loses the mast'); await call('story.demo', {});
+  const plotAfter = await p.inputValue('#plot-add input');
+  const noReader = await call('write.questions', { beat: 'b1' });
+  await p.click('[data-ui="help"]'); await p.click('#splash [data-ui="tour"]');
+  const skip = await p.evaluate(() => { const b = document.querySelector('.tour-actions .tour-skip'); const r = b && b.getBoundingClientRect(); return !!r && r.left >= 0 && r.width > 0; });
+  await p.keyboard.press('Escape');
+  check('ux2b.quick_wins', overDialog && /Paste the story in step 1/.test(asksStory) && !filterShown && plotAfter === '' && !/reader\.select/.test(noReader.next) && skip, { overDialog, asksStory, filterShown, plotAfter, next: noReader.next, skip });
+  check('ux2b.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 { // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
   const { ctx2, p, errs, call } = await readPage({});
   const t0 = (await call('story.get', {})).data.story.threads[0];
