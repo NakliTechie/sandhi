@@ -1400,13 +1400,17 @@ function readError(words, id, strategy, door) {
   if (app.reading) return fail('busy', 'A read is already running.', 'Wait for it to finish, then call read.get.');
   return null;
 }
+// Chrome's Energy Saver freezes a tab hidden for 5 minutes that uses CPU; a held Web Lock exempts it (Chromium's
+// CannotFreezeReason kHoldingWebLock). Two long reads froze in hidden tabs (2026-10-04), so each read holds one, under a
+// name of its own so that reads in two tabs never wait on each other. The lock ends when the read does.
+const whileLocked = (fn) => (globalThis.navigator && navigator.locks ? navigator.locks.request(`sandhi-read-${crypto.randomUUID()}`, () => fn()) : fn());
 let proposalSeq = 0;   // each staged proposal has an id, so the writer accepts the one the dialog shows
 async function runRead(a, door) {
   const text = String(a.text || ''), words = C.wordCount(text), id = a.rung || rcfg.rung;
   const bad = readError(words, id, a.strategy, door); if (bad) return bad;
   app.reading = true; app.proposal = null; readAbort = new AbortController(); const t0 = performance.now();
   try {
-    const r = await readText(text, READERS[id], (m) => readProgress(m), strategyFor(a));
+    const r = await whileLocked(() => readText(text, READERS[id], (m) => readProgress(m), strategyFor(a)));
     stopped();   // a reader that ignored the abort still stages nothing
     if (!r.story) return fail('nothing_found', 'None of the model\'s beat quotes matched the text.', 'Check the text is the story itself, then try again or try the other reader.', { dropped: r.dropped });
     const v = C.validate(r.story);

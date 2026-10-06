@@ -305,8 +305,11 @@ async function readPage(opts) {
   await p.evaluate((text) => { window.__pending = window.sandhi.tools['read.run']({ text }); }, prose);
   await p.waitForFunction(() => window.__nanoCalls.length === 1);
   const busy = (await call('status', {})).data.read.reading;
+  const lockedDuring = await p.evaluate(async () => (await navigator.locks.query()).held.filter(l => l.name.startsWith('sandhi-read-')).length);
   const t0 = Date.now(); const c = await call('read.cancel', {}); const r = await p.evaluate(() => window.__pending);
   const after = (await call('status', {})).data.read;
+  const lockedAfter = await p.evaluate(async () => (await navigator.locks.query()).held.filter(l => l.name.startsWith('sandhi-read-')).length);
+  check('read.holds_web_lock', lockedDuring === 1 && lockedAfter === 0, { lockedDuring, lockedAfter });   // a hidden tab is not frozen mid-read
   check('read.cancel_stops', busy && c.ok && c.data.stopped && r.class === 'cancelled' && Date.now() - t0 < 2000 && !after.reading && after.proposal === null && (await p.evaluate(() => window.__nanoCalls.every(x => x.signal))), { busy, c: c.data, r: r.class, after });
   await p.click('[data-ui="read-open"]'); await p.fill('#read-text', prose);
   await p.click('#read-actions [data-ui="read-run"]');
