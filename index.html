@@ -192,6 +192,8 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 .tstate{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--accent)}
 .tstate.open{background:transparent;border:1.5px solid var(--accent)}
 .tstate.left{background:transparent;border:1.5px dashed var(--muted)}
+.chapform{display:flex;gap:6px;align-items:center;margin:8px 0 2px;flex-wrap:wrap}
+.chapform input{flex:1;min-width:10ch;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:4px 8px;font-size:13px}
 .chap{font:500 15px/1.4 var(--serif);margin:18px 0 6px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .chap-t{all:unset;cursor:pointer;color:var(--ink)}
 .chap-t:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -342,6 +344,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
       <button data-ui="open" type="button">Open a .sandhi.json file…</button>
       <button data-cmd="story.demo" type="button">Load the example, The whistle</button>
       <button data-ui="learn" type="button">How stories work: the 13 principles</button>
+      <button data-ui="jump-tidbits" type="button">Keep a tidbit…</button>
       <p class="mlab" id="recent-h">Recent stories</p>
       <div id="recent" class="recent" aria-labelledby="recent-h"></div>
     </div></details>
@@ -375,7 +378,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
       <div id="plot-sg" aria-live="polite"></div>
       <p class="ask interview-ask"><button class="link" type="button" data-ui="ask-interview">Interview me: one question at a time, on the weakest place</button></p>
       <div id="interview-sg" aria-live="polite"></div>
-      <div id="beats"></div>
+      <div id="beats"></div><datalist id="chapter-names"></datalist>
       <button class="ghost addbeat" data-cmd="beat.add" data-args="{}">Add a beat</button>
     </section>
     <aside>
@@ -2018,6 +2021,17 @@ const TOOLS = [
       if (key) { rcfg.provider = id; rcfg.rung = 'provider'; saveCfg(); }
       return ok({ provider: id, key: key ? await LD.fingerprint(key) : null });
     } },
+  { name: 'chapter.start', description: 'Start a chapter at a beat: the name goes on that beat and on the beats after it, up to the next beat that already starts or belongs to another chapter. An empty name ends the chapter there (the same beats lose their name). Undo reverses it.', mutating: true,
+    inputSchema: { type: 'object', properties: { beat: { type: 'string' }, name: { type: 'string' } }, required: ['beat', 'name'] },
+    handler: async (a) => {
+      const n = C.clone(S()), i = n.beats.findIndex(b => b.id === a.beat);
+      if (i < 0) return noBeat(a.beat);
+      if (typeof a.name !== 'string' || a.name.length > 80) return fail('invalid', 'A chapter name is text, up to 80 characters.', 'Send name, or an empty name to end the chapter.');
+      const name = a.name.trim(), was = n.beats[i].chapter || '';
+      let k = i;
+      do { if (name) n.beats[k].chapter = name; else delete n.beats[k].chapter; k++; } while (k < n.beats.length && (n.beats[k].chapter || '') === was);
+      return commit(n, null) || ok({ from: i + 1, to: k, name });
+    } },
   { name: 'learn.get', description: 'How stories work: the 13 principles (line, what each source says and who pushes back, the beats of this story that serve it), the six fortune shapes, and the sources. principle narrows it to one.', inputSchema: { type: 'object', properties: { principle: { type: 'string' } } },
     handler: async (a) => (a.principle !== undefined && !C.PRINCIPLES.some(p => p.id === a.principle) ? fail('invalid', `no principle ${a.principle}`, `Use one of: ${C.PRINCIPLES.map(p => p.id).join(', ')}.`) : ok(learnData(a.principle))) },
   { name: 'write.questions', description: "Ask the chosen reader 2 to 4 questions about one beat, each from a principle the beat does least for. Questions only; nothing enters the story. The result replaces any earlier suggestion (write.get). It uses the reader the writer chose.", spends: true,
@@ -2358,10 +2372,12 @@ function beatCard(b, i, s) {
         <button data-cmd="beat.move" data-args="${attr({ id, position: P - 1 })}"${P === 1 ? ' disabled' : ''}>Move up</button>
         <button data-cmd="beat.move" data-args="${attr({ id, position: P + 1 })}"${P === last ? ' disabled' : ''}>Move down</button>
         <button data-cmd="beat.add" data-args="${attr({ after: id })}">Add a beat after</button>
+        <button data-ui="chapter-here" data-id="${id}" type="button">Start a chapter here</button>
         <button data-cmd="beat.remove" data-args="${attr({ id })}">Remove beat</button>
       </div></details>
     </div>
     <textarea class="btext" data-beat="${id}" data-field="text" rows="3" aria-label="Text of beat ${P}" placeholder="What happens">${esc(b.text)}</textarea>
+    ${app.chapForm === id ? `<form class="chapform" data-chapform="${id}"><input list="chapter-names" maxlength="80" placeholder="Chapter name" aria-label="Name of the chapter that starts at beat ${P}" required><button class="btn" type="submit">Start the chapter</button><button class="link" type="button" data-ui="chapter-cancel">Cancel</button></form>` : ''}
     <div class="ask"><button class="link" type="button" data-ui="ask-q" data-id="${id}">Ask about this beat</button></div>
     <div class="suggest" data-sg="${id}" aria-live="polite">${suggestHtml(id)}</div>
     ${labelHtml(b, s, P)}
@@ -2390,6 +2406,7 @@ function renderBeats() {
   // which "Label this beat" sections are open, read from the page now: the toggle event arrives a moment after the click
   for (const d of document.querySelectorAll('#beats details.more')) { if (d.open) app.open.add(d.dataset.more); else app.open.delete(d.dataset.more); }
   const s = S();
+  $('#chapter-names').innerHTML = [...new Set(C.chapterRuns(s).map(r => r.name))].map(n => `<option value="${esc(n)}">`).join('');
   const runs = C.chapterRuns(s), head = new Map(runs.map(r => [r.from, r])), shut = (i) => runs.some(r => i + 1 >= r.from && i + 1 <= r.to && app.shut.has(r.name));
   $('#beats').innerHTML = s.beats.length ? s.beats.map((b, i) => (head.has(i + 1) ? chapterHead(head.get(i + 1), s) : '') + (shut(i) ? '' : beatCard(b, i, s))).join('') : '<p class="empty">No beats. Add one, or load The whistle.</p>';
 }
@@ -2611,7 +2628,9 @@ document.addEventListener('change', (e) => {
   delete d.dirty;
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
-const UI_ACTIONS = { 'reader-settings': () => openReaderSettings(), 'reader-done': () => readerDone(),
+const UI_ACTIONS = { 'jump-tidbits': () => { $('#tidbits').scrollIntoView({ block: 'start', behavior: 'smooth' }); $('#tidbit-add input').focus({ preventScroll: true }); },
+  'chapter-here': (u) => { app.chapForm = u.dataset.id; renderBeats(); const f = document.querySelector(`[data-chapform="${u.dataset.id}"] input`); if (f) f.focus(); }, 'chapter-cancel': () => { app.chapForm = null; renderBeats(); },
+  'reader-settings': () => openReaderSettings(), 'reader-done': () => readerDone(),
   learn: () => { renderLearn(); $('#learn').showModal(); }, 'learn-close': () => $('#learn').close(), 'learn-focus': (u) => { $('#learn').close(); ui('view.focus', { principle: u.dataset.id }).then(() => $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' })); },
   'chapter-toggle': (u) => { const n = u.dataset.name; if (app.shut.has(n)) app.shut.delete(n); else app.shut.add(n); renderBeats(); },
   'ask-interview': () => ui('write.interview', {}), 'ask-depth': (u) => ui('write.depth', { beat: u.dataset.id }), 'iv-beat': () => landAnswer('beat'), 'iv-tidbit': () => landAnswer('tidbit'), 'iv-note': () => landAnswer('note'),
@@ -2647,6 +2666,7 @@ $('#thread-chapter').addEventListener('change', (e) => { app.threadChapter = e.t
 $('#trad-all').checked = !!uiPrefs.traditions;
 $('#trad-all').addEventListener('change', (e) => { uiPrefs.traditions = e.target.checked; store.set(UIKEY, JSON.stringify(uiPrefs)); renderChart(); });
 $('#plot-add input').addEventListener('input', (e) => { $('#plot-add button').disabled = !e.target.value.trim(); });
+$('#beats').addEventListener('submit', (e) => { const f = e.target.closest('[data-chapform]'); if (!f) return; e.preventDefault(); const id = f.dataset.chapform, name = f.querySelector('input').value.trim(); if (!name) return; app.chapForm = null; ui('chapter.start', { beat: id, name }); });
 $('#plot-add').addEventListener('submit', (e) => { e.preventDefault(); const v = e.target.querySelector('input').value.trim(); if (v) ui('write.plot', { element: v }); });
 $('#tidbit-add input').addEventListener('input', (e) => { $('#tidbit-add button').disabled = !e.target.value.trim(); });
 $('#tidbit-add').addEventListener('submit', (e) => { e.preventDefault(); const i = e.target.querySelector('input'), v = i.value.trim(); if (!v) return; ui('tidbit.add', { text: v }).then(r => { if (r.ok) { i.value = ''; $('#tidbit-add button').disabled = true; } }); });

@@ -54,7 +54,7 @@ draft   { n, text, note }
 | `avastha` | `arambha` · `prayatna` · `praptyasha` · `niyatapti` · `phalagama` · `null` (Nāṭyaśāstra's five stages) |
 | `kis` | `ki` · `sho` · `ten` · `ketsu` · `null` (kishōtenketsu) |
 | `sketch` (optional) | 25 numbers from −5 to 5: the fortune line the writer sketched, evenly spaced from the first beat to the last (TaleBrush) |
-| `chapter` (beat, optional) | a chapter name, up to 80 characters; consecutive beats with one name form a chapter (`chapterRuns`): a header over them that folds, a chapter filter on the threads, and, when the story outgrows the reader's window, the other chapters cut to one line each in the brief; a chapter read sets it |
+| `chapter` (beat, optional) | a chapter name, up to 80 characters; consecutive beats with one name form a chapter (`chapterRuns`): a header over them that folds, a chapter filter on the threads, and, when the story outgrows the reader's window, the other chapters cut to one line each in the brief; a chapter read sets it; **Start a chapter here** in the beat menu (`chapter.start {beat, name}`) names that beat and the beats after it up to the next chapter, and an empty name ends it |
 | `open` (thread, optional) | `true`: left open on purpose; a planted thread with no payoff is then not flagged `plant_unpaid` |
 | `tidbits` (optional) | real-life observations kept beside the story (up to 500), each placed in distinct beats or none; removing a beat unplaces them |
 | `by` | `writer` · `model` (with `model: <id>`, 1–200 characters) · `agent` (an agent's edit through `window.sandhi` or `navigator.modelContext`) |

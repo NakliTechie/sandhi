@@ -36,7 +36,7 @@ sandhi lays the story on its spine and shows its joints. Each beat has a fortune
 
 ## Import a story, and let the AI you choose read it
 
-Long stories group into chapters: name a beat's chapter and the beats fold under a header, the threads filter by chapter, and the model sees the other chapters in one line each when the whole will not fit. Paste a story, a chapter or a whole manuscript: a long one with chapter headings is read a chapter at a time, one beat per chapter, and picks up where it stopped. Split it by paragraph, or let a model mark its beats, turn, low point, joints and threads. It returns labels and exact quotes only; sandhi cuts your own text where each quote lands and drops any quote that does not match. You see the result before it replaces anything, and Undo brings your story back.
+Long stories group into chapters: **Start a chapter here** in a beat's ⋯ menu, and the beats fold under a header, the threads filter by chapter, and the model sees the other chapters in one line each when the whole will not fit. Paste a story, a chapter or a whole manuscript: a long one with chapter headings is read a chapter at a time, one beat per chapter, and picks up where it stopped. Split it by paragraph, or let a model mark its beats, turn, low point, joints and threads. It returns labels and exact quotes only; sandhi cuts your own text where each quote lands and drops any quote that does not match. You see the result before it replaces anything, and Undo brings your story back.
 
 You choose who reads it. Your own provider and key is the recommended way: OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral, DeepSeek, Together, or any OpenAI-compatible URL. Keys stay in this browser and show only as a fingerprint. A model server on your machine (Ollama or LM Studio) or Gemini Nano in Chrome also read; in our tests they missed the turn. The dialog shows each reader's measured result.
 
@@ -56,7 +56,7 @@ node cli-read.mjs score <reply> <name> --story gift-of-the-magi   # score a mode
 node page-read.mjs --model qwen3.5:4b --story to-build-a-fire     # the real page reads with a local model
 ```
 
-Agents: `window.sandhi` exposes 50 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading or a plot proposal, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
+Agents: `window.sandhi` exposes 51 tools over one command bus, and `navigator.modelContext` gets the same where the browser has it. Accepting a reading or a plot proposal, entering a key, and sending the story to a paid provider stay with the writer. Contract: [SPEC.md §0](SPEC.md).
 
 ## Verify it yourself
 

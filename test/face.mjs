@@ -58,7 +58,7 @@ check('splash.cold_load_shows_it', samples.every(s => s.splash), samples.map(s =
 
   const man = await page.evaluate(() => window.sandhi.manifest);
   const personOnly = man.filter(t => t.personOnly).map(t => t.name).toSorted();
-  check('face.manifest', man.length === 50 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key', 'write.apply']), { n: man.length, personOnly });
+  check('face.manifest', man.length === 51 && man.every(t => t.name && t.description && t.inputSchema) && JSON.stringify(personOnly) === JSON.stringify(['read.accept', 'reader.key', 'write.apply']), { n: man.length, personOnly });
   let st = await call('status', {});
   check('face.status', st.ok && st.data.beats === 10 && st.data.checks.count === 0 && st.data.arc.best === 'hole' && st.data.title === 'The whistle', st);
 
@@ -431,6 +431,22 @@ async function readPage(opts) {
   check('reader.chip_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // chapters and tidbits from the top (Batch X, UX reviews 2026-10-06b: Claude M1, codex M3, M2)
+  const { ctx2, p, errs, call } = await readPage({ ctx: { viewport: { width: 390, height: 844 } } });
+  await p.click('#beat-b4 details.menu summary'); await p.click('#beat-b4 [data-ui="chapter-here"]');
+  await p.fill('[data-chapform="b4"] input', 'The storm'); await p.press('[data-chapform="b4"] input', 'Enter');
+  await p.waitForFunction(() => document.querySelectorAll('#beats h3.chap').length === 1);
+  const st = (await call('story.get', {})).data.story.beats.map(b => b.chapter || '');
+  const second = await call('chapter.start', { beat: 'b8', name: 'The bell' }), s2 = (await call('story.get', {})).data.story.beats.map(b => b.chapter || '');
+  const end = await call('chapter.start', { beat: 'b8', name: '' }), s3 = (await call('story.get', {})).data.story.beats.map(b => b.chapter || '');
+  const names = await p.$$eval('#chapter-names option', o => o.map(x => x.value));
+  await p.click('.storymenu summary'); await p.click('[data-ui="jump-tidbits"]');
+  const focus = await p.evaluate(() => document.activeElement === document.querySelector('#tidbit-add input'));
+  check('chapters.start_here', JSON.stringify(st) === JSON.stringify(['', '', '', 'The storm', 'The storm', 'The storm', 'The storm', 'The storm', 'The storm', 'The storm'])
+    && second.ok && JSON.stringify(s2.slice(7)) === JSON.stringify(['The bell', 'The bell', 'The bell']) && s2[6] === 'The storm' && end.ok && JSON.stringify(s3.slice(7)) === JSON.stringify(['', '', '']) && names.includes('The storm') && focus, { st, s2, s3, names, focus });
+  check('chapters.start_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 { // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
   const { ctx2, p, errs, call } = await readPage({});
   const t0 = (await call('story.get', {})).data.story.threads[0];
@@ -595,7 +611,7 @@ async function readPage(opts) {
   const names = await p5.evaluate(() => window.__mc.map(t => t.name));
   const r5 = await p5.evaluate(() => window.__mc.find(t => t.name === 'sandhi.status').execute({}));
   const j5 = (await p5.evaluate(() => window.sandhi.tools.journal({ n: 1 }))).data.entries[0];
-  check('door.model_context', names.length === 47 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
+  check('door.model_context', names.length === 48 && !names.includes('sandhi.read.accept') && !names.includes('sandhi.reader.key') && r5.ok && r5.content && r5.content[0].type === 'text' && r5.structuredContent.ok && j5.door === 'modelContext' && j5.tool === 'status', { n: names.length, j5 });
   await ctx5.close();
 }
 { // a page opened as a file stores no key: every local file shares its storage
