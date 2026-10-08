@@ -425,7 +425,7 @@ async function readPage(opts) {
   await p.click('#reader-chip'); await p.waitForFunction(() => document.querySelector('#reader').open);
   await p.click('[data-ui="read-close"]'); await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);
   const importBack = await p.evaluate(() => ({ title: document.querySelector('#reader-h').textContent, storyStep: document.querySelector('#reader .rstep').checkVisibility() }));
-  check('reader.chip_choose_and_return', before === 'No reader' && mode.title === 'Who reads your story' && !mode.storyStep && mode.done && !mode.read && after === 'Gemini Nano' && importBack.title === 'Import a story' && importBack.storyStep, { before, mode, after, importBack });
+  check('reader.chip_choose_and_return', before === 'Choose an AI reader' && mode.title === 'Who reads your story' && !mode.storyStep && mode.done && !mode.read && after === 'Gemini Nano' && importBack.title === 'Import a story' && importBack.storyStep, { before, mode, after, importBack });
   check('reader.chip_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }

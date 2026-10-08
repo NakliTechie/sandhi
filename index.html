@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https: http://127.0.0.1:* http://localhost:*; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>sandhi — the joints of a story</title>
-<meta name="description" content="Any AI you choose marks your story’s structure, in your own words. It never writes a sentence. One file, no account.">
+<meta name="description" content="Any AI you choose marks your story’s structure, in your own words. It never writes your story. One file, no account.">
 <link rel="canonical" href="https://sandhi.naklitechie.com/">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sandhi.naklitechie.com/">
 <meta property="og:title" content="sandhi — the joints of a story">
-<meta property="og:description" content="Any AI you choose marks your story’s structure, in your own words. It never writes a sentence. One file, no account.">
+<meta property="og:description" content="Any AI you choose marks your story’s structure, in your own words. It never writes your story. One file, no account.">
 <meta property="og:image" content="https://sandhi.naklitechie.com/social.png">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="640">
@@ -356,7 +356,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
       <p class="mlab" id="recent-h">Recent stories</p>
       <div id="recent" class="recent" aria-labelledby="recent-h"></div>
     </div></details>
-    <button class="btn chip-reader" data-ui="reader-settings" id="reader-chip" type="button" title="Who reads your story: your provider, a model server, or Gemini Nano">No reader</button>
+    <button class="btn chip-reader" data-ui="reader-settings" id="reader-chip" type="button" title="Optional: who reads your story, your provider, a model server, or Gemini Nano">Choose an AI reader</button>
     <button class="btn" data-ui="help" aria-label="About sandhi and the tour" title="About and tour (?)">?</button>
     <span id="savestate" aria-live="polite"></span>
     <input type="file" id="file" accept=".json,application/json" hidden>
@@ -2914,12 +2914,12 @@ async function chipText() {
   if (rcfg.rung === 'device') return 'Gemini Nano';
   if (rcfg.rung === 'machine') return machineChip();
   if (rcfg.rung === 'provider') return `${(LD.PROVIDERS[rcfg.provider] || { label: 'Provider' }).label} · ${(await vault.get(rcfg.provider)) ? 'your key' : 'no key yet'}`;
-  return 'No reader';
+  return 'Choose an AI reader';
 }
 async function renderChip() {
   const chip = $('#reader-chip'); if (!chip) return;
   const text = await chipText();
-  chip.textContent = text; chip.classList.toggle('none', text === 'No reader');
+  chip.textContent = text; chip.classList.toggle('none', !rcfg.rung);
 }
 readProgress = (m) => { $('#read-progress').textContent = m; };
 const countWords = () => { const n = C.wordCount($('#read-text').value); $('#read-count').textContent = n < 50 ? `${n} words · a model read needs 50` : `${n} words`; if (n >= 50 && /too short/.test($('#read-progress').textContent)) readProgress(''); };

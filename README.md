@@ -1,6 +1,6 @@
 <h1 align="center">sandhi</h1>
 
-<p align="center"><b>Any AI you choose marks your story's structure, in your own words. It never writes a sentence.</b></p>
+<p align="center"><b>Any AI you choose marks your story's structure, in your own words. It never writes your story.</b></p>
 
 <p align="center">One HTML file in your browser. No account, no server of ours, no telemetry.</p>
 
@@ -26,7 +26,7 @@ It opens on *The whistle*, a ten-beat demo story, with a short tour. Move a beat
 await window.sandhi.status()   // title, counts, checks by class, closest arc, undo depth
 ```
 
-Nothing to install, no account. Your story autosaves in this browser, and **Save** writes a `.sandhi.json` file.
+Nothing to install, no account, and no AI needed: with no key at all you lay a story on the spine, label its beats and read the chart and the checks by hand. Your story autosaves in this browser, and **Save** writes a `.sandhi.json` file.
 
 ## Why
 
@@ -36,7 +36,7 @@ sandhi lays the story on its spine and shows its joints. Each beat has a fortune
 
 ## Import a story, and let the AI you choose read it
 
-Long stories group into chapters: **Start a chapter here** in a beat's ⋯ menu, and the beats fold under a header, the threads filter by chapter, and the model sees the other chapters in one line each when the whole will not fit. Paste a story, a chapter or a whole manuscript: a long one with chapter headings is read a chapter at a time, one beat per chapter, and picks up where it stopped. Split it by paragraph, or let a model mark its beats, turn, low point, joints and threads. It returns labels and exact quotes only; sandhi cuts your own text where each quote lands and drops any quote that does not match. You see the result before it replaces anything, and Undo brings your story back.
+Paste a story, a chapter or a whole manuscript: a long one with chapter headings is read a chapter at a time, one beat per chapter, and picks up where it stopped. Split it by paragraph, or let a model mark its beats, turn, low point, joints and threads. It returns labels and exact quotes only; sandhi cuts your own text where each quote lands and drops any quote that does not match. You see the result before it replaces anything, and Undo brings your story back.
 
 You choose who reads it. Your own provider and key is the recommended way: OpenRouter, OpenAI, Anthropic, Google Gemini, Groq, Mistral, DeepSeek, Together, or any OpenAI-compatible URL. Keys stay in this browser and show only as a fingerprint. A model server on your machine (Ollama or LM Studio) or Gemini Nano in Chrome also read; in our tests they missed the turn. The dialog shows each reader's measured result.
 
@@ -44,7 +44,9 @@ You choose who reads it. Your own provider and key is the recommended way: OpenR
 
 Every beat carries labels you set: its spine stage, fortune, joint, a turn or low-point mark, whether luck or the hero's choice moves it, and the principles it serves. The checks compare those labels and name the next step: an empty beat or one with no principle, a slack joint, a plant that never pays off, a payoff with nothing planted, luck after the turn. They never guess from your prose.
 
-Stuck on a beat? **Ask about this beat** gets two to four questions from the reader you chose, then, if you ask, what could happen there: the obvious option set aside, and a few one-line situations with their joint, fortune and principle. **Ask the model about your joints** says which *therefore* or *but* reads as *and then*. Keep **tidbits**, things you notice in life, beside the story and place them in beats when they fit; mark a plant **left open on purpose** and the checks stop asking for its payoff. **Interview me** asks one question at a time about the weakest place in the story, and your answer goes where you send it. Type a **plot element** above the beats and the model proposes how the structure changes around it, new empty beats and relabels, as a diff you apply or close. **Sketch the shape you want** on the fortune chart: sandhi rings the beats that miss it, and the model can suggest a line for each. None of it enters the story and nothing writes an option into a beat; you write. Not yet measured with a real model.
+Long stories group into chapters: **Start a chapter here** in a beat's ⋯ menu, and the beats fold under a header, the threads filter by chapter, and the model sees the other chapters in one line each when the whole will not fit.
+
+Stuck on a beat? **Ask about this beat** gets two to four questions from the reader you chose, then, if you ask, what could happen there: the obvious option set aside, and a few one-line situations with their joint, fortune and principle. **Ask the model about your joints** says which *therefore* or *but* reads as *and then*. Keep **tidbits**, things you notice in life, beside the story and place them in beats when they fit; mark a plant **left open on purpose** and the checks stop asking for its payoff. **Interview me** asks one question at a time about the weakest place in the story, and your answer goes where you send it. Type a **plot element** above the beats and the model proposes how the structure changes around it, new empty beats and relabels, as a diff you apply or close. **Sketch the shape you want** on the fortune chart: sandhi rings the beats that miss it, and the model can suggest a line for each. None of it enters the story and nothing writes an option into a beat; you write. Measured with DeepSeek in the page: questions specific to the beat, options that set the obvious aside, joint verdicts that caught 2 of 3 wrongly labelled joints ([SPEC.md §3](SPEC.md)).
 
 ## Commands
 
@@ -64,7 +66,7 @@ Agents: `window.sandhi` exposes 51 tools over one command bus, and `navigator.mo
 cd test && npm install && npm test
 ```
 
-The gates refuse a demo story that does not match the explainer's data, a check with no test that fires it, a control with no tool behind it, a cold load over five seconds, an agent door that offers the accept or key tools or sends the story off the device on its own, and any serious accessibility violation. Reading quality is measured, not gated: on *The whistle* and three public-domain stories, codex `gpt-6-astra` and a Claude subagent marked the turn in all four with every quote matching the text, and DeepSeek in the page with a real key found it in 5 of 5, while a 4B local model found it in 5 of 12 reads, and Gemini Nano missed it in 8 of 8 and could not finish a 7,082-word story (table in [SPEC.md §5](SPEC.md)). The read dialog shows each reader's measured result.
+The gates refuse a demo story that does not match the explainer's data, a check with no test that fires it, a control with no tool behind it, a cold load over five seconds, an agent door that offers the accept or key tools or sends the story off the device on its own, and any serious accessibility violation. Reading quality is measured, not gated: on *The whistle* and three public-domain stories, two frontier models run from the command line marked the turn in all four with every quote matching the text, and DeepSeek in the page with a real key found it in 5 of 5, while a 4B local model found it in 5 of 12 reads, and Gemini Nano missed it in 8 of 8 and could not finish a 7,082-word story (table in [SPEC.md §5](SPEC.md)). The read dialog shows each reader's measured result.
 
 ## License
 

@@ -1,6 +1,6 @@
 # sandhi
 
-> Any AI you choose marks your story's structure, in your own words. It never writes a sentence. One static file, no account.
+> Any AI you choose marks your story's structure, in your own words. It never writes your story. One static file, no account.
 
 sandhi is a single-page tool for writers at https://sandhi.naklitechie.com. You write a story on the Story Spine (beats with a fortune, phase, joint word and the principles each serves), or paste prose and let a model you choose mark its beats, turn, low point, joints and threads. The model only labels; every beat is the writer's own text, cut where the model's exact quote lands. Checks compare labels: empty or idle beats, slack joints ("and then"), plants that never pay off, payoffs with no plant, luck after the turn.
 
