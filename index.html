@@ -200,6 +200,7 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 .chap .faint{font:12px var(--sans)}
 .chapfilter{font-size:12px;color:var(--muted);display:block;margin:0 0 8px}
 .chapfilter[hidden]{display:none}
+#thread-chapter{max-width:100%}
 .tleft{display:inline-flex;gap:4px;align-items:center;margin-left:8px;font-size:12px;color:var(--muted)}
 .tmeta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:12px;color:var(--faint)}
 .x{border:none;background:transparent;color:var(--faint);font-size:12px;padding:0 4px}
@@ -207,6 +208,7 @@ aside{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
 #thread-add,#tidbit-add,.plotadd{display:flex;gap:6px;margin-top:12px}
 .plotadd{margin:0 0 10px}
 .plotadd input{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:6px 10px;font-size:13.5px}
+#tidbits,#checks,#threads{scroll-margin-top:140px}
 #tidbits ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
 #tidbits textarea{width:100%;border:0;background:transparent;font:13.5px/1.5 var(--serif);color:var(--ink);resize:vertical;padding:0}
 #tidbits .tmeta{font-size:12px;color:var(--muted)}
@@ -294,7 +296,7 @@ table.matrix{border-collapse:collapse}
 #reader details.others summary{font-size:12.5px;color:var(--muted);cursor:pointer}
 #reader .intro{font-size:13px;color:var(--muted);margin:0 0 12px}
 #reader.settings-only .intro,#reader.settings-only .rstep:first-of-type,#reader.settings-only .rstep:last-of-type > :not(#read-actions),#reader.settings-only #read-actions > :not(#reader-done):not([data-ui="read-close"]){display:none}
-#reader.settings-only .rnum{display:none}
+#reader.settings-only .rnum,#reader.settings-only #rs2{display:none}
 .reader-need{font-size:13px;color:var(--accent-ink);margin:8px 0 0}
 .reader-need:empty{display:none}
 .chip-reader{max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -326,7 +328,9 @@ footer code{font-size:11.5px}
 .empty{color:var(--faint);font-size:13px;margin:0}
 @media (max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}aside{position:static}.about{grid-template-columns:minmax(0,1fr)}#panel{grid-template-columns:minmax(0,1fr)}}
 #undo .ico,#redo .ico{display:none}
-@media (pointer:coarse) and (max-width:600px){#other-readers:not([open]){display:none}}   /* a phone runs no model server and no Gemini Nano (UX L4) */
+@media (pointer:coarse) and (max-width:600px){#other-readers:not([open]){display:none}.phone-note{display:block}}
+@media (pointer:coarse){.wiz-keys{display:none}}
+.phone-note{display:none;font-size:12px;color:var(--faint);margin:6px 0 0}   /* a phone runs no model server and no Gemini Nano (UX L4) */
 @media (max-width:600px){.brand span{display:none}#savestate{flex-basis:100%;order:9;font-size:11.5px;margin:2px 0 0}.top{gap:8px;flex-wrap:wrap}.actions{gap:4px}.actions .btn{padding:4px 9px;font-size:12px}#undo .lbl,#redo .lbl{display:none}#undo .ico,#redo .ico{display:inline}.tradsw{float:none;margin:0 0 6px}}
 @media (max-width:600px){.top{padding:10px 16px 8px}main{padding:0 16px 32px}footer{padding:16px}}
 /* phone width (UX review 2026-10-06b L3, L4): the plot box stacks, the toast sits clear of the beat text, small controls get 24 px */
@@ -454,6 +458,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   <p class="intro">Bring in a story you have written. Split it into beats by paragraph, or let a model mark its beats, turn, joints and threads. It never rewrites your prose: each beat is your own text, cut where the model's exact quote lands. You see the result before anything changes.</p>
   <section class="rstep" aria-labelledby="rs1"><h3 id="rs1"><span class="rnum" aria-hidden="true">1</span> Your story</h3>
     <textarea id="read-text" placeholder="Paste the story here, or open a .txt or .md file" aria-label="Story text"></textarea>
+    <p id="read-msg1" class="reader-need" role="status"></p>
     <div class="rrow"><button class="btn" data-ui="read-file" type="button">Open a text file</button><button class="btn" data-ui="read-paste" type="button" title="One beat per paragraph; you label them. No model, nothing sent anywhere.">Split by paragraphs, no model</button><span id="read-count">0 words</span><input type="file" id="read-file" accept=".txt,.md,text/plain,text/markdown" hidden></div>
   </section>
   <section class="rstep" aria-labelledby="rs2"><h3 id="rs2"><span class="rnum" aria-hidden="true">2</span> Who reads it</h3>
@@ -468,6 +473,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
           <button class="btn" data-ui="read-models" type="button">Load models</button>
           <p id="key-prompt" class="faint">Choose your provider and paste its API key (<a id="key-link" href="#" target="_blank" rel="noopener">get a key</a>). The key stays in this browser and shows only as a fingerprint; each read is billed to your account.</p>
         </div></div>
+      <p class="phone-note">A model server or Gemini Nano runs on a desktop; on a phone, your provider reads.</p>
       <details class="others" id="other-readers"><summary>Other readers: a model server on this machine, or Gemini Nano in Chrome. In our tests they missed the story's turn.</summary>
         <div class="rung"><label><input type="radio" name="rung" value="machine"> A model server on this machine</label><span id="machine-state" class="faint"></span>
           <div class="rfields" id="machine-fields" hidden><button class="btn" data-ui="read-probe" type="button">Look for Ollama or LM Studio</button><label>model <input type="text" id="machine-model" list="machine-models" spellcheck="false" aria-label="Local model id"></label><datalist id="machine-models"></datalist><button class="btn" data-ui="read-models" type="button">Load models</button></div></div>
@@ -2172,8 +2178,10 @@ function toastShown(on) {
 function toast(msg, next, action) {
   const el = $('#toast'); el.innerHTML = esc(msg) + (next ? ` <span>${esc(next)}</span>` : '') + (action ? ` <button class="toast-act" type="button" data-ui="${esc(action.ui)}">${esc(action.label)}</button>` : '');
   toastShown(false); void el.offsetWidth;   // the same message again still shows as new
-  toastShown(true); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastShown(false), action ? 12000 : 5000);
+  toastShown(true); clearTimeout(toastTimer); toastTimer = setTimeout(toastLater, action ? 12000 : 5000);
 }
+// a toast the writer is pointing at or tabbed into stays until they leave it (UX review 2026-10-08 claude M3)
+function toastLater() { const el = $('#toast'); if (el.matches(':hover') || el.contains(document.activeElement)) { toastTimer = setTimeout(toastLater, 1500); return; } toastShown(false); }
 
 // what to redraw after a command: header and plant-label edits leave the beat cards alone, so a click into a beat keeps its cursor
 const NOTICES = { 'story.new': 'New story.', 'story.demo': 'Demo story loaded.', 'story.start': 'Your story is on the spine. Label each beat when you are ready.', 'beat.remove': 'Beat removed.' };
@@ -2198,7 +2206,7 @@ const readTool = (name) => /^read(er)?\./.test(name);
 function failNotice(name, door, env, args) {
   if (door !== 'ui' || (reader.open && readTool(name))) return;
   // a write ask with no reader keeps the ask: choose a reader, press Done, and it runs (UX review 2026-10-06b H2)
-  if (env.class === 'no_reader' && name.startsWith('write.')) { app.pendingAsk = { name, args }; toast(env.message, 'Choose who reads your story; the question runs when you press Done.', { label: 'Choose a reader', ui: 'reader-settings' }); return; }
+  if (env.class === 'no_reader' && name.startsWith('write.')) { app.pendingAsk = { name, args }; openReaderSettings(); return; }
   toast(env.message, env.next);
 }
 // a story that replaced the open one takes nothing of the old one along: the plot box empties, a suggestion about it goes
@@ -2247,7 +2255,8 @@ function renderHeader() {
 }
 function renderRecent() {
   const list = recentList();
-  $('#recent').innerHTML = list.length ? list.map((x, k) => `<button type="button" data-ui="recent" data-k="${k}">${esc(x.title)} <span class="faint">· ${esc(new Date(x.at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }))}</span></button>`).join('')
+  const open = JSON.stringify(S()), shown = list.map((x, k) => ({ x, k })).filter(({ x }) => JSON.stringify(x.story) !== open);
+  $('#recent').innerHTML = shown.length ? shown.map(({ x, k }) => `<button type="button" data-ui="recent" data-k="${k}">${esc(x.title)} <span class="faint">· ${esc(new Date(x.at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }))}</span></button>`).join('')
     : '<p class="mlab">None yet: a story you replace waits here.</p>';
 }
 const SEED_JSON = JSON.stringify(C.seed());
@@ -2370,9 +2379,9 @@ function labelHtml(b, s, P) {
     </div></details>`;
 }
 // a beat card writes first: its number, stage, name, text and the joint above it; the labels wait in labelHtml
-function beatCard(b, i, s) {
+function beatCard(b, i, s, noJoint) {
   const id = b.id, P = i + 1, on = app.focus === 'all' || b.tags.includes(app.focus), hit = app.focus !== 'all' && on, last = s.beats.length;
-  return `${jointHtml(b, i)}<article class="card beat${on ? '' : ' dim'}${hit ? ' hit' : ''}" id="beat-${id}" data-id="${id}">
+  return `${noJoint ? '' : jointHtml(b, i)}<article class="card beat${on ? '' : ' dim'}${hit ? ' hit' : ''}" id="beat-${id}" data-id="${id}">
     <div class="bhead">
       <span class="bnum">${P}</span>
       <select class="sel" data-beat="${id}" data-field="spine" aria-label="Story Spine stage of beat ${P}">${opts(C.SPINE, b.spine)}</select>
@@ -2388,7 +2397,7 @@ function beatCard(b, i, s) {
       </div></details>
     </div>
     <textarea class="btext" data-beat="${id}" data-field="text" rows="3" aria-label="Text of beat ${P}" placeholder="What happens">${esc(b.text)}</textarea>
-    ${app.chapForm === id ? `<form class="chapform" data-chapform="${id}"><input list="chapter-names" maxlength="80" placeholder="Chapter name" aria-label="Name of the chapter that starts at beat ${P}" required><button class="btn" type="submit">Start the chapter</button><button class="link" type="button" data-ui="chapter-cancel">Cancel</button></form>` : ''}
+    ${app.chapForm === id ? `<form class="chapform" data-chapform="${id}"><input list="chapter-names" maxlength="80" placeholder="Chapter name" aria-label="Name of the chapter that starts at beat ${P}"><span class="reader-need" role="status"></span><button class="btn" type="submit">Start the chapter</button><button class="link" type="button" data-ui="chapter-cancel">Cancel</button></form>` : ''}
     <div class="ask"><button class="link" type="button" data-ui="ask-q" data-id="${id}">Ask about this beat</button></div>
     <div class="suggest" data-sg="${id}" aria-live="polite">${suggestHtml(id)}</div>
     ${labelHtml(b, s, P)}
@@ -2419,7 +2428,7 @@ function renderBeats() {
   const s = S();
   $('#chapter-names').innerHTML = [...new Set(C.chapterRuns(s).map(r => r.name))].map(n => `<option value="${esc(n)}">`).join('');
   const runs = C.chapterRuns(s), head = new Map(runs.map(r => [r.from, r])), shut = (i) => runs.some(r => i + 1 >= r.from && i + 1 <= r.to && app.shut.has(r.name));
-  $('#beats').innerHTML = s.beats.length ? s.beats.map((b, i) => (head.has(i + 1) ? chapterHead(head.get(i + 1), s) : '') + (shut(i) ? '' : beatCard(b, i, s))).join('') : '<p class="empty">No beats. Add one, or load The whistle.</p>';
+  $('#beats').innerHTML = s.beats.length ? s.beats.map((b, i) => (shut(i) ? '' : jointHtml(b, i)) + (head.has(i + 1) ? chapterHead(head.get(i + 1), s) : '') + (shut(i) ? '' : beatCard(b, i, s, true))).join('') : '<p class="empty">No beats. Add one, or load The whistle.</p>';
 }
 
 const CHECK_NAMES = { beat_empty: 'Empty beat', beat_idle: 'No principle yet', joint_unlabelled: 'Unlabelled joint', joint_slack: 'Slack joint', plant_unpaid: 'Plant never fires', payoff_unplanted: 'Payoff without a plant', payoff_early: 'Payoff before its plant', low_not_lowest: 'Low point is not the lowest', thread_unused: 'Unused plant', ending_luck: 'Luck after the turn', no_turn: 'No turn marked', flat_fortune: 'Flat fortune' };
@@ -2476,7 +2485,8 @@ function renderSuggest() {
 }
 function renderChecks() {
   const list = C.checks(S()), box = $('#checks div');
-  $('#checks-h').textContent = list.length ? `Checks · ${list.length} to look at` : 'Checks';
+  const shown = groupChecks(list).length;
+  $('#checks-h').textContent = list.length ? `Checks · ${shown} to look at` : 'Checks';
   box.innerHTML = list.length ? `<ul>${groupChecks(list).map(checkItem).join('')}</ul>`
     : `<p class="clean">Nothing to flag in ${S().beats.length} beats and ${S().threads.length} plants.</p>`;
   const labelled = S().beats.some(b => b.joint === 'therefore' || b.joint === 'but');
@@ -2642,7 +2652,7 @@ document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.
 const UI_ACTIONS = { 'jump-tidbits': () => { $('#tidbits').scrollIntoView({ block: 'start', behavior: 'smooth' }); $('#tidbit-add input').focus({ preventScroll: true }); },
   'chapter-here': (u) => { app.chapForm = u.dataset.id; renderBeats(); const f = document.querySelector(`[data-chapform="${u.dataset.id}"] input`); if (f) f.focus(); }, 'chapter-cancel': () => { app.chapForm = null; renderBeats(); },
   'reader-settings': () => openReaderSettings(), 'reader-done': () => readerDone(),
-  learn: () => { renderLearn(); $('#learn').showModal(); }, 'learn-close': () => $('#learn').close(), 'learn-focus': (u) => { $('#learn').close(); ui('view.focus', { principle: u.dataset.id }).then(() => $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' })); },
+  learn: () => { renderLearn(); $('#learn').showModal(); $('#learn [data-ui="learn-close"]').focus(); }, 'learn-close': () => { $('#learn').close(); $('.storymenu summary').focus(); }, 'learn-focus': (u) => { $('#learn').close(); ui('view.focus', { principle: u.dataset.id }).then(() => { $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); const h = $('#panel h3'); if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); } }); },
   'chapter-toggle': (u) => { const n = u.dataset.name; if (app.shut.has(n)) app.shut.delete(n); else app.shut.add(n); renderBeats(); },
   'ask-interview': () => ui('write.interview', {}), 'ask-depth': (u) => ui('write.depth', { beat: u.dataset.id }), 'iv-beat': () => landAnswer('beat'), 'iv-tidbit': () => landAnswer('tidbit'), 'iv-note': () => landAnswer('note'),
   'plot-apply': (u, e) => { if (e && e.isTrusted) ui('write.apply', { id: +u.dataset.id }).then(r => { if (r.ok) toast(`Applied ${r.data.changes} change${r.data.changes > 1 ? 's' : ''}.`, 'Undo reverses them. New beats are empty: write them.'); }); },
@@ -2680,7 +2690,8 @@ $('#trad-all').addEventListener('change', (e) => { uiPrefs.traditions = e.target
 const PLOTKEY = 'sandhi:plot-draft';
 $('#plot-add input').addEventListener('input', (e) => { $('#plot-add button').disabled = !e.target.value.trim(); if (e.target.value.trim()) store.set(PLOTKEY, e.target.value); else store.del(PLOTKEY); });
 { const draft = store.get(PLOTKEY); if (draft) { $('#plot-add input').value = draft; $('#plot-add button').disabled = false; } }
-$('#beats').addEventListener('submit', (e) => { const f = e.target.closest('[data-chapform]'); if (!f) return; e.preventDefault(); const id = f.dataset.chapform, name = f.querySelector('input').value.trim(); if (!name) return; app.chapForm = null; ui('chapter.start', { beat: id, name }); });
+$('#beats').addEventListener('submit', (e) => { const f = e.target.closest('[data-chapform]'); if (!f) return; e.preventDefault(); const id = f.dataset.chapform, name = f.querySelector('input').value.trim(); if (!name) { f.querySelector('.reader-need').textContent = 'Name the chapter first.'; return; } app.chapForm = null; ui('chapter.start', { beat: id, name }).then(r => { if (r.ok) { const h = document.querySelector(`#beats .chap-t[data-name="${CSS.escape(name)}"]`); if (h) h.focus(); } }); });
+$('#beats').addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target.closest('[data-chapform]')) { e.stopPropagation(); app.chapForm = null; renderBeats(); } });
 $('#plot-add').addEventListener('submit', (e) => { e.preventDefault(); const v = e.target.querySelector('input').value.trim(); if (v) ui('write.plot', { element: v }); });
 $('#tidbit-add input').addEventListener('input', (e) => { $('#tidbit-add button').disabled = !e.target.value.trim(); });
 $('#tidbit-add').addEventListener('submit', (e) => { e.preventDefault(); const i = e.target.querySelector('input'), v = i.value.trim(); if (!v) return; ui('tidbit.add', { text: v }).then(r => { if (r.ok) { i.value = ''; $('#tidbit-add button').disabled = true; } }); });
@@ -2869,6 +2880,7 @@ async function openReader() { readerMode(false); $('#read-progress').textContent
 function readerMode(settings) {
   reader.classList.toggle('settings-only', settings); $('#reader-done').hidden = !settings;
   $('#reader-need').textContent = settings && app.pendingAsk ? 'A question waits: choose who reads it, then Done runs it.' : '';
+  reader.querySelector('[data-ui="read-close"]').textContent = settings ? 'Cancel' : 'Close';
   $('#reader-h').textContent = settings ? 'Who reads your story' : 'Import a story';
 }
 async function openReaderSettings() {
@@ -2892,12 +2904,15 @@ async function readerDone() {
 }
 // the chip says who reads: no reader, the provider (and whether it has a key), the model server's model, or Gemini Nano
 // the words on the chip for the reader the writer chose
+// the chip's words for a model server: whether one answered, and its model
+function machineChip() {
+  if (!machine.found) return machine.checked ? 'Model server · not found' : 'Model server · not looked for';
+  const model = rcfg.models[machine.found.id];
+  return `${LD.SERVERS[machine.found.id].label}${model ? ' · ' + model : ' · pick a model'}`;
+}
 async function chipText() {
   if (rcfg.rung === 'device') return 'Gemini Nano';
-  if (rcfg.rung === 'machine') {
-    const id = (machine.found && machine.found.id) || rcfg.server || 'ollama', model = rcfg.models[id];
-    return `${LD.SERVERS[id] ? LD.SERVERS[id].label : 'Model server'}${model ? ' · ' + model : ''}`;
-  }
+  if (rcfg.rung === 'machine') return machineChip();
   if (rcfg.rung === 'provider') return `${(LD.PROVIDERS[rcfg.provider] || { label: 'Provider' }).label} · ${(await vault.get(rcfg.provider)) ? 'your key' : 'no key yet'}`;
   return 'No reader';
 }
@@ -2908,8 +2923,8 @@ async function renderChip() {
 }
 readProgress = (m) => { $('#read-progress').textContent = m; };
 const countWords = () => { const n = C.wordCount($('#read-text').value); $('#read-count').textContent = n < 50 ? `${n} words · a model read needs 50` : `${n} words`; if (n >= 50 && /too short/.test($('#read-progress').textContent)) readProgress(''); };
-$('#read-text').addEventListener('input', countWords);
-$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; const t = f && !tooBig(f) ? await textOf(f) : null; if (t !== null) { $('#read-text').value = t; countWords(); if (!t.trim()) readProgress(`"${f.name}" is empty. Open another file, or paste the story.`); } });
+$('#read-text').addEventListener('input', () => { countWords(); $('#read-msg1').textContent = ''; });
+$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; const t = f && !tooBig(f) ? await textOf(f) : null; if (t !== null) { $('#read-text').value = t; countWords(); $('#read-msg1').textContent = t.trim() ? '' : `"${f.name}" is empty. Open another file, or paste the story.`; } });
 const READER_CHANGES = {
   rung: (el) => { readProgress(''); return ui('reader.select', { rung: el.value }); },
   provider: (el) => ui('reader.select', { provider: el.value }),
@@ -2944,7 +2959,7 @@ async function onReaderTool(kind) {
   return renderReader(false);
 }
 async function readRunClick() {
-  if (!$('#read-text').value.trim()) { readProgress('Paste the story in step 1 first, or open a text file.'); $('#read-text').focus(); return null; }
+  if (!$('#read-text').value.trim()) { $('#read-msg1').textContent = 'Paste the story here first, or open a text file.'; $('#read-text').focus(); return null; }
   if (!reader.querySelector('input[name=rung]:checked')) {   // no reader yet: ask for the key, the recommended way in
     readProgress('Paste your provider’s API key in step 2 to read with it, or open Other readers.'); $('#provider-key').focus(); return null;
   }
@@ -3074,6 +3089,7 @@ const TOUR = [
   { target: '#checks', title: 'Checks', body: 'sandhi compares your labels: empty beats, slack joints, plants that never fire, luck after the turn. Each check names the next step.' },
   { target: '#threads', title: 'Plants and payoffs', body: "Chekhov's gun, the Nāṭyaśāstra's seed. Name what the story plants, where, and where it pays off." },
   { target: '#coverage', title: 'Thirteen principles', body: 'Tap a dot to tag a beat with a principle. Tap a name to read what the masters said, and note how it works in your story.' },
+  { target: '#reader-chip', title: 'Who reads your story', body: 'The questions, options and readings come from a reader you choose here: your own provider with your key (recommended), a model server on your machine, or Gemini Nano in Chrome. Without one, every check and chart still works.' },
   { target: '[data-ui="read-open"]', title: 'Import a story', body: 'Paste a story you have written. Split it by paragraphs, or let your own provider, with your key, mark its beats, phases, turn and threads in your own words; a model server on your machine or Gemini Nano in Chrome can too, less well in our tests. You decide whether to use it.' },
   { target: '.actions', title: 'Your story, your file', body: 'It autosaves in this browser. Save writes a .sandhi.json file; More › Open, or dropping one on the page, reads it back, and More › Recent stories keeps the last three you replaced. Press ? to see all this again.' }
 ];
@@ -3121,6 +3137,7 @@ function endTour() {
   removeEventListener('resize', placeTour); removeEventListener('scroll', placeTour, true);
   document.removeEventListener('keydown', tourKeys, true);
   if (tour.back && tour.back.isConnected) tour.back.focus();
+  else { scrollTo({ top: 0, behavior: 'smooth' }); $('[data-ui="wizard"]').focus({ preventScroll: true }); }   // after the tour: back at the top, on New (UX review 2026-10-08 L1)
 }
 function tourKeys(e) {
   if (!tour.layer) return;

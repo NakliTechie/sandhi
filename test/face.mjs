@@ -126,14 +126,14 @@ check('splash.cold_load_shows_it', samples.every(s => s.splash), samples.map(s =
   check('splash.question_key_reopens', await page.evaluate(() => document.querySelector('#splash').open && document.querySelector('#splash-close').textContent === 'Back to the story'), 'not reopened');
   await page.click('#splash [data-ui="tour"]');
   const tourTitles = [];
-  for (let k = 0; k < 8; k++) {
+  for (let k = 0; k < 9; k++) {
     tourTitles.push(await page.evaluate(() => document.querySelector('.tour-layer h2') && document.querySelector('.tour-layer h2').textContent));
-    if (k < 7) await page.keyboard.press('ArrowRight');
+    if (k < 8) await page.keyboard.press('ArrowRight');
   }
   const spot = await page.waitForFunction(() => { const box = document.querySelector('.tour-spot').getBoundingClientRect(); return box.width > 20 && box.height > 20; }, null, { timeout: 2000 }).then(() => true, () => false);   // placed on the next frame
   await page.keyboard.press('Escape');
   const tourGone = await page.evaluate(() => !document.querySelector('.tour-layer') && !document.querySelector('#splash').open);
-  check('tour.eight_steps_then_escape', tourTitles[0] === 'The shape of the story' && tourTitles[7] === 'Your story, your file' && new Set(tourTitles).size === 8 && spot && tourGone, { tourTitles, spot, tourGone });
+  check('tour.nine_steps_then_escape', tourTitles[0] === 'The shape of the story' && tourTitles.includes('Who reads your story') && tourTitles[8] === 'Your story, your file' && new Set(tourTitles).size === 9 && spot && tourGone, { tourTitles, spot, tourGone });
   await page.click('#matrix tbody tr:nth-child(1) td.c:nth-child(3) button');   // principle 1 (care), beat 2
   const b2 = (await call('story.get', {})).data.story.beats[1];
   const j = (await call('journal', { n: 5 })).data.entries;
@@ -399,7 +399,7 @@ async function readPage(opts) {
   await p.waitForFunction(() => /picture\.png/.test(document.querySelector('#toast').textContent));
   const overDialog = await p.evaluate(() => document.querySelector('#toast').matches(':popover-open'));
   await p.fill('#read-text', ''); await p.click('#read-actions [data-ui="read-run"]');
-  const asksStory = await p.textContent('#read-progress');
+  const asksStory = await p.textContent('#read-msg1');
   await p.click('[data-ui="read-close"]');
   const filterShown = await p.evaluate(() => document.querySelector('.chapfilter').checkVisibility());
   await p.fill('#plot-add input', 'Ama loses the mast'); await call('story.demo', {});
@@ -408,7 +408,7 @@ async function readPage(opts) {
   await p.click('[data-ui="help"]'); await p.click('#splash [data-ui="tour"]');
   const skip = await p.evaluate(() => { const b = document.querySelector('.tour-actions .tour-skip'); const r = b && b.getBoundingClientRect(); return !!r && r.left >= 0 && r.width > 0; });
   await p.keyboard.press('Escape');
-  check('ux2b.quick_wins', overDialog && /Paste the story in step 1/.test(asksStory) && !filterShown && plotAfter === '' && !/reader\.select/.test(noReader.next) && skip, { overDialog, asksStory, filterShown, plotAfter, next: noReader.next, skip });
+  check('ux2b.quick_wins', overDialog && /Paste the story here first/.test(asksStory) && !filterShown && plotAfter === '' && !/reader\.select/.test(noReader.next) && skip, { overDialog, asksStory, filterShown, plotAfter, next: noReader.next, skip });
   check('ux2b.no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
@@ -416,8 +416,6 @@ async function readPage(opts) {
   const { ctx2, p, errs } = await readPage({ nano: 6144, noSelect: true });
   const before = (await p.textContent('#reader-chip')).trim();
   await p.click('#beat-b3 [data-ui="ask-q"]');
-  await p.waitForSelector('#toast .toast-act');
-  await p.click('#toast .toast-act');
   await p.waitForFunction(() => document.querySelector('#reader').open);
   const mode = await p.evaluate(() => ({ title: document.querySelector('#reader-h').textContent, storyStep: document.querySelector('#reader .rstep').checkVisibility(), done: document.querySelector('#reader-done').checkVisibility(), read: document.querySelector('#read-actions [data-ui="read-run"]').checkVisibility() }));
   await p.click('#other-readers summary'); await p.check('#reader input[value="device"]');
@@ -467,7 +465,7 @@ async function readPage(opts) {
 { // the third UX review (codex 2026-10-08): Done waits for a ready reader; the phone shows the status row; the plot draft survives a reload
   const { ctx2, p, errs } = await readPage({ nano: 6144, noSelect: true, ctx: { viewport: { width: 390, height: 844 } } });
   const status = await p.evaluate(() => { const e = document.querySelector('#savestate'); return { vis: e.checkVisibility(), text: e.textContent }; });
-  await p.click('#beat-b3 [data-ui="ask-q"]'); await p.waitForSelector('#toast .toast-act'); await p.click('#toast .toast-act');
+  await p.click('#beat-b3 [data-ui="ask-q"]'); 
   await p.waitForFunction(() => document.querySelector('#reader').open);
   const waits = await p.textContent('#reader-need');
   await p.click('#reader-done');
@@ -477,6 +475,32 @@ async function readPage(opts) {
   const draft = await p.inputValue('#plot-add input');
   check('ux3.codex_fixes', status.vis && /example/i.test(status.text) && /A question waits/.test(waits) && stillOpen.open && /Choose who reads it first/.test(stillOpen.need) && draft === 'Ama loses the mast', { status, waits, stillOpen, draft });
   check('ux3.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // the third UX review (Claude 2026-10-08): chip names an absent server, Checks counts what it lists, Recent omits the open story,
+  // an empty chapter name says so and Esc cancels, How stories work takes focus, the joint stays above a chapter heading
+  const { ctx2, p, errs, call } = await readPage({});
+  await p.route('http://127.0.0.1:*/**', (route) => route.abort());
+  await call('reader.select', { rung: 'machine' }); await call('reader.status', { probe: true });
+  await p.waitForFunction(() => /not found/.test(document.querySelector('#reader-chip').textContent));
+  const chip = await p.textContent('#reader-chip');
+  await call('beat.update', { id: 'b4', patch: { tags: [] } }); await call('beat.update', { id: 'b5', patch: { tags: [] } }); await call('beat.update', { id: 'b6', patch: { tags: [] } });
+  const counts = await p.evaluate(() => ({ head: document.querySelector('#checks-h').textContent, items: document.querySelectorAll('#checks li').length }));
+  await call('story.new', {}); await call('undo', {});
+  const recent = await p.$$eval('#recent button', b => b.map(x => x.textContent));
+  await p.click('#beat-b4 details.menu summary'); await p.click('#beat-b4 [data-ui="chapter-here"]');
+  await p.press('[data-chapform="b4"] input', 'Enter');
+  const emptyMsg = await p.textContent('[data-chapform="b4"] .reader-need');
+  await p.press('[data-chapform="b4"] input', 'Escape');
+  const formGone = await p.evaluate(() => !document.querySelector('[data-chapform]'));
+  await call('chapter.start', { beat: 'b4', name: 'The storm' });
+  const order = await p.evaluate(() => { const h = document.querySelector('#beats h3.chap'), j = h.previousElementSibling; return j && j.classList.contains('joint'); });
+  await p.click('.storymenu summary'); await p.click('[data-ui="learn"]');
+  const learnFocus = await p.evaluate(() => document.activeElement && document.activeElement.dataset.ui);
+  await p.click('[data-ui="learn-close"]');
+  check('ux3.claude_fixes', chip.trim() === 'Model server · not found' && counts.head === `Checks · ${counts.items} to look at` && !recent.some(t => t.startsWith('The whistle')) && /Name the chapter first/.test(emptyMsg) && formGone && order && learnFocus === 'learn-close',
+    { chip, counts, recent, emptyMsg, formGone, order, learnFocus });
+  check('ux3.claude_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
 { // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
