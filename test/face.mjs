@@ -447,6 +447,23 @@ async function readPage(opts) {
   check('chapters.start_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // the Claude review's small findings (Batch Y): saved survives a reload, the first edit of the example says so once, phone layout
+  const { ctx2, p, errs, call } = await readPage({ ctx: { acceptDownloads: true, viewport: { width: 390, height: 844 } } });
+  await call('beat.update', { id: 'b1', patch: { fortune: 2 } });             // an agent edit: no note
+  const agentNote = await p.textContent('#toast');
+  await call('undo', {});
+  await p.click('#beat-b2 [data-more="b2"] > summary'); await p.focus('#beat-b2 [data-focus="mark:b2:turn"]'); await p.keyboard.press('Space');
+  await p.waitForFunction(() => /changing the example/.test(document.querySelector('#toast').textContent));
+  await p.focus('#beat-b2 [data-focus="mark:b2:turn"]'); await p.keyboard.press('Space');
+  const again = /changing the example/.test(await p.textContent('#toast')) && (await p.evaluate(() => document.querySelector('#toast').classList.contains('show')));
+  const dl = p.waitForEvent('download'); await call('story.save', {}); await dl;
+  await p.reload(); await p.evaluate(() => window.sandhi.ready);
+  const saved = await p.textContent('#savestate');
+  const phone = await p.evaluate(() => ({ dir: getComputedStyle(document.querySelector('.plotadd')).flexDirection, link: document.querySelector('[data-ui="ask-q"]').getBoundingClientRect().height, toastTop: getComputedStyle(document.querySelector('#toast')).top }));
+  check('ux2b.small_findings', !/changing the example/.test(agentNote) && /Downloaded/.test(saved) && phone.dir === 'column' && phone.link >= 24 && phone.toastTop === '12px', { agentNote, again, saved, phone });
+  check('ux2b.small_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 { // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
   const { ctx2, p, errs, call } = await readPage({});
   const t0 = (await call('story.get', {})).data.story.threads[0];
