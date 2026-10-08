@@ -2863,6 +2863,33 @@ async function renderChip() {
   const text = await chipText();
   chip.textContent = text; chip.classList.toggle('none', text === 'No reader');
 }
+readProgress = (m) => { $('#read-progress').textContent = m; };
+const countWords = () => { const n = C.wordCount($('#read-text').value); $('#read-count').textContent = n < 50 ? `${n} words · a model read needs 50` : `${n} words`; if (n >= 50 && /too short/.test($('#read-progress').textContent)) readProgress(''); };
+$('#read-text').addEventListener('input', countWords);
+$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; const t = f && !tooBig(f) ? await textOf(f) : null; if (t !== null) { $('#read-text').value = t; countWords(); if (!t.trim()) readProgress(`"${f.name}" is empty. Open another file, or paste the story.`); } });
+const READER_CHANGES = {
+  rung: (el) => { readProgress(''); return ui('reader.select', { rung: el.value }); },
+  provider: (el) => ui('reader.select', { provider: el.value }),
+  'provider-model': (el) => ui('reader.select', { rung: 'provider', model: el.value }),
+  'machine-model': (el) => ui('reader.select', { rung: 'machine', model: el.value }),
+  'provider-key': async (el) => { const r = await ui('reader.key', { provider: $('#provider').value, key: el.value, base: $('#provider-base').value }); el.value = ''; return r; }   // the key never stays in the page
+};
+reader.addEventListener('change', async (e) => {
+  readerDraws++;   // the writer's change wins: a draw already under way read the settings before it, so it must not write
+  const fn = READER_CHANGES[e.target.name === 'rung' ? 'rung' : e.target.id];
+  if (!fn) return;
+  const r = await fn(e.target);
+  if (r && !r.ok) readProgress(`${r.message} ${r.next || ''}`);   // a refused key or choice says why, in the dialog
+  renderReader(false);
+});
+async function lookForServer() {
+  readProgress('Looking for Ollama or LM Studio on 127.0.0.1… If Chrome asks to let this site reach your local network, choose Allow.');
+  await ui('reader.status', { probe: true });
+  const m = machine.found ? await ui('reader.models', {}) : null;   // fill the model list so the writer can pick one
+  if (m && m.ok) fillModels('#machine-models', m.data.models);
+  readProgress(machine.found && !rcfg.models[machine.found.id] ? 'Pick a model in the model field.' : '');
+  return renderReader(false);
+}
 async function onReaderTool(kind) {
   if (kind === 'read-probe') return lookForServer();
   if (kind === 'read-forget-key') { await ui('reader.key', { provider: $('#provider').value, key: '' }); return renderReader(false); }
