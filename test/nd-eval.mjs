@@ -60,6 +60,9 @@ function scoreOne(st, story) {
   const { text, starts } = textOf(st), n = st.sentences.length;
   const turn = mark(story, 'turn', text, starts, Math.round(st.tp.tp3)), low = mark(story, 'low', text, starts, Math.round(st.tp.tp4));
   turn.nearest = nearestTp(story, 'turn', text, starts, st.tp); low.nearest = nearestTp(story, 'low', text, starts, st.tp);
+  // sandhi's turn is the major reversal (decision 2026-10-08): scored against the nearest of TP3, TP4 and TP5
+  const rev = ['tp3', 'tp4', 'tp5'].map(k => mark(story, 'turn', text, starts, Math.round(st.tp[k]))).filter(x => x.found).toSorted((x, y) => x.distance - y.distance)[0] || { found: false };
+  turn.reversal = rev;
   const best = plain(C.arcMatch(story)).best;
   return { id: st.id, sentences: n, beats: story.beats.length, turn, low, arc: { gold: st.arc, want: ARC[st.arc], got: best, hit: best === ARC[st.arc] } };
 }
@@ -70,7 +73,9 @@ const share = (a, k) => Math.round(100 * a.filter(x => x[k]).length / a.length);
 function baseline(stories) {
   const r3 = med(stories.map(s => s.tp.tp3 / s.sentences.length)), r4 = med(stories.map(s => s.tp.tp4 / s.sentences.length));
   const t = stories.map(s => placeHit(s, r3, s.tp.tp3)), l = stories.map(s => placeHit(s, r4, s.tp.tp4)), pct = share;
-  return { turn_place: +r3.toFixed(2), low_place: +r4.toFixed(2), turn_exact: pct(t, 'inside'), turn_within3: pct(t, 'within3'), low_exact: pct(l, 'inside'), low_within3: pct(l, 'within3') };
+  // the reversal baseline: one guess at TP4's median place, a hit when it lands on any of TP3, TP4, TP5
+  const rv = stories.map(s => ['tp3', 'tp4', 'tp5'].map(k => placeHit(s, r4, s.tp[k])).reduce((a, b) => ({ inside: a.inside || b.inside, within3: a.within3 || b.within3 })));
+  return { turn_place: +r3.toFixed(2), low_place: +r4.toFixed(2), turn_exact: pct(t, 'inside'), turn_within3: pct(t, 'within3'), low_exact: pct(l, 'inside'), low_within3: pct(l, 'within3'), reversal_exact: pct(rv, 'inside'), reversal_within3: pct(rv, 'within3'), arc_majority: Math.round(100 * Math.max(...Object.values(stories.reduce((m, s) => ({ ...m, [ARC[s.arc]]: (m[ARC[s.arc]] || 0) + 1 }), {}))) / stories.length) };
 }
 const tally = (xs) => xs.reduce((m, x) => ({ ...m, [x || 'unmarked']: (m[x || 'unmarked'] || 0) + 1 }), {});
 function summary(rows, all) {
@@ -79,6 +84,7 @@ function summary(rows, all) {
   return { read: ok.length, of: all.length, failed: rows.length - ok.length,
     turn_inside: pct(r => r.turn.inside), turn_within3: pct(r => r.turn.within3), turn_marked: sum(r => r.turn.found),
     low_inside: pct(r => r.low.inside), low_within3: pct(r => r.low.within3), low_marked: sum(r => r.low.found),
+    turn_reversal_inside: pct(r => r.turn.reversal && r.turn.reversal.inside), turn_reversal_within3: pct(r => r.turn.reversal && r.turn.reversal.within3),
     arc_hit: pct(r => r.arc.hit), turn_nearest: tally(ok.map(r => r.turn.nearest)), low_nearest: tally(ok.map(r => r.low.nearest)), mean_beat_sentences: ok.length ? +(ok.reduce((n, r) => n + r.sentences / r.beats, 0) / ok.length).toFixed(1) : 0 };
 }
 function report(name, s, rows) {

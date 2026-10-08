@@ -827,7 +827,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     'A beat is one turn of events, not a paragraph. Story Spine stage of a beat: ' + SPINE.map(x => `${x.id} = "${x.name}"`).join('; ') + '. Setup is once and everyday, the inciting event is oneday, the chain of consequences is because, the resolution is until, the new normal is since.',
     'joint = the word joining a beat to the one before it: therefore (it happens because of the previous beat), but (it happens despite it), and-then (it merely follows), none (the first beat, or setup).',
     "fortune = the protagonist's fortune at the end of the beat, an integer from -5 (worst) to 5 (best), 0 neutral.",
-    'marks: turn = the beat where the story turns (at most one beat); low = the lowest point.',
+    "marks: turn = the major reversal, the beat where the protagonist's fortune flips for good or ill (Aristotle's peripeteia), usually late in the story; not the inciting event and not the first commitment (at most one beat). low = the lowest point of fortune.",
     "driver: luck = chance moves the beat; choice = the protagonist's own choice moves it; none = neither.",
     'avastha (Natyashastra stage): ' + AVASTHA.map(x => `${x.id} = ${x.gloss}`).join('; ') + '; none if unclear.',
     'kis (kishotenketsu part): ' + KIS.map(x => `${x.id} = ${x.gloss}`).join('; ') + '.',

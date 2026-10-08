@@ -158,6 +158,8 @@ Every quote from the codex and Claude readers matched the text (0 dropped); spac
 
 Read with care: the low point beats position alone (33% v 17% inside); the turn does not (±3 below the baseline), and the models put sandhi's turn nearer TP4 or TP5 than TP3, so TP3 may be the wrong target for "the turn"; on arcs every reader is below always answering Man in Hole (21 of 30 stories are Man in Hole or its double). Synopses are not short stories, and one sentence-level label per TP is a narrow target for a beat. Nano's failures led to a larger answer reserve (3,000 tokens, not re-measured).
 
+**The turn is the major reversal (decision 2026-10-08).** Since the readers put the turn nearer TP4/TP5, sandhi's turn now means the beat where the protagonist's fortune flips (peripeteia), and the read prompt says so; the eval scores it against the nearest of TP3, TP4 and TP5 (`turn_reversal_*`). Re-scored codex `gpt-6-astra` (its replies used the earlier prompt): inside 47% v 23% for one guess at TP4's median place; within 3 sentences 87% v 87%. DeepSeek and Nano cannot be re-scored: their readings were deleted with the eval's storage on 2026-10-08. The earlier rows were read with the earlier prompt.
+
 ## §6 Where it is going, and what came before
 
 a story creator for short stories and novels. You keep adding plot elements and *tidbits*, the real-life observations that give a story life (a curious train stop; meat kept too long gets freezer burn). The AI keeps structuring the story around them, suggests where each tidbit fits, tracks open threads (some left open on purpose), and keeps interviewing you to fill blanks and add depth. You still write the prose.
