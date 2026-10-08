@@ -464,6 +464,21 @@ async function readPage(opts) {
   check('ux2b.small_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // the third UX review (codex 2026-10-08): Done waits for a ready reader; the phone shows the status row; the plot draft survives a reload
+  const { ctx2, p, errs } = await readPage({ nano: 6144, noSelect: true, ctx: { viewport: { width: 390, height: 844 } } });
+  const status = await p.evaluate(() => { const e = document.querySelector('#savestate'); return { vis: e.checkVisibility(), text: e.textContent }; });
+  await p.click('#beat-b3 [data-ui="ask-q"]'); await p.waitForSelector('#toast .toast-act'); await p.click('#toast .toast-act');
+  await p.waitForFunction(() => document.querySelector('#reader').open);
+  const waits = await p.textContent('#reader-need');
+  await p.click('#reader-done');
+  const stillOpen = await p.evaluate(() => ({ open: document.querySelector('#reader').open, need: document.querySelector('#reader-need').textContent }));
+  await p.click('[data-ui="read-close"]');
+  await p.fill('#plot-add input', 'Ama loses the mast'); await p.reload(); await p.evaluate(() => window.sandhi.ready);
+  const draft = await p.inputValue('#plot-add input');
+  check('ux3.codex_fixes', status.vis && /example/i.test(status.text) && /A question waits/.test(waits) && stillOpen.open && /Choose who reads it first/.test(stillOpen.need) && draft === 'Ama loses the mast', { status, waits, stillOpen, draft });
+  check('ux3.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 { // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
   const { ctx2, p, errs, call } = await readPage({});
   const t0 = (await call('story.get', {})).data.story.threads[0];

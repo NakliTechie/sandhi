@@ -295,6 +295,8 @@ table.matrix{border-collapse:collapse}
 #reader .intro{font-size:13px;color:var(--muted);margin:0 0 12px}
 #reader.settings-only .intro,#reader.settings-only .rstep:first-of-type,#reader.settings-only .rstep:last-of-type > :not(#read-actions),#reader.settings-only #read-actions > :not(#reader-done):not([data-ui="read-close"]){display:none}
 #reader.settings-only .rnum{display:none}
+.reader-need{font-size:13px;color:var(--accent-ink);margin:8px 0 0}
+.reader-need:empty{display:none}
 .chip-reader{max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #read-text{width:100%;min-height:9em;max-height:40vh;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px 10px;font:14px/1.6 var(--serif);resize:vertical}
 .rrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:8px 0 14px;font-size:12.5px;color:var(--faint)}
@@ -325,7 +327,7 @@ footer code{font-size:11.5px}
 @media (max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}aside{position:static}.about{grid-template-columns:minmax(0,1fr)}#panel{grid-template-columns:minmax(0,1fr)}}
 #undo .ico,#redo .ico{display:none}
 @media (pointer:coarse) and (max-width:600px){#other-readers:not([open]){display:none}}   /* a phone runs no model server and no Gemini Nano (UX L4) */
-@media (max-width:600px){.brand span,#savestate{display:none}.top{gap:8px}.actions{gap:4px}.actions .btn{padding:4px 9px;font-size:12px}#undo .lbl,#redo .lbl{display:none}#undo .ico,#redo .ico{display:inline}.tradsw{float:none;margin:0 0 6px}}
+@media (max-width:600px){.brand span{display:none}#savestate{flex-basis:100%;order:9;font-size:11.5px;margin:2px 0 0}.top{gap:8px;flex-wrap:wrap}.actions{gap:4px}.actions .btn{padding:4px 9px;font-size:12px}#undo .lbl,#redo .lbl{display:none}#undo .ico,#redo .ico{display:inline}.tradsw{float:none;margin:0 0 6px}}
 @media (max-width:600px){.top{padding:10px 16px 8px}main{padding:0 16px 32px}footer{padding:16px}}
 /* phone width (UX review 2026-10-06b L3, L4): the plot box stacks, the toast sits clear of the beat text, small controls get 24 px */
 @media (max-width:600px){.plotadd{flex-direction:column;align-items:stretch}#toast{bottom:auto;top:12px}.link,.chap-t{min-height:24px;display:inline-flex;align-items:center}.sel,.addtag{min-height:24px}}
@@ -473,6 +475,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
       </details>
     </fieldset>
     <p id="read-measured" class="faint"></p>
+    <p id="reader-need" class="reader-need" role="status"></p>
   </section>
   <section class="rstep" aria-labelledby="rs3"><h3 id="rs3"><span class="rnum" aria-hidden="true">3</span> Read</h3>
     <p id="read-privacy"></p>
@@ -2205,7 +2208,7 @@ function noteExampleEdit() {
   store.set(EXAMPLE_NOTED, '1'); toast('You are changing the example, The whistle. Your changes are kept in this browser.', 'More → Load the example brings the original back.');
 }
 function afterReplace() {
-  const box = $('#plot-add input'); if (box) { box.value = ''; $('#plot-add button').disabled = true; }
+  const box = $('#plot-add input'); if (box) { box.value = ''; $('#plot-add button').disabled = true; store.del(PLOTKEY); }
   if (app.suggest && !app.suggest.pending) app.suggest = null;
 }
 function afterDispatch(name, args, door, env, t) {
@@ -2673,7 +2676,10 @@ document.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset &
 $('#thread-chapter').addEventListener('change', (e) => { app.threadChapter = e.target.value || null; renderThreads(); });
 $('#trad-all').checked = !!uiPrefs.traditions;
 $('#trad-all').addEventListener('change', (e) => { uiPrefs.traditions = e.target.checked; store.set(UIKEY, JSON.stringify(uiPrefs)); renderChart(); });
-$('#plot-add input').addEventListener('input', (e) => { $('#plot-add button').disabled = !e.target.value.trim(); });
+// the plot box keeps its draft in this browser until it is asked or the story is replaced (UX review 2026-10-08 codex M2)
+const PLOTKEY = 'sandhi:plot-draft';
+$('#plot-add input').addEventListener('input', (e) => { $('#plot-add button').disabled = !e.target.value.trim(); if (e.target.value.trim()) store.set(PLOTKEY, e.target.value); else store.del(PLOTKEY); });
+{ const draft = store.get(PLOTKEY); if (draft) { $('#plot-add input').value = draft; $('#plot-add button').disabled = false; } }
 $('#beats').addEventListener('submit', (e) => { const f = e.target.closest('[data-chapform]'); if (!f) return; e.preventDefault(); const id = f.dataset.chapform, name = f.querySelector('input').value.trim(); if (!name) return; app.chapForm = null; ui('chapter.start', { beat: id, name }); });
 $('#plot-add').addEventListener('submit', (e) => { e.preventDefault(); const v = e.target.querySelector('input').value.trim(); if (v) ui('write.plot', { element: v }); });
 $('#tidbit-add input').addEventListener('input', (e) => { $('#tidbit-add button').disabled = !e.target.value.trim(); });
@@ -2862,6 +2868,7 @@ async function openReader() { readerMode(false); $('#read-progress').textContent
 // the reader on its own, from the header chip or a "Choose a reader" action: only step 2, then Done (UX review 2026-10-06b H2)
 function readerMode(settings) {
   reader.classList.toggle('settings-only', settings); $('#reader-done').hidden = !settings;
+  $('#reader-need').textContent = settings && app.pendingAsk ? 'A question waits: choose who reads it, then Done runs it.' : '';
   $('#reader-h').textContent = settings ? 'Who reads your story' : 'Import a story';
 }
 async function openReaderSettings() {
@@ -2870,10 +2877,18 @@ async function openReaderSettings() {
   const first = reader.querySelector('input[name=rung]:checked') || reader.querySelector('input[name=rung]'); if (first) first.focus();
 }
 // Done: close, and run the ask that was waiting on a reader, if one was chosen
-function readerDone() {
-  reader.close(); readerMode(false);
-  const ask = app.pendingAsk; app.pendingAsk = null;
-  if (ask && rcfg.rung) ui(ask.name, ask.args);
+// what the chosen reader still lacks before it can answer, or '' when it is ready (UX review 2026-10-08 codex M3)
+async function readerMissing() {
+  if (!rcfg.rung) return 'Choose who reads it first.';
+  if (rcfg.rung === 'provider') return (await vault.get(rcfg.provider)) ? (rcfg.models[rcfg.provider] || (LD.PROVIDERS[rcfg.provider] || {}).model ? '' : 'Pick or type a model for your provider.') : 'Paste your provider’s API key first.';
+  if (rcfg.rung === 'machine') return machine.found && rcfg.models[machine.found.id] ? '' : 'Look for the model server and pick a model first.';
+  return (await nano.state()) === 'absent' ? 'Gemini Nano is not in this browser; choose another reader.' : '';
+}
+async function readerDone() {
+  const ask = app.pendingAsk;
+  if (ask) { const missing = await readerMissing(); if (missing) { $('#reader-need').textContent = `${missing} Your question waits; Close drops it.`; return; } }
+  reader.close(); readerMode(false); app.pendingAsk = null;
+  if (ask) ui(ask.name, ask.args);
 }
 // the chip says who reads: no reader, the provider (and whether it has a key), the model server's model, or Gemini Nano
 // the words on the chip for the reader the writer chose
@@ -2952,7 +2967,7 @@ async function readPasteClick() {
 }
 async function onReadControl(kind, e) {
   if (kind === 'read-open') return openReader();
-  if (kind === 'read-close') { reader.close(); readerMode(false); return null; }
+  if (kind === 'read-close') { reader.close(); readerMode(false); app.pendingAsk = null; return null; }
   if (kind === 'read-file') return $('#read-file').click();
   if (kind === 'read-paste') return readPasteClick();
   if (kind === 'read-run') return readRunClick();
