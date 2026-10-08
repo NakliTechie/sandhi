@@ -291,6 +291,9 @@ table.matrix{border-collapse:collapse}
 #reader details.others{margin-top:8px}
 #reader details.others summary{font-size:12.5px;color:var(--muted);cursor:pointer}
 #reader .intro{font-size:13px;color:var(--muted);margin:0 0 12px}
+#reader.settings-only .intro,#reader.settings-only .rstep:first-of-type,#reader.settings-only .rstep:last-of-type > :not(#read-actions),#reader.settings-only #read-actions > :not(#reader-done):not([data-ui="read-close"]){display:none}
+#reader.settings-only .rnum{display:none}
+.chip-reader{max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #read-text{width:100%;min-height:9em;max-height:40vh;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px 10px;font:14px/1.6 var(--serif);resize:vertical}
 .rrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:8px 0 14px;font-size:12.5px;color:var(--faint)}
 .readers{border:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
@@ -315,6 +318,7 @@ footer code{font-size:11.5px}
 #toast{position:fixed;inset:auto;margin:0;border:0;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13px;padding:8px 14px;border-radius:8px;max-width:min(560px,calc(100vw - 32px));display:none;z-index:20}
 #toast.show{display:block}
 #toast span{opacity:.75}
+#toast .toast-act{margin-left:8px;background:var(--bg);color:var(--ink);border:0;border-radius:6px;padding:3px 9px;font:inherit;cursor:pointer}
 .empty{color:var(--faint);font-size:13px;margin:0}
 @media (max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}aside{position:static}.about{grid-template-columns:minmax(0,1fr)}#panel{grid-template-columns:minmax(0,1fr)}}
 #undo .ico,#redo .ico{display:none}
@@ -341,6 +345,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
       <p class="mlab" id="recent-h">Recent stories</p>
       <div id="recent" class="recent" aria-labelledby="recent-h"></div>
     </div></details>
+    <button class="btn chip-reader" data-ui="reader-settings" id="reader-chip" type="button" title="Who reads your story: your provider, a model server, or Gemini Nano">No reader</button>
     <button class="btn" data-ui="help" aria-label="About sandhi and the tour" title="About and tour (?)">?</button>
     <span id="savestate" aria-live="polite"></span>
     <input type="file" id="file" accept=".json,application/json" hidden>
@@ -468,7 +473,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     <p id="read-privacy"></p>
     <div id="read-progress" role="status"></div>
     <div id="read-result"></div>
-    <div class="sp-actions" id="read-actions"><button class="btn primary" data-ui="read-run" type="button">Read it</button><button class="btn" data-cmd="read.cancel" id="read-stop" type="button" hidden>Stop</button><button class="btn primary" data-ui="read-accept" type="button" hidden>Use this structure</button><button class="btn" data-cmd="read.discard" type="button" hidden>Discard</button><button class="btn" data-ui="read-close" type="button">Close</button></div>
+    <div class="sp-actions" id="read-actions"><button class="btn primary" data-ui="reader-done" id="reader-done" type="button" hidden>Done</button><button class="btn primary" data-ui="read-run" type="button">Read it</button><button class="btn" data-cmd="read.cancel" id="read-stop" type="button" hidden>Stop</button><button class="btn primary" data-ui="read-accept" type="button" hidden>Use this structure</button><button class="btn" data-cmd="read.discard" type="button" hidden>Discard</button><button class="btn" data-ui="read-close" type="button">Close</button></div>
   </section>
 </dialog>
 <div id="toast" role="status" popover="manual"></div>
@@ -1374,6 +1379,9 @@ const vault = {
 };
 const LM_OPTS = { expectedInputs: [{ type: 'text', languages: ['en'] }], expectedOutputs: [{ type: 'text', languages: ['en'] }] };
 const NANO_STATES = { available: 'ready', 'readily-available': 'ready', readily: 'ready', downloadable: 'download', 'after-download': 'download', downloading: 'downloading' };
+// tokens Nano keeps free for its answer: a labelled 14-beat story comes back in about 2,700; with 1,600 kept free, 12 of 30
+// Narrative-Discourse synopses (700–1,400 words) failed too_long about 70 s in (Chrome, 2026-10-06)
+const NANO_ANSWER = 3000;
 const nano = {
   async state() {
     const LM = globalThis.LanguageModel;
@@ -1386,11 +1394,11 @@ const nano = {
     try { base = await globalThis.LanguageModel.create({ ...LM_OPTS, signal: readSignal(), monitor(m) { m.addEventListener('downloadprogress', e => progress(`Downloading Gemini Nano… ${Math.round(e.loaded * 100)}%`)); } }); }
     catch (e) { throw readerFail('no_reader', `Gemini Nano did not start (${e.message}).`, 'Click Read it in the page once: the first download needs a click. Or use another rung.'); }
     const window = base.contextWindow || base.inputQuota || 6144, f = base.measureContextUsage || base.measureInputUsage || base.countPromptTokens;
-    if (window - 1600 < 1200) { base.destroy(); throw readerFail('no_reader', `Gemini Nano in this browser is too small to read a story (it holds ${window} tokens).`, 'Use a model server on your machine, or your provider.'); }
+    if (window - NANO_ANSWER < 1200) { base.destroy(); throw readerFail('no_reader', `Gemini Nano in this browser is too small to read a story (it holds ${window} tokens).`, 'Use a model server on your machine, or your provider.'); }
     const measure = async (t) => { try { if (f) return await f.call(base, t); } catch { /* a character estimate below */ } return Math.ceil(t.length / 4); };
     // parts: false. Nano read To Build a Fire in parts, then failed at the outline in 2 of 2 reads after ~10 minutes (SPEC §5),
     // so a story that does not fit one call is refused before Nano spends that time.
-    return { model: 'gemini-nano', label: 'Gemini Nano', parts: false, maxInput: window - 1600, charsPerToken: 4, measure, run: nanoRun, close: () => base.destroy() };
+    return { model: 'gemini-nano', label: 'Gemini Nano', parts: false, maxInput: window - NANO_ANSWER, charsPerToken: 4, measure, run: nanoRun, close: () => base.destroy() };
   }
 };
 async function nanoRun({ system, user }, schema) {
@@ -2142,10 +2150,10 @@ function toastShown(on) {
   const el = $('#toast'); el.classList.toggle('show', on);
   try { if (on) { if (el.matches(':popover-open')) el.hidePopover(); el.showPopover(); } else if (el.matches(':popover-open')) el.hidePopover(); } catch { /* no Popover API: the fixed toast still shows outside dialogs */ }
 }
-function toast(msg, next) {
-  const el = $('#toast'); el.innerHTML = esc(msg) + (next ? ` <span>${esc(next)}</span>` : '');
+function toast(msg, next, action) {
+  const el = $('#toast'); el.innerHTML = esc(msg) + (next ? ` <span>${esc(next)}</span>` : '') + (action ? ` <button class="toast-act" type="button" data-ui="${esc(action.ui)}">${esc(action.label)}</button>` : '');
   toastShown(false); void el.offsetWidth;   // the same message again still shows as new
-  toastShown(true); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastShown(false), 5000);
+  toastShown(true); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastShown(false), action ? 12000 : 5000);
 }
 
 // what to redraw after a command: header and plant-label edits leave the beat cards alone, so a click into a beat keeps its cursor
@@ -2168,7 +2176,12 @@ const AFTER = {
 };
 const readTool = (name) => /^read(er)?\./.test(name);
 // a failed call from the page says so in a toast, except in the open read dialog, whose own status line says it (one announcement)
-function failNotice(name, door, env) { if (door === 'ui' && !(reader.open && readTool(name))) toast(env.message, env.next); }
+function failNotice(name, door, env, args) {
+  if (door !== 'ui' || (reader.open && readTool(name))) return;
+  // a write ask with no reader keeps the ask: choose a reader, press Done, and it runs (UX review 2026-10-06b H2)
+  if (env.class === 'no_reader' && name.startsWith('write.')) { app.pendingAsk = { name, args }; toast(env.message, 'Choose who reads your story; the question runs when you press Done.', { label: 'Choose a reader', ui: 'reader-settings' }); return; }
+  toast(env.message, env.next);
+}
 // a story that replaced the open one takes nothing of the old one along: the plot box empties, a suggestion about it goes
 function afterReplace() {
   const box = $('#plot-add input'); if (box) { box.value = ''; $('#plot-add button').disabled = true; }
@@ -2176,7 +2189,8 @@ function afterReplace() {
 }
 function afterDispatch(name, args, door, env, t) {
   if (door !== 'ui' && readTool(name)) { renderProposal(); if (reader.open) renderReader(false); }   // the dialog shows what an agent changed
-  if (!env.ok) { failNotice(name, door, env); return; }
+  if (name.startsWith('reader.')) renderChip();
+  if (!env.ok) { failNotice(name, door, env, args); return; }
   if (REPLACES.has(name)) afterReplace();   // UX review 2026-10-06b M5
   if (AFTER[name]) { AFTER[name](args, door); return; }
   if (!t.mutating && name !== 'story.save') return;
@@ -2597,7 +2611,8 @@ document.addEventListener('change', (e) => {
   delete d.dirty;
 });
 document.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.beat) flushPending(); });
-const UI_ACTIONS = { learn: () => { renderLearn(); $('#learn').showModal(); }, 'learn-close': () => $('#learn').close(), 'learn-focus': (u) => { $('#learn').close(); ui('view.focus', { principle: u.dataset.id }).then(() => $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' })); },
+const UI_ACTIONS = { 'reader-settings': () => openReaderSettings(), 'reader-done': () => readerDone(),
+  learn: () => { renderLearn(); $('#learn').showModal(); }, 'learn-close': () => $('#learn').close(), 'learn-focus': (u) => { $('#learn').close(); ui('view.focus', { principle: u.dataset.id }).then(() => $('#panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' })); },
   'chapter-toggle': (u) => { const n = u.dataset.name; if (app.shut.has(n)) app.shut.delete(n); else app.shut.add(n); renderBeats(); },
   'ask-interview': () => ui('write.interview', {}), 'ask-depth': (u) => ui('write.depth', { beat: u.dataset.id }), 'iv-beat': () => landAnswer('beat'), 'iv-tidbit': () => landAnswer('tidbit'), 'iv-note': () => landAnswer('note'),
   'plot-apply': (u, e) => { if (e && e.isTrusted) ui('write.apply', { id: +u.dataset.id }).then(r => { if (r.ok) toast(`Applied ${r.data.changes} change${r.data.changes > 1 ? 's' : ''}.`, 'Undo reverses them. New beats are empty: write them.'); }); },
@@ -2815,33 +2830,38 @@ function renderProposal() {
   box.innerHTML = `<p class="sum"><b>${r.beats} beats, ${r.threads} plants</b> from ${r.words} words, ${proposalHow(r)}.${arc ? ` Closest shape: ${esc(arc.name)}.` : ''}${drop ? ` ${drop} quote${drop > 1 ? 's' : ''} did not match the text and ${drop > 1 ? 'were' : 'was'} dropped.` : ''}</p>
     <ol>${p.story.beats.map(b => `<li><b>${esc(b.label || C.spineName(b.spine))}</b>${b.label && b.label !== C.spineName(b.spine) ? ' · ' + esc(C.spineName(b.spine)) : ''} · fortune ${fmtF(b.fortune)}${b.marks.length ? ' · ' + b.marks.map(m => (m === 'low' ? 'low point' : m)).join(', ') : ''} — ${esc(snip(b.text, 80))}</li>`).join('')}</ol>`;
 }
-async function openReader() { $('#read-progress').textContent = ''; await renderReader(false); renderProposal(); if (!reader.open) reader.showModal(); $('#read-text').focus(); }   // the proposal is drawn last, so a read that ended meanwhile shows
-readProgress = (m) => { $('#read-progress').textContent = m; };
-const countWords = () => { const n = C.wordCount($('#read-text').value); $('#read-count').textContent = n < 50 ? `${n} words · a model read needs 50` : `${n} words`; if (n >= 50 && /too short/.test($('#read-progress').textContent)) readProgress(''); };
-$('#read-text').addEventListener('input', countWords);
-$('#read-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; const t = f && !tooBig(f) ? await textOf(f) : null; if (t !== null) { $('#read-text').value = t; countWords(); if (!t.trim()) readProgress(`"${f.name}" is empty. Open another file, or paste the story.`); } });
-const READER_CHANGES = {
-  rung: (el) => { readProgress(''); return ui('reader.select', { rung: el.value }); },
-  provider: (el) => ui('reader.select', { provider: el.value }),
-  'provider-model': (el) => ui('reader.select', { rung: 'provider', model: el.value }),
-  'machine-model': (el) => ui('reader.select', { rung: 'machine', model: el.value }),
-  'provider-key': async (el) => { const r = await ui('reader.key', { provider: $('#provider').value, key: el.value, base: $('#provider-base').value }); el.value = ''; return r; }   // the key never stays in the page
-};
-reader.addEventListener('change', async (e) => {
-  readerDraws++;   // the writer's change wins: a draw already under way read the settings before it, so it must not write
-  const fn = READER_CHANGES[e.target.name === 'rung' ? 'rung' : e.target.id];
-  if (!fn) return;
-  const r = await fn(e.target);
-  if (r && !r.ok) readProgress(`${r.message} ${r.next || ''}`);   // a refused key or choice says why, in the dialog
-  renderReader(false);
-});
-async function lookForServer() {
-  readProgress('Looking for Ollama or LM Studio on 127.0.0.1… If Chrome asks to let this site reach your local network, choose Allow.');
-  await ui('reader.status', { probe: true });
-  const m = machine.found ? await ui('reader.models', {}) : null;   // fill the model list so the writer can pick one
-  if (m && m.ok) fillModels('#machine-models', m.data.models);
-  readProgress(machine.found && !rcfg.models[machine.found.id] ? 'Pick a model in the model field.' : '');
-  return renderReader(false);
+async function openReader() { readerMode(false); $('#read-progress').textContent = ''; await renderReader(false); renderProposal(); if (!reader.open) reader.showModal(); $('#read-text').focus(); }
+// the reader on its own, from the header chip or a "Choose a reader" action: only step 2, then Done (UX review 2026-10-06b H2)
+function readerMode(settings) {
+  reader.classList.toggle('settings-only', settings); $('#reader-done').hidden = !settings;
+  $('#reader-h').textContent = settings ? 'Who reads your story' : 'Import a story';
+}
+async function openReaderSettings() {
+  readerMode(true); $('#read-progress').textContent = ''; await renderReader(false);
+  if (!reader.open) reader.showModal();
+  const first = reader.querySelector('input[name=rung]:checked') || reader.querySelector('input[name=rung]'); if (first) first.focus();
+}
+// Done: close, and run the ask that was waiting on a reader, if one was chosen
+function readerDone() {
+  reader.close(); readerMode(false);
+  const ask = app.pendingAsk; app.pendingAsk = null;
+  if (ask && rcfg.rung) ui(ask.name, ask.args);
+}
+// the chip says who reads: no reader, the provider (and whether it has a key), the model server's model, or Gemini Nano
+// the words on the chip for the reader the writer chose
+async function chipText() {
+  if (rcfg.rung === 'device') return 'Gemini Nano';
+  if (rcfg.rung === 'machine') {
+    const id = (machine.found && machine.found.id) || rcfg.server || 'ollama', model = rcfg.models[id];
+    return `${LD.SERVERS[id] ? LD.SERVERS[id].label : 'Model server'}${model ? ' · ' + model : ''}`;
+  }
+  if (rcfg.rung === 'provider') return `${(LD.PROVIDERS[rcfg.provider] || { label: 'Provider' }).label} · ${(await vault.get(rcfg.provider)) ? 'your key' : 'no key yet'}`;
+  return 'No reader';
+}
+async function renderChip() {
+  const chip = $('#reader-chip'); if (!chip) return;
+  const text = await chipText();
+  chip.textContent = text; chip.classList.toggle('none', text === 'No reader');
 }
 async function onReaderTool(kind) {
   if (kind === 'read-probe') return lookForServer();
@@ -2877,7 +2897,7 @@ async function readPasteClick() {
 }
 async function onReadControl(kind, e) {
   if (kind === 'read-open') return openReader();
-  if (kind === 'read-close') return reader.close();
+  if (kind === 'read-close') { reader.close(); readerMode(false); return null; }
   if (kind === 'read-file') return $('#read-file').click();
   if (kind === 'read-paste') return readPasteClick();
   if (kind === 'read-run') return readRunClick();
@@ -3082,6 +3102,7 @@ function restore() {
   try { restore(); renderAll(); } finally { document.body.classList.add('ready'); }
   performance.mark('sandhi:first-value');
   bootResolve(statusData());
+  renderChip();   // after first value: the key lookup is IndexedDB, off the critical path
   if (!store.get(SEEN)) requestAnimationFrame(() => openSplash(true));
   if (app.setAside !== undefined) toast('The story kept in this browser did not pass the schema check, so the demo story is shown.', app.setAside ? 'It is set aside in this browser as sandhi:story:rejected; nothing was deleted.' : 'This browser could not set it aside: its storage is full.');
 })();

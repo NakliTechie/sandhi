@@ -247,7 +247,7 @@ async function readPage(opts) {
   const p = await ctx2.newPage(); const errs = [];
   p.on('pageerror', e => errs.push(String(e)));
   await p.goto(base); await p.evaluate(() => window.sandhi.ready);
-  if (opts && opts.nano) await p.evaluate(() => window.sandhi.tools['reader.select']({ rung: 'device' }));   // nothing reads until the writer chooses
+  if (opts && opts.nano && !opts.noSelect) await p.evaluate(() => window.sandhi.tools['reader.select']({ rung: 'device' }));   // nothing reads until the writer chooses
   return { ctx2, p, errs, call: (n, a) => p.evaluate(([x, y]) => window.sandhi.tools[x](y), [n, a]) };
 }
 { // write mode (Batch C): questions, then options for a beat, then joint verdicts; nothing enters the story
@@ -410,6 +410,25 @@ async function readPage(opts) {
   await p.keyboard.press('Escape');
   check('ux2b.quick_wins', overDialog && /Paste the story in step 1/.test(asksStory) && !filterShown && plotAfter === '' && !/reader\.select/.test(noReader.next) && skip, { overDialog, asksStory, filterShown, plotAfter, next: noReader.next, skip });
   check('ux2b.no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // the reader chip (Batch X, UX review 2026-10-06b H2): it says who reads; a write ask with no reader offers Choose a reader, and Done runs it
+  const { ctx2, p, errs } = await readPage({ nano: 6144, noSelect: true });
+  const before = (await p.textContent('#reader-chip')).trim();
+  await p.click('#beat-b3 [data-ui="ask-q"]');
+  await p.waitForSelector('#toast .toast-act');
+  await p.click('#toast .toast-act');
+  await p.waitForFunction(() => document.querySelector('#reader').open);
+  const mode = await p.evaluate(() => ({ title: document.querySelector('#reader-h').textContent, storyStep: document.querySelector('#reader .rstep').checkVisibility(), done: document.querySelector('#reader-done').checkVisibility(), read: document.querySelector('#read-actions [data-ui="read-run"]').checkVisibility() }));
+  await p.click('#other-readers summary'); await p.check('#reader input[value="device"]');
+  await p.click('#reader-done');
+  await p.waitForFunction(() => /Questions from gemini-nano/.test(document.querySelector('[data-sg="b3"]').textContent));
+  const after = (await p.textContent('#reader-chip')).trim();
+  await p.click('#reader-chip'); await p.waitForFunction(() => document.querySelector('#reader').open);
+  await p.click('[data-ui="read-close"]'); await p.click('[data-ui="read-open"]'); await p.waitForFunction(() => document.querySelector('#reader').open);
+  const importBack = await p.evaluate(() => ({ title: document.querySelector('#reader-h').textContent, storyStep: document.querySelector('#reader .rstep').checkVisibility() }));
+  check('reader.chip_choose_and_return', before === 'No reader' && mode.title === 'Who reads your story' && !mode.storyStep && mode.done && !mode.read && after === 'Gemini Nano' && importBack.title === 'Import a story' && importBack.storyStep, { before, mode, after, importBack });
+  check('reader.chip_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
 { // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
@@ -652,13 +671,13 @@ async function lmStudioPage(win) {
   await page.ctx2.close();
 }
 { // Gemini Nano cannot read in parts (SPEC §5): a story that needs them is refused before any prompt, naming the readers that can
-  const { ctx2, p, errs, call } = await readPage({ nano: twoPassInput + 1600 });
+  const { ctx2, p, errs, call } = await readPage({ nano: twoPassInput + 3000 });
   const before = (await call('status', {})).data.read;
   const r = await call('read.run', { text: prose });
   const calls = await p.evaluate(() => window.__nanoCalls.length), after = (await call('status', {})).data.read;
   check('read.nano_refuses_parts', r.class === 'too_long' && calls === 0 && /cannot read a story in parts/.test(r.message) && /\d+ words at once/.test(r.message) && /provider/.test(r.next) && /model server/.test(r.next) && after.proposal === before.proposal && !after.reading, { r, calls });
   // split, when the story fits whole but its labelling call would not: Nano reads it whole instead of in parts
-  const tight = await readPage({ nano: tok(whole.system + '\n' + whole.user) + 1600 });
+  const tight = await readPage({ nano: tok(whole.system + '\n' + whole.user) + 3000 });
   const sp = await tight.call('read.run', { text: prose, strategy: 'split' });
   check('read.nano_split_tight_reads_whole', sp.ok && sp.data.mode === 'whole' && sp.data.calls === 1, sp.data || sp);
   await tight.ctx2.close();
