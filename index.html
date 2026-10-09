@@ -336,6 +336,11 @@ footer code{font-size:11.5px}
 .phone-note{display:none;font-size:12px;color:var(--faint);margin:6px 0 0}   /* a phone runs no model server and no Gemini Nano (UX L4) */
 @media (max-width:600px){.brand span{display:none}#savestate{flex:1 0 100%;order:9;font-size:11.5px;margin:2px 0 0;white-space:normal}.top{gap:8px;flex-wrap:wrap}.actions{gap:4px}.actions .btn{padding:4px 9px;font-size:12px}#undo .lbl,#redo .lbl{display:none}#undo .ico,#redo .ico{display:inline}.tradsw{float:none;margin:0 0 6px}}
 @media (max-width:600px){.top{padding:10px 16px 8px}main{padding:0 16px 32px}footer{padding:16px}}
+/* phone top bar (UX review 2026-10-09 claude M2; Chirag chose one row that tucks away): New, Save, Undo, Redo, More, ?; Import and the reader live in More */
+.phone-only{display:none}
+@media (max-width:600px){.actions > [data-ui="read-open"],#reader-chip{display:none}.storymenu .phone-only{display:block}.brand h1{font-size:17px}.top{gap:4px 8px;padding:8px 16px 6px;flex-wrap:nowrap;align-items:flex-start}.actions{flex:1 1 0;min-width:0;justify-content:flex-end}#savestate{margin:0;text-align:right}
+  .topbar{transition:transform .2s ease}.topbar.tuck{transform:translateY(-100%)}}
+@media (max-width:600px) and (prefers-reduced-motion:reduce){.topbar{transition:none}}
 /* phone width (UX review 2026-10-06b L3, L4): the plot box stacks, the toast sits clear of the beat text, small controls get 24 px */
 @media (max-width:600px){.plotadd{flex-direction:column;align-items:stretch}#toast{bottom:auto;top:12px}.link,.chap-t{min-height:24px;display:inline-flex;align-items:center}.sel,.addtag{min-height:24px}}
 /* the page is drawn by its scripts: until the first render, nothing shows, so nothing visible moves (layout shift 0.63 on a slow phone) */
@@ -352,6 +357,8 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     <button class="btn" data-cmd="undo" id="undo" aria-label="Undo"><span class="lbl">Undo</span><span class="ico" aria-hidden="true">↶</span></button>
     <button class="btn" data-cmd="redo" id="redo" aria-label="Redo"><span class="lbl">Redo</span><span class="ico" aria-hidden="true">↷</span></button>
     <details class="menu storymenu"><summary class="btn">More</summary><div>
+      <button data-ui="read-open" type="button" class="phone-only">Import a story…</button>
+      <button data-ui="reader-settings" type="button" class="phone-only" id="reader-item">Choose an AI reader</button>
       <button data-ui="open" type="button">Open a .sandhi.json file…</button>
       <button data-cmd="story.demo" type="button">Load the example, The whistle</button>
       <button data-ui="learn" type="button">How stories work: the 13 principles</button>
@@ -2752,6 +2759,14 @@ function saveActiveField() {
 }
 addEventListener('pagehide', () => { saveActiveField(); flushPending(); });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { saveActiveField(); flushPending(); } });
+// phone: the top bar tucks away while the writer scrolls down and comes back on the way up; never while it holds focus, an open menu or the tour
+const PHONE = matchMedia('(max-width:600px)'), bar = document.querySelector('.topbar'); let lastY = scrollY;
+addEventListener('scroll', () => {
+  const y = scrollY, d = y - lastY; if (Math.abs(d) < 6) return; lastY = y;
+  const hold = !PHONE.matches || y < 80 || bar.contains(document.activeElement) || bar.querySelector('details[open]') || tour.layer;
+  bar.classList.toggle('tuck', !hold && d > 0);
+}, { passive: true });
+bar.addEventListener('focusin', () => bar.classList.remove('tuck'));
 addEventListener('storage', (e) => {
   if (e.key !== KEY || !e.newValue) return;
   let o = null; try { o = JSON.parse(e.newValue); } catch { return; }
@@ -2934,7 +2949,7 @@ async function chipText() {
 async function renderChip() {
   const chip = $('#reader-chip'); if (!chip) return;
   const text = await chipText();
-  chip.textContent = text; chip.classList.toggle('none', !rcfg.rung);
+  chip.textContent = text; chip.classList.toggle('none', !rcfg.rung); $('#reader-item').textContent = `AI reader: ${text}`;
 }
 readProgress = (m) => { $('#read-progress').textContent = m; };
 const countWords = () => { const n = C.wordCount($('#read-text').value); $('#read-count').textContent = n < 50 ? `${n} words · a model read needs 50` : `${n} words`; if (n >= 50 && /too short/.test($('#read-progress').textContent)) readProgress(''); };
@@ -3111,8 +3126,8 @@ const TOUR = [
   { target: '#checks', title: 'Checks', body: 'sandhi compares your labels: empty beats, slack joints, plants that never fire, luck after the turn. Each check names the next step.' },
   { target: '#threads', title: 'Plants and payoffs', body: "Chekhov's gun, the Nāṭyaśāstra's seed. Name what the story plants, where, and where it pays off." },
   { target: '#coverage', title: 'Thirteen principles', body: 'Tap a dot to tag a beat with a principle. Tap a name to read what the masters said, and note how it works in your story.' },
-  { target: '#reader-chip', title: 'Who reads your story', body: 'The questions, options and readings come from a reader you choose here: your own provider with your key (recommended), a model server on your machine, or Gemini Nano in Chrome. Without one, every check and chart still works.' },
-  { target: '[data-ui="read-open"]', title: 'Import a story', body: 'Paste a story you have written. Split it by paragraphs, or let your own provider, with your key, mark its beats, phases, turn and threads in your own words; a model server on your machine or Gemini Nano in Chrome can too, less well in our tests. You decide whether to use it.' },
+  { target: '#reader-chip|.storymenu > summary', title: 'Who reads your story', body: 'The questions, options and readings come from a reader you choose here: your own provider with your key (recommended), a model server on your machine, or Gemini Nano in Chrome. Without one, every check and chart still works.' },
+  { target: '.actions > [data-ui="read-open"]|.storymenu > summary', title: 'Import a story', body: 'Paste a story you have written. Split it by paragraphs, or let your own provider, with your key, mark its beats, phases, turn and threads in your own words; a model server on your machine or Gemini Nano in Chrome can too, less well in our tests. You decide whether to use it.' },
   { target: '.actions', title: 'Your story, your file', body: 'It autosaves in this browser. Save writes a .sandhi.json file; More › Open, or dropping one on the page, reads it back, and More › Recent stories keeps the last three you replaced. Press ? to see all this again.' }
 ];
 const splash = $('#splash');
@@ -3122,7 +3137,8 @@ function openSplash(first) {
 }
 splash.addEventListener('close', () => store.set(SEEN, '1'));
 const tour = { layer: null, i: 0, steps: TOUR, back: null };
-function tourTarget() { return document.querySelector(tour.steps[tour.i].target) || $('#chart'); }
+const tourPick = (sel) => sel.split('|').map(x => [...document.querySelectorAll(x)].find(e => e.checkVisibility())).find(Boolean);
+function tourTarget() { return tourPick(tour.steps[tour.i].target) || $('#chart'); }
 function placeTour() {
   if (!tour.layer) return;
   const t = tourTarget(), pad = 6, m = 12, gap = 16;
@@ -3177,7 +3193,7 @@ function startTour() {
   if (splash.open) splash.close();
   if (tour.layer) return;
   tour.back = document.activeElement;
-  tour.steps = TOUR.filter(s => document.querySelector(s.target));
+  tour.steps = TOUR.filter(s => tourPick(s.target));
   tour.layer = document.createElement('div');
   tour.layer.className = 'tour-layer';
   tour.layer.innerHTML = `<div class="tour-dim" aria-hidden="true"></div><div class="tour-spot" aria-hidden="true"></div><section class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-h" aria-describedby="tour-p">

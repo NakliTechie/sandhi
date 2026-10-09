@@ -517,7 +517,7 @@ async function readPage(opts) {
   await p.click('#reader-done');
   const need = await p.textContent('#reader-need');
   await p.click('[data-ui="read-close"]');
-  await p.click('[data-ui="read-open"]'); await p.fill('#read-text', 'One fog morning.\n\nThe boats came home.');
+  await p.click('.storymenu > summary'); await p.click('.storymenu [data-ui="read-open"]'); await p.fill('#read-text', 'One fog morning.\n\nThe boats came home.');
   await p.click('[data-ui="read-paste"]'); await p.waitForSelector('#read-result ol');
   const vis = () => p.evaluate(() => ({ step2: getComputedStyle(document.querySelectorAll('#reader .rstep')[1]).display !== 'none', privacy: getComputedStyle(document.querySelector('#read-privacy')).display !== 'none' }));
   const local = await vis();
@@ -557,6 +557,15 @@ async function readPage(opts) {
   await p.click('#beat-b4 details.menu summary'); await p.click('#beat-b4 details.menu [data-cmd="beat.remove"]');
   await p.waitForFunction(() => document.querySelector('#toast').matches(':popover-open'));
   const gap = await p.evaluate(() => Math.round(document.querySelector('#toast').getBoundingClientRect().top - document.querySelector('.topbar').getBoundingClientRect().bottom));
+  await p.evaluate(() => scrollTo(0, 0)); await p.waitForTimeout(100);
+  const barH = await p.evaluate(() => Math.round(document.querySelector('.topbar').getBoundingClientRect().height));
+  const rowTops = await p.$$eval('.actions > .btn, .actions > details > summary', e => [...new Set(e.filter(x => x.checkVisibility()).map(x => Math.round(x.getBoundingClientRect().top)))]);
+  await p.click('.storymenu > summary'); const inMore = await p.$$eval('.storymenu .phone-only', e => e.filter(x => x.checkVisibility()).map(x => x.textContent));
+  await p.click('.storymenu > summary'); await p.evaluate(() => document.activeElement.blur());
+  await p.mouse.wheel(0, 900); await p.waitForTimeout(400); const tucked = await p.evaluate(() => document.querySelector('.topbar').classList.contains('tuck'));
+  await p.mouse.wheel(0, -300); await p.waitForTimeout(400); const back = await p.evaluate(() => !document.querySelector('.topbar').classList.contains('tuck'));
+  const bar = { barH, rowTops, inMore, tucked, back };
+  check('ux4.phone_bar', barH <= 80 && Math.max(...rowTops) - Math.min(...rowTops) <= 2 && inMore.length === 2 && /Import/.test(inMore[0]) && /AI reader/.test(inMore[1]) && tucked && back, bar);
   check('ux4.claude_phone', mark >= 40 && !segs.some(t => /\s\.$/.test(t) || /^(Ever|Beca)\./.test(t)) && gap >= 0, { mark, segs, gap });
   check('ux4.claude_phone_no_errors', errs.length === 0, errs);
   await ctx2.close();
@@ -1255,7 +1264,7 @@ async function lmStudioPage(win) {
   const pp2 = await ph.newPage(); await pp2.goto(base); await pp2.evaluate(() => window.sandhi.ready);
   const spineSegs = await pp2.evaluate(() => { const y = [...document.querySelectorAll('#chart .rowl')][0].getAttribute('y'); return [...document.querySelectorAll('#chart rect')].filter(r => Math.abs(+r.getAttribute('y') + 14 - +y) < 6).length + ' rects, ' + document.querySelectorAll('#chart .segt').length + ' names'; });
   const named = await pp2.evaluate(() => document.querySelectorAll('#chart .segt').length >= document.querySelectorAll('#chart rect').length);
-  await pp2.click('[data-ui="read-open"]'); await pp2.waitForFunction(() => document.querySelector('#reader').open);
+  await pp2.click('.storymenu > summary'); await pp2.click('.storymenu [data-ui="read-open"]'); await pp2.waitForFunction(() => document.querySelector('#reader').open);
   const others = await pp2.evaluate(() => document.querySelector('#other-readers').checkVisibility());
   check('ux.phone_chart_and_readers', named && !others, { spineSegs, named, others });
   await ph.close();
