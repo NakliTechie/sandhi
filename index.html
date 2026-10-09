@@ -295,6 +295,8 @@ table.matrix{border-collapse:collapse}
 #reader details.others{margin-top:8px}
 #reader details.others summary{font-size:12.5px;color:var(--muted);cursor:pointer}
 #reader .intro{font-size:13px;color:var(--muted);margin:0 0 12px}
+/* a paragraph split needs no reader: step 2 and the reader line stay out of the way until "Read it with a model" (UX review 2026-10-09 codex M2) */
+#reader.local-only .rstep:nth-of-type(2),#reader.local-only #read-privacy{display:none}
 #reader.settings-only .intro,#reader.settings-only .rstep:first-of-type,#reader.settings-only .rstep:last-of-type > :not(#read-actions),#reader.settings-only #read-actions > :not(#reader-done):not([data-ui="read-close"]){display:none}
 #reader.settings-only .rnum,#reader.settings-only #rs2{display:none}
 .reader-need{font-size:13px;color:var(--accent-ink);margin:8px 0 0}
@@ -329,7 +331,7 @@ footer code{font-size:11.5px}
 @media (max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}aside{position:static}.about{grid-template-columns:minmax(0,1fr)}#panel{grid-template-columns:minmax(0,1fr)}}
 #undo .ico,#redo .ico{display:none}
 @media (pointer:coarse) and (max-width:600px){#other-readers:not([open]){display:none}.phone-note{display:block}}
-@media (pointer:coarse){.wiz-keys{display:none}}
+@media (pointer:coarse){.wiz-keys{display:none}.joint select{min-height:44px;font-size:14px;padding:4px 14px}}   /* a joint is a touch target on a phone (UX review 2026-10-09 codex L1) */
 .phone-note{display:none;font-size:12px;color:var(--faint);margin:6px 0 0}   /* a phone runs no model server and no Gemini Nano (UX L4) */
 @media (max-width:600px){.brand span{display:none}#savestate{flex-basis:100%;order:9;font-size:11.5px;margin:2px 0 0}.top{gap:8px;flex-wrap:wrap}.actions{gap:4px}.actions .btn{padding:4px 9px;font-size:12px}#undo .lbl,#redo .lbl{display:none}#undo .ico,#redo .ico{display:inline}.tradsw{float:none;margin:0 0 6px}}
 @media (max-width:600px){.top{padding:10px 16px 8px}main{padding:0 16px 32px}footer{padding:16px}}
@@ -449,8 +451,9 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     <button class="btn" type="button" data-ui="wiz-skip" id="wiz-skip">Leave blank</button>
     <button class="btn primary" type="button" data-ui="wiz-next" id="wiz-next">Next</button>
     <button class="btn" type="button" data-ui="wiz-finish" id="wiz-finish">Finish now</button>
+    <button class="btn" type="button" data-ui="wiz-close">Close</button>
   </div>
-  <p class="wiz-alt"><button class="link" type="button" data-ui="wiz-blank">Start with an empty spine instead</button> · <button class="link" type="button" data-ui="wiz-restart">Start over</button> · Esc closes without changes; your answers wait here, even after a reload.</p>
+  <p class="wiz-alt"><button class="link" type="button" data-ui="wiz-blank">Start with an empty spine instead</button> · <button class="link" type="button" data-ui="wiz-restart">Start over</button> · Close or Esc leaves your story as it was; your answers wait here, even after a reload.</p>
 </dialog>
 
 <dialog id="reader" aria-labelledby="reader-h">
@@ -2661,7 +2664,7 @@ const UI_ACTIONS = { 'jump-tidbits': () => { $('#tidbits').scrollIntoView({ bloc
   help: () => openSplash(false), tour: () => startTour(), 'splash-close': () => splash.close(), open: () => $('#file').click(), wizard: () => openWizard(),
   'wiz-next': () => wizardMove(1), 'wiz-back': () => wizardMove(-1), 'wiz-skip': () => wizardMove(1), 'wiz-more': () => wizardMore(),
   'wiz-finish': () => { wiz.values[wiz.i] = $('#wiz-text').value; wizardFinish(); }, 'wiz-restart': () => { wizardReset(); wizardStep(); },
-  'wiz-blank': () => wizardBlank(), recent: (u) => { const x = recentList()[+u.dataset.k]; if (x) ui('story.load', { story: x.story }).then(r => { if (r.ok) toast(`Brought back "${x.title}".`, 'Undo returns the story you had open.'); }); } };
+  'wiz-blank': () => wizardBlank(), 'wiz-close': () => wizard.close(), recent: (u) => { const x = recentList()[+u.dataset.k]; if (x) ui('story.load', { story: x.story }).then(r => { if (r.ok) toast(`Brought back "${x.title}".`, 'Undo returns the story you had open.'); }); } };
 function onUiControl(u, e) {
   const kind = u.dataset.ui;
   if (kind.startsWith('read-')) { onReadControl(kind, e); return; }
@@ -2869,6 +2872,7 @@ function renderProposal() {
   const acc = $('#read-actions [data-ui="read-accept"]');
   acc.hidden = !p; acc.dataset.proposal = p ? p.id : ''; $('#read-actions [data-cmd="read.discard"]').hidden = !p;
   run.textContent = p ? (p.report.mode === 'paragraphs' ? 'Read it with a model' : 'Read again') : 'Read it'; run.classList.toggle('primary', !p);
+  reader.classList.toggle('local-only', !!p && p.report.mode === 'paragraphs');
   if (!p) { box.innerHTML = ''; return; }
   const r = p.report, drop = r.dropped.beats + r.dropped.quotes;
   const arc = C.ARCS.find(x => x.id === r.arc);
@@ -2898,7 +2902,7 @@ async function readerMissing() {
 }
 async function readerDone() {
   const ask = app.pendingAsk;
-  if (ask) { const missing = await readerMissing(); if (missing) { $('#reader-need').textContent = `${missing} Your question waits; Close drops it.`; return; } }
+  if (ask) { const missing = await readerMissing(); if (missing) { $('#reader-need').textContent = `${missing} Your question waits; ${reader.querySelector('[data-ui="read-close"]').textContent} drops it.`; return; } }
   reader.close(); readerMode(false); app.pendingAsk = null;
   if (ask) ui(ask.name, ask.args);
 }
@@ -2959,6 +2963,7 @@ async function onReaderTool(kind) {
   return renderReader(false);
 }
 async function readRunClick() {
+  if (reader.classList.contains('local-only')) return showReaders();
   if (!$('#read-text').value.trim()) { $('#read-msg1').textContent = 'Paste the story here first, or open a text file.'; $('#read-text').focus(); return null; }
   if (!reader.querySelector('input[name=rung]:checked')) {   // no reader yet: ask for the key, the recommended way in
     readProgress('Paste your provider’s API key in step 2 to read with it, or open Other readers.'); $('#provider-key').focus(); return null;
@@ -2978,6 +2983,12 @@ function showPreview() { const box = $('#read-result'); if (app.proposal && box.
 async function readPasteClick() {
   const r = await ui('read.paragraphs', { text: $('#read-text').value });
   readProgress(r.ok ? '' : `${r.message} ${r.next || ''}`); renderProposal(); showPreview();
+  return null;
+}
+// after a paragraph split, the first "Read it with a model" brings back step 2, so the writer chooses who reads before anything is sent
+function showReaders() {
+  reader.classList.remove('local-only'); $('#rs2').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  const r = reader.querySelector('input[name=rung]:checked') || reader.querySelector('input[name=rung]'); if (r) r.focus();
   return null;
 }
 async function onReadControl(kind, e) {

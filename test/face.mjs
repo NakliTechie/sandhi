@@ -503,6 +503,30 @@ async function readPage(opts) {
   check('ux3.claude_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // the fourth UX review (codex 2026-10-09): the wizard closes by touch and keeps its answers, the reader's wait message names the
+  // button it shows, a paragraph split hides the reader step until "Read it with a model", a phone joint is a 44 px target
+  const { ctx2, p, errs, call } = await readPage({ ctx: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } });
+  await p.click('[data-ui="wizard"]'); await p.fill('#wiz-text', 'The lighthouse');
+  await p.tap('#wizard [data-ui="wiz-close"]');
+  const closed = await p.evaluate(() => !document.querySelector('#wizard').open && document.querySelector('h2, #title') !== null);
+  const title = (await call('story.get', {})).data.story.title;
+  await p.click('[data-ui="wizard"]'); const resumed = await p.inputValue('#wiz-text'); await p.tap('#wizard [data-ui="wiz-close"]');
+  const joint = await p.evaluate(() => Math.round(document.querySelector('.joint select').getBoundingClientRect().height));
+  await p.click('#beat-b3 [data-ui="ask-q"]');
+  await p.waitForFunction(() => document.querySelector('#reader').open);
+  await p.click('#reader-done');
+  const need = await p.textContent('#reader-need');
+  await p.click('[data-ui="read-close"]');
+  await p.click('[data-ui="read-open"]'); await p.fill('#read-text', 'One fog morning.\n\nThe boats came home.');
+  await p.click('[data-ui="read-paste"]'); await p.waitForSelector('#read-result ol');
+  const vis = () => p.evaluate(() => ({ step2: getComputedStyle(document.querySelectorAll('#reader .rstep')[1]).display !== 'none', privacy: getComputedStyle(document.querySelector('#read-privacy')).display !== 'none' }));
+  const local = await vis();
+  await p.click('#read-actions [data-ui="read-run"]'); const asked = await vis();
+  check('ux4.codex_fixes', closed && title === 'The whistle' && resumed === 'The lighthouse' && joint >= 44 && /Cancel drops it/.test(need) && !local.step2 && !local.privacy && asked.step2,
+    { closed, title, resumed, joint, need, local, asked });
+  check('ux4.codex_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 { // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
   const { ctx2, p, errs, call } = await readPage({});
   const t0 = (await call('story.get', {})).data.story.threads[0];
