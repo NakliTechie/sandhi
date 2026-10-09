@@ -527,6 +527,40 @@ async function readPage(opts) {
   check('ux4.codex_no_errors', errs.length === 0, errs);
   await ctx2.close();
 }
+{ // the fourth UX review (Claude 2026-10-09), desktop: a replaced story drops the "Downloaded" note, the status has a fixed slot,
+  // Split leads with no reader, an optional joint says why it is faint, Remove keeps focus nearby, the splash tour ends on New
+  const { ctx2, p, errs, call } = await readPage({ ctx: { acceptDownloads: true } });
+  await call('beat.update', { id: 'b1', patch: { label: 'Tavi' } });
+  const x0 = await p.evaluate(() => document.querySelector('[data-ui="wizard"]').getBoundingClientRect().x);
+  await call('story.save', {}); await p.waitForFunction(() => /Downloaded/.test(document.querySelector('#savestate').textContent));
+  const x1 = await p.evaluate(() => document.querySelector('[data-ui="wizard"]').getBoundingClientRect().x);
+  await call('story.new', {}); const afterNew = await p.textContent('#savestate'); await call('undo', {});
+  await p.click('[data-ui="read-open"]'); await p.waitForTimeout(300);
+  const lead = await p.evaluate(() => ({ split: document.querySelector('[data-ui="read-paste"]').classList.contains('primary'), run: document.querySelector('#read-actions [data-ui="read-run"]').classList.contains('primary') }));
+  await p.click('[data-ui="read-close"]');
+  const optTitle = await p.evaluate(() => { const j = document.querySelector('.joint.opt'); return j && j.title; });
+  await p.click('#beat-b4 details.menu summary'); await p.click('#beat-b4 details.menu [data-cmd="beat.remove"]');
+  const focus = await p.evaluate(() => { const a = document.activeElement; return a && a.closest('.beat') && a.closest('.beat').id; });
+  await p.evaluate(() => document.activeElement.blur()); await p.keyboard.press('?'); await p.waitForFunction(() => document.querySelector('#splash').open);
+  await p.click('#splash [data-ui="tour"]'); await p.keyboard.press('Escape');
+  const tourEnd = await p.evaluate(() => ({ ui: document.activeElement && document.activeElement.dataset.ui, y: scrollY }));
+  check('ux4.claude_desktop', x0 === x1 && !/Downloaded/.test(afterNew) && lead.split && !lead.run && /setup beat/.test(optTitle || '') && focus === 'beat-b5' && tourEnd.ui === 'wizard',
+    { x0, x1, afterNew, lead, optTitle, focus, tourEnd });
+  check('ux4.claude_desktop_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
+{ // the fourth UX review (Claude 2026-10-09), phone: label controls are 40 px targets, phase names cut at a word, a toast sits under the top bar
+  const { ctx2, p, errs } = await readPage({ ctx: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } });
+  await p.click('#beat-b3 details.more summary');
+  const mark = await p.evaluate(() => Math.round(document.querySelector('#beat-b3 details .mark').getBoundingClientRect().height));
+  const segs = await p.$$eval('#chart .segt', t => t.map(x => x.textContent));
+  await p.click('#beat-b4 details.menu summary'); await p.click('#beat-b4 details.menu [data-cmd="beat.remove"]');
+  await p.waitForFunction(() => document.querySelector('#toast').matches(':popover-open'));
+  const gap = await p.evaluate(() => Math.round(document.querySelector('#toast').getBoundingClientRect().top - document.querySelector('.topbar').getBoundingClientRect().bottom));
+  check('ux4.claude_phone', mark >= 40 && !segs.some(t => /\s\.$/.test(t) || /^(Ever|Beca)\./.test(t)) && gap >= 0, { mark, segs, gap });
+  check('ux4.claude_phone_no_errors', errs.length === 0, errs);
+  await ctx2.close();
+}
 { // open threads (Batch D): a planted thread with no payoff can be left open on purpose, by the writer or an agent
   const { ctx2, p, errs, call } = await readPage({});
   const t0 = (await call('story.get', {})).data.story.threads[0];

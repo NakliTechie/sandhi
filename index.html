@@ -59,7 +59,7 @@ a{color:var(--muted)}
 .btn{font-size:12.5px;padding:5px 12px;border-radius:999px;border:1px solid var(--line-strong);background:transparent;color:var(--muted)}
 .btn:hover{background:var(--hover);color:var(--ink)}
 .btn:disabled{opacity:.4;cursor:default}
-#savestate{font-size:12px;color:var(--faint);margin-left:4px}
+#savestate{font-size:12px;color:var(--faint);margin-left:4px;flex:0 0 19em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* a fixed slot: Save's filename never shifts the buttons (UX review 2026-10-09 claude M4) */
 main{max-width:1200px;margin:0 auto;padding:0 24px 40px}
 .about{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr);gap:10px 18px;padding:6px 0 18px;border-bottom:1px solid var(--line);margin-bottom:18px}
 .about label{display:flex;flex-direction:column;gap:2px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint)}
@@ -331,9 +331,10 @@ footer code{font-size:11.5px}
 @media (max-width:900px){.cols{grid-template-columns:minmax(0,1fr)}aside{position:static}.about{grid-template-columns:minmax(0,1fr)}#panel{grid-template-columns:minmax(0,1fr)}}
 #undo .ico,#redo .ico{display:none}
 @media (pointer:coarse) and (max-width:600px){#other-readers:not([open]){display:none}.phone-note{display:block}}
-@media (pointer:coarse){.wiz-keys{display:none}.joint select{min-height:44px;font-size:14px;padding:4px 14px}}   /* a joint is a touch target on a phone (UX review 2026-10-09 codex L1) */
+@media (pointer:coarse){.beat details .mark,.beat details .chip,.beat details .addtag,.beat details select,.beat details .sel{min-height:40px}.beat details input[type=range]{height:40px}   /* label controls on a phone (UX review 2026-10-09 claude M3) */
+.wiz-keys{display:none}.joint select{min-height:44px;font-size:14px;padding:4px 14px}}   /* a joint is a touch target on a phone (UX review 2026-10-09 codex L1) */
 .phone-note{display:none;font-size:12px;color:var(--faint);margin:6px 0 0}   /* a phone runs no model server and no Gemini Nano (UX L4) */
-@media (max-width:600px){.brand span{display:none}#savestate{flex-basis:100%;order:9;font-size:11.5px;margin:2px 0 0}.top{gap:8px;flex-wrap:wrap}.actions{gap:4px}.actions .btn{padding:4px 9px;font-size:12px}#undo .lbl,#redo .lbl{display:none}#undo .ico,#redo .ico{display:inline}.tradsw{float:none;margin:0 0 6px}}
+@media (max-width:600px){.brand span{display:none}#savestate{flex:1 0 100%;order:9;font-size:11.5px;margin:2px 0 0;white-space:normal}.top{gap:8px;flex-wrap:wrap}.actions{gap:4px}.actions .btn{padding:4px 9px;font-size:12px}#undo .lbl,#redo .lbl{display:none}#undo .ico,#redo .ico{display:inline}.tradsw{float:none;margin:0 0 6px}}
 @media (max-width:600px){.top{padding:10px 16px 8px}main{padding:0 16px 32px}footer{padding:16px}}
 /* phone width (UX review 2026-10-06b L3, L4): the plot box stacks, the toast sits clear of the beat text, small controls get 24 px */
 @media (max-width:600px){.plotadd{flex-direction:column;align-items:stretch}#toast{bottom:auto;top:12px}.link,.chap-t{min-height:24px;display:inline-flex;align-items:center}.sel,.addtag{min-height:24px}}
@@ -462,7 +463,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
   <section class="rstep" aria-labelledby="rs1"><h3 id="rs1"><span class="rnum" aria-hidden="true">1</span> Your story</h3>
     <textarea id="read-text" placeholder="Paste the story here, or open a .txt or .md file" aria-label="Story text"></textarea>
     <p id="read-msg1" class="reader-need" role="status"></p>
-    <div class="rrow"><button class="btn" data-ui="read-file" type="button">Open a text file</button><button class="btn" data-ui="read-paste" type="button" title="One beat per paragraph; you label them. No model, nothing sent anywhere.">Split by paragraphs, no model</button><span id="read-count">0 words</span><input type="file" id="read-file" accept=".txt,.md,text/plain,text/markdown" hidden></div>
+    <div class="rrow"><button class="btn" data-ui="read-file" type="button">Open a text file</button><button class="btn primary" data-ui="read-paste" type="button" title="One beat per paragraph; you label them. No model, nothing sent anywhere.">Split by paragraphs, no model</button><span id="read-count">0 words</span><input type="file" id="read-file" accept=".txt,.md,text/plain,text/markdown" hidden></div>
   </section>
   <section class="rstep" aria-labelledby="rs2"><h3 id="rs2"><span class="rnum" aria-hidden="true">2</span> Who reads it</h3>
     <fieldset class="readers"><legend class="sr-only">Who reads it</legend>
@@ -490,7 +491,7 @@ body:not(.ready) > :not(dialog) { visibility: hidden; }
     <p id="read-privacy"></p>
     <div id="read-progress" role="status"></div>
     <div id="read-result"></div>
-    <div class="sp-actions" id="read-actions"><button class="btn primary" data-ui="reader-done" id="reader-done" type="button" hidden>Done</button><button class="btn primary" data-ui="read-run" type="button">Read it</button><button class="btn" data-cmd="read.cancel" id="read-stop" type="button" hidden>Stop</button><button class="btn primary" data-ui="read-accept" type="button" hidden>Use this structure</button><button class="btn" data-cmd="read.discard" type="button" hidden>Discard</button><button class="btn" data-ui="read-close" type="button">Close</button></div>
+    <div class="sp-actions" id="read-actions"><button class="btn primary" data-ui="reader-done" id="reader-done" type="button" hidden>Done</button><button class="btn" data-ui="read-run" type="button">Read it</button><button class="btn" data-cmd="read.cancel" id="read-stop" type="button" hidden>Stop</button><button class="btn primary" data-ui="read-accept" type="button" hidden>Use this structure</button><button class="btn" data-cmd="read.discard" type="button" hidden>Discard</button><button class="btn" data-ui="read-close" type="button">Close</button></div>
   </section>
 </dialog>
 <div id="toast" role="status" popover="manual"></div>
@@ -1328,7 +1329,7 @@ function commit(next, key) {
   const now = Date.now(), same = key && key === app.coalesce && now - app.coalesceAt < 2000 && now - app.coalesceStart < 5000;
   if (!same) { app.undo.push(C.clone(app.story)); if (app.undo.length > 100) app.undo.shift(); app.coalesceStart = now; }
   app.coalesce = key || null; app.coalesceAt = now;
-  app.redo = []; app.story = next; app.dirty = true; persist();
+  app.redo = []; app.story = next; app.dirty = true; app.savedNote = null; persist();   // a changed story is no longer the file (UX review 2026-10-09 claude H1)
   if (!same) persistUndo();
   return null;
 }
@@ -2180,6 +2181,7 @@ function toastShown(on) {
 }
 function toast(msg, next, action) {
   const el = $('#toast'); el.innerHTML = esc(msg) + (next ? ` <span>${esc(next)}</span>` : '') + (action ? ` <button class="toast-act" type="button" data-ui="${esc(action.ui)}">${esc(action.label)}</button>` : '');
+  el.style.top = matchMedia('(max-width:600px)').matches ? `${Math.max(12, $('.topbar').getBoundingClientRect().bottom + 8)}px` : '';   // on a phone, under the top bar, never over its buttons (UX review 2026-10-09 claude L6)
   toastShown(false); void el.offsetWidth;   // the same message again still shows as new
   toastShown(true); clearTimeout(toastTimer); toastTimer = setTimeout(toastLater, action ? 12000 : 5000);
 }
@@ -2201,9 +2203,16 @@ const AFTER = {
   'write.questions': () => renderSuggest(), 'write.options': () => renderSuggest(), 'write.joints': () => renderSuggest(), 'write.shape': () => renderSuggest(), 'write.place': () => renderSuggest(), 'write.plot': () => renderSuggest(), 'write.interview': () => renderSuggest(), 'write.depth': () => renderSuggest(), 'write.apply': (args, door) => { notice('write.apply', door); renderAll(); renderSuggest(); }, 'write.dismiss': () => renderSuggest(),
   'story.update': () => { renderHeader(); renderViews(); },
   'story.save': () => renderSaveState(),
+  'beat.remove': (args, door) => { notice('beat.remove', door); renderAll(); if (door === 'ui') focusNear(args.id); },
   'thread.update': (args) => (patchKeys(args).every(k => k === 'label') ? (renderViews(), patchCards()) : renderAll()),
   'beat.update': (args, door) => (door === 'ui' && patchKeys(args).length && patchKeys(args).every(k => k === 'text' || k === 'label') ? (renderViews(), patchCards()) : renderAll())
 };
+// the beat menu next to a removed beat takes focus, so a keyboard writer keeps their place (UX review 2026-10-09 claude L5)
+function focusNear(id) {
+  const prev = app.undo.at(-1), at = prev ? prev.beats.findIndex(b => b.id === id) : -1, bs = S().beats;
+  const b = bs[Math.min(Math.max(at, 0), bs.length - 1)], el = b && document.querySelector(`#beat-${b.id} details.menu summary`);
+  if (el) el.focus();
+}
 const readTool = (name) => /^read(er)?\./.test(name);
 // a failed call from the page says so in a toast, except in the open read dialog, whose own status line says it (one announcement)
 function failNotice(name, door, env, args) {
@@ -2265,8 +2274,9 @@ function renderRecent() {
 const SEED_JSON = JSON.stringify(C.seed());
 function renderSaveState() {
   const example = JSON.stringify(S()) === SEED_JSON;   // the untouched demo is named as such, never "saved" (UX M3)
-  $('#savestate').textContent = !app.kept ? 'Not kept in this browser: its storage is full · save to a file' : app.savedNote || (example ? 'The example story · New starts yours' : app.dirty ? 'In this browser · not saved to a file' : 'In this browser');
   if (app.dirty) app.savedNote = null;
+  $('#savestate').textContent = !app.kept ? 'Not kept in this browser: its storage is full · save to a file' : app.savedNote || (example ? 'The example story · New starts yours' : app.dirty ? 'In this browser · not saved to a file' : 'In this browser');
+  $('#savestate').title = $('#savestate').textContent;
   $('#undo').disabled = !app.undo.length; $('#redo').disabled = !app.redo.length;
 }
 
@@ -2314,7 +2324,7 @@ function phaseRow(s, [k, label, vocab], yy, geo) {
 function phaseSeg(item, i, j, yy, alt, { L, w, RH }) {
   const x0 = L + w * i + 1, x1 = L + w * (j + 1) - 1, fits = (t) => !!t && x1 - x0 > t.length * 6 + 8;
   const room = Math.floor((x1 - x0 - 8) / 6);   // a narrow segment (a phone) shows as much of the name as fits, never a blank (UX L12)
-  const shown = fits(item.name) ? item.name : fits(item.short) ? item.short : room >= 2 ? item.name.slice(0, room - 1) + '.' : '';
+  const word = item.name.split(' ')[0], shown = fits(item.name) ? item.name : fits(item.short) ? item.short : fits(word) ? word : room >= 2 ? item.name.slice(0, room - 1).trim() + '.' : '';   // first word before a cut (UX review 2026-10-09 claude L7)
   const g = `<rect class="${alt % 2 ? 'seg-b' : 'seg-a'}" x="${x0}" y="${yy}" width="${Math.max(2, x1 - x0)}" height="${RH}" rx="4"><title>${esc(item.name)}${item.gloss ? ' · ' + esc(item.gloss) : ''}, beats ${i + 1}${j > i ? '–' + (j + 1) : ''}</title></rect>`;
   return shown ? g + `<text class="segt" x="${(x0 + x1) / 2}" y="${yy + RH / 2 + 4}" text-anchor="middle" pointer-events="none">${esc(shown)}</text>` : g;
 }
@@ -2337,7 +2347,7 @@ function jointHtml(b, i) {
   if (i === 0) return '';
   const needs = !C.SETUP.has(b.spine), cls = !needs ? ' opt' : b.joint === 'and-then' ? ' slack' : b.joint ? '' : ' missing';
   const choices = [['', needs ? 'what joins these?' : 'no joint needed'], ['therefore', 'therefore'], ['but', 'but'], ['and-then', 'and then']];
-  return `<div class="joint${cls}"><select data-beat="${b.id}" data-field="joint" aria-label="What joins beat ${i + 1} to beat ${i}">${choices.map(([v, l]) => `<option value="${v}"${(b.joint || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`;
+  return `<div class="joint${cls}"${needs ? '' : ' title="Optional: a setup beat needs no joint"'}><select data-beat="${b.id}" data-field="joint" aria-label="What joins beat ${i + 1} to beat ${i}">${choices.map(([v, l]) => `<option value="${v}"${(b.joint || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`;
 }
 function markBtn(b, m, l) {
   const has = b.marks.includes(m), next = has ? b.marks.filter(x => x !== m) : [...b.marks, m];
@@ -2857,6 +2867,7 @@ async function renderReader(probe) {
   $('#nano-state').textContent = '· ' + NANO_TEXT[st.device];
   $('#key-state').textContent = st.provider.key ? `· ${st.provider.label}, ${st.provider.key}` : '· no key yet';
   readerFields(st);
+  $('[data-ui="read-paste"]').classList.toggle('primary', !st.rung); renderProposal();   // no reader: the split leads (UX review 2026-10-09 claude M1)
   $('#read-measured').textContent = measuredLine(st);
   $('#read-privacy').textContent = !st.rung ? 'Add your provider’s key to read with it, or choose another reader.' : st.local ? `Read by ${st.where}.` : `Read by ${st.where}, billed to your account.`;
 }
@@ -2871,7 +2882,7 @@ function renderProposal() {
   const box = $('#read-result'), p = app.proposal, run = $('#read-actions [data-ui="read-run"]');
   const acc = $('#read-actions [data-ui="read-accept"]');
   acc.hidden = !p; acc.dataset.proposal = p ? p.id : ''; $('#read-actions [data-cmd="read.discard"]').hidden = !p;
-  run.textContent = p ? (p.report.mode === 'paragraphs' ? 'Read it with a model' : 'Read again') : 'Read it'; run.classList.toggle('primary', !p);
+  run.textContent = p ? (p.report.mode === 'paragraphs' ? 'Read it with a model' : 'Read again') : 'Read it'; run.classList.toggle('primary', !p && !!rcfg.rung);
   reader.classList.toggle('local-only', !!p && p.report.mode === 'paragraphs');
   if (!p) { box.innerHTML = ''; return; }
   const r = p.report, drop = r.dropped.beats + r.dropped.quotes;
@@ -3147,7 +3158,7 @@ function endTour() {
   tour.layer.remove(); tour.layer = null; store.set(SEEN, '1');
   removeEventListener('resize', placeTour); removeEventListener('scroll', placeTour, true);
   document.removeEventListener('keydown', tourKeys, true);
-  if (tour.back && tour.back.isConnected) tour.back.focus();
+  if (tour.back && tour.back.isConnected && tour.back.checkVisibility()) tour.back.focus();
   else { scrollTo({ top: 0, behavior: 'smooth' }); $('[data-ui="wizard"]').focus({ preventScroll: true }); }   // after the tour: back at the top, on New (UX review 2026-10-08 L1)
 }
 function tourKeys(e) {
